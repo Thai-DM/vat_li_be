@@ -17,5 +17,6 @@ public interface IQuestionBankService {
     QuestionBankDTO updateQuestion(UUID questionId, CreateQuestionDTO dto, UUID currentUserId, String role);
     QuestionBankDTO approveQuestion(UUID questionId);
     void deleteQuestion(UUID questionId, UUID currentUserId, String role);
-    QuestionImportResultDTO importQuestionsFromPdf(MultipartFile file, UUID subjectId, UUID topicId, UUID currentUserId);
+    QuestionImportResultDTO importQuestionsFromExcel(MultipartFile file, UUID subjectId, UUID topicId, UUID currentUserId);
+    byte[] downloadQuestionExcelTemplate();
 }

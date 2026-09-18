@@ -12,22 +12,23 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/questions")
 @RequiredArgsConstructor
-@Tag(name = "Question Bank", description = "APIs Ngân hàng câu hỏi trắc nghiệm, phân loại Bloom, nhập câu hỏi từ PDF")
+@Tag(name = "Question Bank", description = "APIs Ngân hàng câu hỏi trắc nghiệm, phân loại Bloom, tạo câu hỏi tự động từ Excel")
 @SecurityRequirement(name = "bearerAuth")
 public class QuestionBankController {
 
@@ -123,19 +124,30 @@ public class QuestionBankController {
                 .build());
     }
 
-    @Operation(summary = "Nhập tự động câu hỏi từ file PDF (AI OCR)", description = "Phân tích cú pháp tệp đề thi PDF và trích xuất hàng loạt câu hỏi trắc nghiệm.")
-    @PostMapping(value = "/import-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Tải file mẫu Excel nhập câu hỏi", description = "Tải xuống file Excel (.xlsx) chuẩn hóa để giáo viên điền danh sách câu hỏi.")
+    @GetMapping("/import-excel/template")
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
-    public ResponseEntity<ApiResponse<QuestionImportResultDTO>> importQuestionsFromPdf(
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] excelBytes = questionBankService.downloadQuestionExcelTemplate();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=mau_import_cau_hoi.xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
+    @Operation(summary = "Tạo câu hỏi tự động từ file Excel", description = "Bóc tách tệp bảng tính Excel (.xlsx, .xls) và nhập hàng loạt câu hỏi trắc nghiệm vào ngân hàng.")
+    @PostMapping(value = "/import-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<QuestionImportResultDTO>> importQuestionsFromExcel(
             @RequestParam("file") MultipartFile file,
             @RequestParam("subjectId") UUID subjectId,
             @RequestParam("topicId") UUID topicId,
             HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
-        QuestionImportResultDTO result = questionBankService.importQuestionsFromPdf(file, subjectId, topicId, currentUserId);
+        QuestionImportResultDTO result = questionBankService.importQuestionsFromExcel(file, subjectId, topicId, currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<QuestionImportResultDTO>builder()
                 .status(HttpStatus.CREATED.value())
-                .message("Parsed and imported questions from PDF successfully")
+                .message("Parsed and imported questions from Excel successfully")
                 .data(result)
                 .build());
     }

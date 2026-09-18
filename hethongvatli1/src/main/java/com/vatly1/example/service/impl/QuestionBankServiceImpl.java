@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.vatly1.example.dto.QuestionImportResultDTO;
-import com.vatly1.example.service.IPdfQuestionParserService;
+import com.vatly1.example.service.IExcelQuestionParserService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -41,7 +41,7 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
     private final QuestionOptionRepository questionOptionRepository;
     private final ISubjectRepository subjectRepository;
     private final TopicRepository topicRepository;
-    private final IPdfQuestionParserService pdfQuestionParserService;
+    private final IExcelQuestionParserService excelQuestionParserService;
 
     @Override
     public Page<QuestionBankDTO> getQuestions(UUID subjectId, UUID topicId, DifficultyLevel difficultyLevel, Pageable pageable) {
@@ -181,7 +181,7 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
 
     @Override
     @Transactional
-    public QuestionImportResultDTO importQuestionsFromPdf(MultipartFile file, UUID subjectId, UUID topicId, UUID currentUserId) {
+    public QuestionImportResultDTO importQuestionsFromExcel(MultipartFile file, UUID subjectId, UUID topicId, UUID currentUserId) {
         if (!subjectRepository.existsById(subjectId)) {
             throw new CustomException("Subject not found", HttpStatus.NOT_FOUND);
         }
@@ -189,11 +189,16 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
             throw new CustomException("Topic not found", HttpStatus.NOT_FOUND);
         }
         if (file == null || file.isEmpty()) {
-            throw new CustomException("File PDF không được để trống", HttpStatus.BAD_REQUEST);
+            throw new CustomException("File Excel không được để trống", HttpStatus.BAD_REQUEST);
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && !originalFilename.toLowerCase().endsWith(".xlsx") && !originalFilename.toLowerCase().endsWith(".xls")) {
+            throw new CustomException("Định dạng file không được hỗ trợ. Vui lòng tải lên file Excel (.xlsx hoặc .xls)", HttpStatus.BAD_REQUEST);
         }
 
         try (InputStream is = file.getInputStream()) {
-            IPdfQuestionParserService.ParsedResult parsedResult = pdfQuestionParserService.parseQuestionsFromPdf(is, subjectId, topicId);
+            IExcelQuestionParserService.ParsedResult parsedResult = excelQuestionParserService.parseQuestionsFromExcel(is, subjectId, topicId);
             List<QuestionBankDTO> savedQuestions = new ArrayList<>();
 
             for (CreateQuestionDTO qDto : parsedResult.getQuestions()) {
@@ -208,8 +213,13 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
                     .warnings(parsedResult.getWarnings())
                     .build();
         } catch (IOException e) {
-            throw new CustomException("Lỗi khi xử lý file PDF: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new CustomException("Lỗi khi đọc file Excel: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
+    }
+
+    @Override
+    public byte[] downloadQuestionExcelTemplate() {
+        return excelQuestionParserService.generateTemplate();
     }
 
     private QuestionBankDTO mapToDTO(QuestionBank question) {
