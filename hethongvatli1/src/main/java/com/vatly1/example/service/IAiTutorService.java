@@ -3,8 +3,8 @@ package com.vatly1.example.service;
 import com.vatly1.example.dto.AiConversationDTO;
 import com.vatly1.example.dto.AiFeedbackDTO;
 import com.vatly1.example.dto.AiMessageDTO;
-import com.vatly1.example.dto.SendAiMessageDTO;
-import com.vatly1.example.dto.StartAiConversationDTO;
+import com.vatly1.example.dto.request.SendAiMessageDTO;
+import com.vatly1.example.dto.request.StartAiConversationDTO;
 
 import java.util.List;
 import java.util.UUID;

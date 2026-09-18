@@ -1,5 +1,8 @@
 package com.vatly1.example.dto;
 
+import com.vatly1.example.dto.request.*;
+import com.vatly1.example.dto.response.*;
+
 import java.time.LocalDate;
 import com.vatly1.example.entity.enums.GenderType;
 import lombok.AllArgsConstructor;

@@ -1,6 +1,6 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.AssignStaffDTO;
+import com.vatly1.example.dto.request.AssignStaffDTO;
 import com.vatly1.example.dto.ClassStaffDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.ClassStaff;

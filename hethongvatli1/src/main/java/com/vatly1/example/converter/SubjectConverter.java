@@ -1,6 +1,6 @@
 package com.vatly1.example.converter;
 
-import com.vatly1.example.dto.CreateSubjectDTO;
+import com.vatly1.example.dto.request.CreateSubjectDTO;
 import com.vatly1.example.dto.SubjectDTO;
 import com.vatly1.example.entity.Subject;
 import org.springframework.stereotype.Component;

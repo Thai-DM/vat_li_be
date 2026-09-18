@@ -1,18 +1,18 @@
 package com.vatly1.example.service;
 
 import jakarta.servlet.http.HttpServletRequest;
-import com.vatly1.example.dto.AuthResponseDTO;
-import com.vatly1.example.dto.UserDataDTO;
-import com.vatly1.example.dto.UserResponseDTO;
+import com.vatly1.example.dto.response.AuthResponseDTO;
+import com.vatly1.example.dto.response.UserDataDTO;
+import com.vatly1.example.dto.response.UserResponseDTO;
 import com.vatly1.example.entity.User;
 
-import com.vatly1.example.dto.AdminCreateUserDTO;
-import com.vatly1.example.dto.AdminUpdateUserDTO;
-import com.vatly1.example.dto.ChangePasswordDTO;
-import com.vatly1.example.dto.UpdateUserStatusDTO;
+import com.vatly1.example.dto.request.AdminCreateUserDTO;
+import com.vatly1.example.dto.request.AdminUpdateUserDTO;
+import com.vatly1.example.dto.request.ChangePasswordDTO;
+import com.vatly1.example.dto.request.UpdateUserStatusDTO;
 import com.vatly1.example.dto.UserProfileDTO;
-import com.vatly1.example.dto.UserProfileUpdateDTO;
-import com.vatly1.example.dto.UserUpdateDTO;
+import com.vatly1.example.dto.request.UserProfileUpdateDTO;
+import com.vatly1.example.dto.request.UserUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.UUID;

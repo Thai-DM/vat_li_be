@@ -1,10 +1,10 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.AddExamQuestionDTO;
-import com.vatly1.example.dto.CreateExamDTO;
+import com.vatly1.example.dto.request.AddExamQuestionDTO;
+import com.vatly1.example.dto.request.CreateExamDTO;
 import com.vatly1.example.dto.ExamAttemptDTO;
 import com.vatly1.example.dto.ExamDTO;
-import com.vatly1.example.dto.SubmitAnswerDTO;
+import com.vatly1.example.dto.request.SubmitAnswerDTO;
 
 import java.util.List;
 import java.util.UUID;

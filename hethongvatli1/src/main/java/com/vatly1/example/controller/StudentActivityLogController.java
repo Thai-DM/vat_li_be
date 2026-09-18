@@ -1,6 +1,6 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.ApiResponse;
+import com.vatly1.example.dto.response.ApiResponse;
 import com.vatly1.example.entity.ActivityLog;
 import com.vatly1.example.service.ILogService;
 import io.swagger.v3.oas.annotations.Operation;

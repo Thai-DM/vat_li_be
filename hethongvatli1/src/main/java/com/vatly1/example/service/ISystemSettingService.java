@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.BulkUpdateSettingsRequest;
-import com.vatly1.example.dto.UpdateSettingRequest;
+import com.vatly1.example.dto.request.BulkUpdateSettingsRequest;
+import com.vatly1.example.dto.request.UpdateSettingRequest;
 import com.vatly1.example.entity.SystemSetting;
 
 import java.util.List;

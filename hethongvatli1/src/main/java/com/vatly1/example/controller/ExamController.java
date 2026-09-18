@@ -1,11 +1,11 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.AddExamQuestionDTO;
-import com.vatly1.example.dto.ApiResponse;
-import com.vatly1.example.dto.CreateExamDTO;
+import com.vatly1.example.dto.request.AddExamQuestionDTO;
+import com.vatly1.example.dto.response.ApiResponse;
+import com.vatly1.example.dto.request.CreateExamDTO;
 import com.vatly1.example.dto.ExamAttemptDTO;
 import com.vatly1.example.dto.ExamDTO;
-import com.vatly1.example.dto.SubmitAnswerDTO;
+import com.vatly1.example.dto.request.SubmitAnswerDTO;
 import com.vatly1.example.service.IExamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

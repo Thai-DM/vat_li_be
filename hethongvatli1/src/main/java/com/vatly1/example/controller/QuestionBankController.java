@@ -1,9 +1,9 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.ApiResponse;
-import com.vatly1.example.dto.CreateQuestionDTO;
+import com.vatly1.example.dto.response.ApiResponse;
+import com.vatly1.example.dto.request.CreateQuestionDTO;
 import com.vatly1.example.dto.QuestionBankDTO;
-import com.vatly1.example.dto.QuestionImportResultDTO;
+import com.vatly1.example.dto.response.QuestionImportResultDTO;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.service.IQuestionBankService;
 import io.swagger.v3.oas.annotations.Operation;

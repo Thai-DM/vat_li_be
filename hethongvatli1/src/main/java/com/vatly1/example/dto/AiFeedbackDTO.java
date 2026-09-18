@@ -1,5 +1,8 @@
 package com.vatly1.example.dto;
 
+import com.vatly1.example.dto.request.*;
+import com.vatly1.example.dto.response.*;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;

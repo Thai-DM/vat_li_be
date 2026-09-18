@@ -1,8 +1,8 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.ApiResponse;
+import com.vatly1.example.dto.response.ApiResponse;
 import com.vatly1.example.dto.LearningProgressDTO;
-import com.vatly1.example.dto.UpdateLearningProgressDTO;
+import com.vatly1.example.dto.request.UpdateLearningProgressDTO;
 import com.vatly1.example.service.ILearningProgressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.CreateLearningMaterialDTO;
+import com.vatly1.example.dto.request.CreateLearningMaterialDTO;
 import com.vatly1.example.dto.LearningMaterialDTO;
 
 import java.util.List;

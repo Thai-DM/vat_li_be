@@ -1,6 +1,8 @@
 package com.vatly1.example.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
+
+
+import com.vatly1.example.dto.request.SigninRequestDTO;import com.vatly1.example.dto.request.AdminCreateUserDTO;import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
@@ -20,20 +22,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import com.vatly1.example.dto.AuthResponseDTO;
-import com.vatly1.example.dto.RefreshRequestDTO;
-import com.vatly1.example.dto.UserDataDTO;
-import com.vatly1.example.dto.UserResponseDTO;
-import com.vatly1.example.dto.UserUpdateDTO;
-import com.vatly1.example.dto.ChangePasswordDTO;
+import com.vatly1.example.dto.response.AuthResponseDTO;
+import com.vatly1.example.dto.request.RefreshRequestDTO;
+import com.vatly1.example.dto.response.UserDataDTO;
+import com.vatly1.example.dto.response.UserResponseDTO;
+import com.vatly1.example.dto.request.UserUpdateDTO;
+import com.vatly1.example.dto.request.ChangePasswordDTO;
 import com.vatly1.example.dto.UserProfileDTO;
-import com.vatly1.example.dto.UserProfileUpdateDTO;
-import com.vatly1.example.dto.AdminUpdateUserDTO;
-import com.vatly1.example.dto.ForgotPasswordRequestDTO;
-import com.vatly1.example.dto.ResetPasswordRequestDTO;
-import com.vatly1.example.dto.UpdateUserStatusDTO;
+import com.vatly1.example.dto.request.UserProfileUpdateDTO;
+import com.vatly1.example.dto.request.AdminUpdateUserDTO;
+import com.vatly1.example.dto.request.ForgotPasswordRequestDTO;
+import com.vatly1.example.dto.request.ResetPasswordRequestDTO;
+import com.vatly1.example.dto.request.UpdateUserStatusDTO;
 import com.vatly1.example.service.IUserService;
-// import com.vatly1.example.dto.ApiResponse; // Replaced with fully qualified name
+// import com.vatly1.example.dto.response.ApiResponse; // Replaced with fully qualified name
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,9 +56,9 @@ public class UserController {
       @ApiResponse(responseCode = "200", description = "Success"),
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "422", description = "Invalid username/password supplied")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<AuthResponseDTO>> login(
-      @Parameter(description = "Signin Credentials") @RequestBody @Valid com.vatly1.example.dto.SigninRequestDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.signin(request.getUsername(), request.getPassword())));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<AuthResponseDTO>> login(
+      @Parameter(description = "Signin Credentials") @RequestBody @Valid com.vatly1.example.dto.request.SigninRequestDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.signin(request.getUsername(), request.getPassword())));
   }
 
   @PostMapping("/forgot-password")
@@ -65,10 +67,10 @@ public class UserController {
       @ApiResponse(responseCode = "200", description = "Password reset email dispatched successfully"),
       @ApiResponse(responseCode = "400", description = "Invalid email format"),
       @ApiResponse(responseCode = "429", description = "Rate limit exceeded")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<Void>> forgotPassword(
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<Void>> forgotPassword(
       @Parameter(description = "Email details for password recovery") @RequestBody @Valid ForgotPasswordRequestDTO request) {
     userService.processForgotPassword(request.getEmail());
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(null, "Nếu email tồn tại trên hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi."));
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(null, "Nếu email tồn tại trên hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi."));
   }
 
   @PostMapping("/reset-password")
@@ -76,10 +78,10 @@ public class UserController {
   @ApiResponses(value = {
       @ApiResponse(responseCode = "200", description = "Password reset successfully"),
       @ApiResponse(responseCode = "400", description = "Invalid, expired, or previously used token")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<Void>> resetPassword(
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<Void>> resetPassword(
       @Parameter(description = "Token and new password details") @RequestBody @Valid ResetPasswordRequestDTO request) {
     userService.processResetPassword(request.getToken(), request.getNewPassword());
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(null, "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập với mật khẩu mới."));
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(null, "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập với mật khẩu mới."));
   }
 
   @PostMapping("/admin/create-user")
@@ -91,8 +93,8 @@ public class UserController {
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "403", description = "Access denied"),
       @ApiResponse(responseCode = "422", description = "Username is already in use")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> adminCreateUser(@Parameter(description = "Admin Create User") @RequestBody @Valid com.vatly1.example.dto.AdminCreateUserDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.adminCreateUser(request), "User created successfully"));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> adminCreateUser(@Parameter(description = "Admin Create User") @RequestBody @Valid com.vatly1.example.dto.request.AdminCreateUserDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.adminCreateUser(request), "User created successfully"));
   }
 
   @PostMapping("/signup")
@@ -101,8 +103,8 @@ public class UserController {
       @ApiResponse(responseCode = "200", description = "Success"),
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "422", description = "Username is already in use")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<AuthResponseDTO>> signup(@Parameter(description = "Signup User") @RequestBody @Valid UserDataDTO user) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.signup(user)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<AuthResponseDTO>> signup(@Parameter(description = "Signup User") @RequestBody @Valid UserDataDTO user) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.signup(user)));
   }
 
   @DeleteMapping(value = "/{username}")
@@ -114,9 +116,9 @@ public class UserController {
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "403", description = "Access denied"),
       @ApiResponse(responseCode = "404", description = "The user doesn't exist")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<String>> delete(@Parameter(description = "Username") @PathVariable String username) {
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<String>> delete(@Parameter(description = "Username") @PathVariable String username) {
     userService.delete(username);
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(username, "User deleted successfully"));
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(username, "User deleted successfully"));
   }
 
   @GetMapping(value = "/{username}")
@@ -128,8 +130,8 @@ public class UserController {
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "403", description = "Access denied"),
       @ApiResponse(responseCode = "404", description = "The user doesn't exist")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> search(@Parameter(description = "Username") @PathVariable String username) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.search(username)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> search(@Parameter(description = "Username") @PathVariable String username) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.search(username)));
   }
 
   @GetMapping(value = "/me")
@@ -140,8 +142,8 @@ public class UserController {
       @ApiResponse(responseCode = "200", description = "Success"),
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "401", description = "Expired or invalid JWT token")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> whoami(HttpServletRequest req) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.whoami(req)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> whoami(HttpServletRequest req) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.whoami(req)));
   }
 
   @PostMapping("/refresh")
@@ -152,8 +154,8 @@ public class UserController {
       @ApiResponse(responseCode = "400", description = "Something went wrong"),
       @ApiResponse(responseCode = "401", description = "Expired or invalid refresh token"),
       @ApiResponse(responseCode = "404", description = "User no longer exists")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<AuthResponseDTO>> refresh(@RequestBody @Valid RefreshRequestDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.refresh(request.getRefreshToken())));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<AuthResponseDTO>> refresh(@RequestBody @Valid RefreshRequestDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.refresh(request.getRefreshToken())));
   }
 
   @PostMapping("/logout")
@@ -164,73 +166,73 @@ public class UserController {
   @ApiResponses(value = {
       @ApiResponse(responseCode = "200", description = "Refresh token revoked"),
       @ApiResponse(responseCode = "400", description = "Something went wrong")})
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<Void>> logout(@RequestBody @Valid RefreshRequestDTO request) {
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<Void>> logout(@RequestBody @Valid RefreshRequestDTO request) {
     userService.logout(request.getRefreshToken());
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(null, "Logged out successfully"));
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(null, "Logged out successfully"));
   }
 
   @org.springframework.web.bind.annotation.PutMapping("/me")
   @PreAuthorize("isAuthenticated()")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Cập nhật tên đăng nhập / email của tôi")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> updateUserMe(HttpServletRequest req, @RequestBody @Valid UserUpdateDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.updateUserMe(req, request)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> updateUserMe(HttpServletRequest req, @RequestBody @Valid UserUpdateDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.updateUserMe(req, request)));
   }
 
   @PutMapping("/me/password")
   @PreAuthorize("isAuthenticated()")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Đổi mật khẩu tài khoản hiện tại")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<Void>> changePassword(HttpServletRequest req, @RequestBody @Valid ChangePasswordDTO request) {
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<Void>> changePassword(HttpServletRequest req, @RequestBody @Valid ChangePasswordDTO request) {
     userService.changePassword(req, request);
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(null, "Password changed successfully"));
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(null, "Password changed successfully"));
   }
 
   @GetMapping("/me/profile")
   @PreAuthorize("isAuthenticated()")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Lấy hồ sơ cá nhân của tôi")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserProfileDTO>> getMyProfile(HttpServletRequest req) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.getMyProfile(req)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserProfileDTO>> getMyProfile(HttpServletRequest req) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.getMyProfile(req)));
   }
 
   @PutMapping("/me/profile")
   @PreAuthorize("isAuthenticated()")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Cập nhật hồ sơ cá nhân của tôi")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserProfileDTO>> updateMyProfile(HttpServletRequest req, @RequestBody @Valid UserProfileUpdateDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.updateMyProfile(req, request)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserProfileDTO>> updateMyProfile(HttpServletRequest req, @RequestBody @Valid UserProfileUpdateDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.updateMyProfile(req, request)));
   }
 
   @GetMapping("/admin/users")
   @PreAuthorize("hasRole('ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Lấy danh sách người dùng phân trang (Chỉ Admin)")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<Page<UserResponseDTO>>> getAllUsers(@ParameterObject Pageable pageable) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.getAllUsers(pageable)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<Page<UserResponseDTO>>> getAllUsers(@ParameterObject Pageable pageable) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.getAllUsers(pageable)));
   }
 
   @GetMapping("/admin/users/{id}/profile")
   @PreAuthorize("hasRole('ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Lấy hồ sơ người dùng theo ID (Chỉ Admin)")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserProfileDTO>> getUserProfile(@PathVariable UUID id) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.getUserProfile(id)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserProfileDTO>> getUserProfile(@PathVariable UUID id) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.getUserProfile(id)));
   }
 
   @PutMapping("/admin/users/{id}")
   @PreAuthorize("hasRole('ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Cập nhật vai trò / email người dùng (Chỉ Admin)")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> adminUpdateUser(@PathVariable UUID id, @RequestBody @Valid AdminUpdateUserDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.adminUpdateUser(id, request)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> adminUpdateUser(@PathVariable UUID id, @RequestBody @Valid AdminUpdateUserDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.adminUpdateUser(id, request)));
   }
 
   @PutMapping("/admin/users/{id}/status")
   @PreAuthorize("hasRole('ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Khóa / Mở khóa trạng thái người dùng (Chỉ Admin)")
-  public ResponseEntity<com.vatly1.example.dto.ApiResponse<UserResponseDTO>> adminUpdateUserStatus(@PathVariable UUID id, @RequestBody @Valid UpdateUserStatusDTO request) {
-    return ResponseEntity.ok(com.vatly1.example.dto.ApiResponse.success(userService.adminUpdateUserStatus(id, request)));
+  public ResponseEntity<com.vatly1.example.dto.response.ApiResponse<UserResponseDTO>> adminUpdateUserStatus(@PathVariable UUID id, @RequestBody @Valid UpdateUserStatusDTO request) {
+    return ResponseEntity.ok(com.vatly1.example.dto.response.ApiResponse.success(userService.adminUpdateUserStatus(id, request)));
   }
 }

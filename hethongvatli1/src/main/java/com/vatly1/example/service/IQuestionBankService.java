@@ -1,8 +1,8 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.CreateQuestionDTO;
+import com.vatly1.example.dto.request.CreateQuestionDTO;
 import com.vatly1.example.dto.QuestionBankDTO;
-import com.vatly1.example.dto.QuestionImportResultDTO;
+import com.vatly1.example.dto.response.QuestionImportResultDTO;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

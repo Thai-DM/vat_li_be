@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.DashboardSnapshotDTO;
+import com.vatly1.example.dto.response.DashboardSnapshotDTO;
 
 import java.util.UUID;
 

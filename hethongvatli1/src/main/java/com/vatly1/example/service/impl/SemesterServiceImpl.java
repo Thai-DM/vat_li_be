@@ -1,9 +1,9 @@
 package com.vatly1.example.service.impl;
 
 import com.vatly1.example.converter.SemesterConverter;
-import com.vatly1.example.dto.CreateSemesterDTO;
+import com.vatly1.example.dto.request.CreateSemesterDTO;
 import com.vatly1.example.dto.SemesterDTO;
-import com.vatly1.example.dto.UpdateSemesterDTO;
+import com.vatly1.example.dto.request.UpdateSemesterDTO;
 import com.vatly1.example.entity.Semester;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.repository.ISemesterRepository;

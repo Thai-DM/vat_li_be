@@ -1,9 +1,9 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.BulkEnrollmentDTO;
+import com.vatly1.example.dto.request.BulkEnrollmentDTO;
 import com.vatly1.example.dto.EnrollmentDTO;
-import com.vatly1.example.dto.SingleEnrollmentDTO;
-import com.vatly1.example.dto.UpdateEnrollmentStatusDTO;
+import com.vatly1.example.dto.request.SingleEnrollmentDTO;
+import com.vatly1.example.dto.request.UpdateEnrollmentStatusDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.ClassEnrollment;
 import com.vatly1.example.entity.User;

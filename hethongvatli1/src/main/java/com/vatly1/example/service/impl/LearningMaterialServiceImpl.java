@@ -1,6 +1,6 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.CreateLearningMaterialDTO;
+import com.vatly1.example.dto.request.CreateLearningMaterialDTO;
 import com.vatly1.example.dto.LearningMaterialDTO;
 import com.vatly1.example.entity.FileUpload;
 import com.vatly1.example.entity.LearningMaterial;

@@ -1,12 +1,12 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.CreateExperimentAssignmentDTO;
-import com.vatly1.example.dto.CreateExperimentDTO;
+import com.vatly1.example.dto.request.CreateExperimentAssignmentDTO;
+import com.vatly1.example.dto.request.CreateExperimentDTO;
 import com.vatly1.example.dto.ExperimentAssignmentDTO;
 import com.vatly1.example.dto.ExperimentDTO;
-import com.vatly1.example.dto.SubmitExperimentDTO;
+import com.vatly1.example.dto.request.SubmitExperimentDTO;
 
-import com.vatly1.example.dto.GradeSubmissionDTO;
+import com.vatly1.example.dto.request.GradeSubmissionDTO;
 
 import java.util.List;
 import java.util.UUID;

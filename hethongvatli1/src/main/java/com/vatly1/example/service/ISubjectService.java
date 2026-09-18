@@ -1,8 +1,8 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.CreateSubjectDTO;
+import com.vatly1.example.dto.request.CreateSubjectDTO;
 import com.vatly1.example.dto.SubjectDTO;
-import com.vatly1.example.dto.UpdateSubjectDTO;
+import com.vatly1.example.dto.request.UpdateSubjectDTO;
 import org.springframework.data.domain.Page;
 
 import java.util.UUID;

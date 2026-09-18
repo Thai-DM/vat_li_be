@@ -1,8 +1,8 @@
 package com.vatly1.example.aspect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vatly1.example.dto.AdminUpdateUserDTO;
-import com.vatly1.example.dto.UpdateUserStatusDTO;
+import com.vatly1.example.dto.request.AdminUpdateUserDTO;
+import com.vatly1.example.dto.request.UpdateUserStatusDTO;
 import com.vatly1.example.entity.AuditLog;
 import com.vatly1.example.entity.ExperimentSubmission;
 import com.vatly1.example.entity.User;

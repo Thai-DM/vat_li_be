@@ -1,8 +1,8 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.ApiResponse;
-import com.vatly1.example.dto.BulkUpdateSettingsRequest;
-import com.vatly1.example.dto.UpdateSettingRequest;
+import com.vatly1.example.dto.response.ApiResponse;
+import com.vatly1.example.dto.request.BulkUpdateSettingsRequest;
+import com.vatly1.example.dto.request.UpdateSettingRequest;
 import com.vatly1.example.entity.SystemSetting;
 import com.vatly1.example.service.ISystemSettingService;
 import io.swagger.v3.oas.annotations.Operation;

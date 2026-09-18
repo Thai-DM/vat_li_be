@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.AssignStaffDTO;
+import com.vatly1.example.dto.request.AssignStaffDTO;
 import com.vatly1.example.dto.ClassStaffDTO;
 
 import java.util.List;

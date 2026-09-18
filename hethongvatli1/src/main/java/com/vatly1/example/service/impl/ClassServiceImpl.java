@@ -1,9 +1,9 @@
 package com.vatly1.example.service.impl;
 
 import com.vatly1.example.dto.ClassDTO;
-import com.vatly1.example.dto.CreateClassDTO;
-import com.vatly1.example.dto.UpdateClassDTO;
-import com.vatly1.example.dto.UpdateClassStatusDTO;
+import com.vatly1.example.dto.request.CreateClassDTO;
+import com.vatly1.example.dto.request.UpdateClassDTO;
+import com.vatly1.example.dto.request.UpdateClassStatusDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.enums.ClassStatus;
 import com.vatly1.example.entity.enums.UserRole;

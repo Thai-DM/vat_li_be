@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.CreateTopicDTO;
+import com.vatly1.example.dto.request.CreateTopicDTO;
 import com.vatly1.example.dto.TopicDTO;
 
 import java.util.List;

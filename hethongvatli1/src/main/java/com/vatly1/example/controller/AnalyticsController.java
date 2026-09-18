@@ -1,11 +1,11 @@
 package com.vatly1.example.controller;
 
 import com.vatly1.example.dto.AiTopicGapDTO;
-import com.vatly1.example.dto.ApiResponse;
+import com.vatly1.example.dto.response.ApiResponse;
 import com.vatly1.example.dto.MaterialEffectivenessDTO;
 import com.vatly1.example.dto.QuestionQualityDTO;
 import com.vatly1.example.dto.TopicDifficultyDTO;
-import com.vatly1.example.dto.TriggerAggregationRequestDTO;
+import com.vatly1.example.dto.request.TriggerAggregationRequestDTO;
 import com.vatly1.example.service.IAnalyticsAggregationService;
 import com.vatly1.example.service.IAnalyticsService;
 import io.swagger.v3.oas.annotations.Operation;

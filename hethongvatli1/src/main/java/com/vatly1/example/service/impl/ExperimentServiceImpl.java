@@ -1,11 +1,11 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.CreateExperimentAssignmentDTO;
-import com.vatly1.example.dto.CreateExperimentDTO;
+import com.vatly1.example.dto.request.CreateExperimentAssignmentDTO;
+import com.vatly1.example.dto.request.CreateExperimentDTO;
 import com.vatly1.example.dto.ExperimentAssignmentDTO;
 import com.vatly1.example.dto.ExperimentDTO;
-import com.vatly1.example.dto.GradeSubmissionDTO;
-import com.vatly1.example.dto.SubmitExperimentDTO;
+import com.vatly1.example.dto.request.GradeSubmissionDTO;
+import com.vatly1.example.dto.request.SubmitExperimentDTO;
 import com.vatly1.example.entity.Experiment;
 import com.vatly1.example.entity.ExperimentAssignment;
 import com.vatly1.example.entity.ExperimentSubmission;

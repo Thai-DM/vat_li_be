@@ -1,6 +1,6 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.CreateQuestionDTO;
+import com.vatly1.example.dto.request.CreateQuestionDTO;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.service.IExcelQuestionParserService;
