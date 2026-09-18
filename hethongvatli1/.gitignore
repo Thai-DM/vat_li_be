@@ -1,0 +1,97 @@
+# =============================================================================
+# Gitignore for hethongvatli1 (Spring Boot Backend)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Maven & Build Artifacts
+# -----------------------------------------------------------------------------
+target/
+build/
+dist/
+out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Large archives
+*.zip
+*.tar.gz
+*.rar
+
+# Preserved Maven Wrapper
+!mvnw
+!mvnw.cmd
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# -----------------------------------------------------------------------------
+# User Uploads & Media Files (Chống commit tệp test upload 50MB+)
+# -----------------------------------------------------------------------------
+uploads/*
+!uploads/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Environment & Secrets
+# -----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.env
+!*.env.example
+secrets/
+*.pem
+*.key
+*.p12
+
+# -----------------------------------------------------------------------------
+# Logs & Temporary Files
+# -----------------------------------------------------------------------------
+*.log
+logs/
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# -----------------------------------------------------------------------------
+# IDE & Code Editor Configurations
+# -----------------------------------------------------------------------------
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse / Spring Tool Suite (STS)
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# NetBeans
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# -----------------------------------------------------------------------------
+# Operating System Files
+# -----------------------------------------------------------------------------
+Thumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+._*

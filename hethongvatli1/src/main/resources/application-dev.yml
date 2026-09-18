@@ -1,0 +1,23 @@
+# Development profile: in-memory H2, default port
+spring:
+  datasource:
+    url: jdbc:postgresql://ep-noisy-star-aeavcjvp-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require
+    username: neondb_owner
+    password: npg_x1SelkBH9poZ
+    driver-class-name: org.postgresql.Driver
+  tomcat:
+    max-wait: 20000
+    max-active: 50
+    max-idle: 20
+    min-idle: 15
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        id:
+          new_generator_mappings: false
+
+server:
+  port: 8080

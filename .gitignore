@@ -1,0 +1,121 @@
+# =============================================================================
+# Gitignore for Physics 1 LMS & Virtual Lab (Học phần Vật lý 1)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Maven & Build Artifacts
+# -----------------------------------------------------------------------------
+target/
+**/target/
+build/
+**/build/
+dist/
+**/dist/
+out/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Large archives & standalone Maven binary distribution
+apache-maven-*/
+maven.zip
+*.zip
+*.tar.gz
+*.rar
+
+# Preserved Maven Wrapper files
+!mvnw
+!mvnw.cmd
+!**/mvnw
+!**/mvnw.cmd
+!.mvn/wrapper/maven-wrapper.jar
+!**/.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+!**/.mvn/wrapper/maven-wrapper.properties
+
+# -----------------------------------------------------------------------------
+# User Uploads & Media Files (Tránh đẩy tệp PDF/EXE test 50MB+ lên GitHub)
+# -----------------------------------------------------------------------------
+uploads/*
+**/uploads/*
+!uploads/.gitkeep
+!**/uploads/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Environment Secrets & Credentials
+# -----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.env
+!*.env.example
+secrets/
+*.pem
+*.key
+*.p12
+
+# -----------------------------------------------------------------------------
+# Logs & Temporary Files
+# -----------------------------------------------------------------------------
+*.log
+logs/
+**/logs/
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+# Microsoft Office temp lock files
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# -----------------------------------------------------------------------------
+# IDE & Code Editor Configurations
+# -----------------------------------------------------------------------------
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse / Spring Tool Suite (STS)
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# NetBeans
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# -----------------------------------------------------------------------------
+# Operating System Files
+# -----------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
