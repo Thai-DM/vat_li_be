@@ -1,9 +1,9 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.AiTopicGapDTO;
-import com.vatly1.example.dto.MaterialEffectivenessDTO;
-import com.vatly1.example.dto.QuestionQualityDTO;
-import com.vatly1.example.dto.TopicDifficultyDTO;
+import com.vatly1.example.dto.dto.AiTopicGapDTO;
+import com.vatly1.example.dto.dto.MaterialEffectivenessDTO;
+import com.vatly1.example.dto.dto.QuestionQualityDTO;
+import com.vatly1.example.dto.dto.TopicDifficultyDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.LearningMaterial;
 import com.vatly1.example.entity.QuestionBank;

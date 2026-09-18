@@ -1,7 +1,7 @@
 package com.vatly1.example.service.impl;
 
 import com.vatly1.example.dto.request.CreateTopicDTO;
-import com.vatly1.example.dto.TopicDTO;
+import com.vatly1.example.dto.dto.TopicDTO;
 import com.vatly1.example.entity.Topic;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.repository.ISubjectRepository;

@@ -1,9 +1,8 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
 
-import com.vatly1.example.entity.enums.ClassStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,13 +12,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ClassDTO {
-    private java.util.UUID classId;
+public class SubjectDTO {
     private java.util.UUID subjectId;
-    private java.util.UUID semesterId;
-    private String classCode;
-    private java.util.UUID instructorId;
-    private Integer maxStudents;
-    private ClassStatus status;
+    private String subjectCode;
+    private String subjectName;
+    private String description;
+    private Boolean isActive;
     private java.time.Instant createdAt;
 }

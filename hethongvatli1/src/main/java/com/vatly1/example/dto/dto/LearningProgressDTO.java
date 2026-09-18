@@ -1,9 +1,9 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
 
-import com.vatly1.example.entity.enums.AttemptStatus;
+import com.vatly1.example.entity.enums.ProgressStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,13 +17,12 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ExamAttemptDTO {
-    private UUID attemptId;
-    private UUID examId;
+public class LearningProgressDTO {
+    private UUID progressId;
     private UUID studentId;
-    private Integer attemptNumber;
-    private Instant startedAt;
-    private Instant submittedAt;
-    private AttemptStatus status;
-    private BigDecimal totalScore;
+    private UUID classId;
+    private UUID topicId;
+    private ProgressStatus status;
+    private BigDecimal progressPercent;
+    private Instant lastAccessedAt;
 }

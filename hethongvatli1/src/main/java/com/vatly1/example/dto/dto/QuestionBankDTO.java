@@ -1,36 +1,36 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
 
 import com.vatly1.example.entity.enums.ApprovalStatus;
-import com.vatly1.example.entity.enums.MaterialType;
+import com.vatly1.example.entity.enums.DifficultyLevel;
+import com.vatly1.example.entity.enums.QuestionType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LearningMaterialDTO {
-
-    private UUID materialId;
+public class QuestionBankDTO {
+    private UUID questionId;
+    private UUID subjectId;
     private UUID topicId;
-    private UUID fileId;
-    private String title;
-    private MaterialType type;
-    private String fileUrl;
-    private String contentText;
-    private Integer version;
+    private QuestionType questionType;
+    private String content;
+    private String mediaUrl;
+    private DifficultyLevel difficultyLevel;
+    private String cognitiveLevel;
     private ApprovalStatus approvalStatus;
-    private String sourceCitation;
     private UUID createdBy;
     private Instant createdAt;
-    private Instant updatedAt;
-
+    
+    private List<QuestionOptionDTO> options;
 }

@@ -1,8 +1,8 @@
 package com.vatly1.example.aspect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vatly1.example.dto.AiConversationDTO;
-import com.vatly1.example.dto.ExamAttemptDTO;
+import com.vatly1.example.dto.dto.AiConversationDTO;
+import com.vatly1.example.dto.dto.ExamAttemptDTO;
 import com.vatly1.example.entity.ActivityLog;
 import com.vatly1.example.repository.ActivityLogRepository;
 import com.vatly1.example.entity.enums.EvidenceSourceType;

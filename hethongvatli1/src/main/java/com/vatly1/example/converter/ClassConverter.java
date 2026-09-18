@@ -1,6 +1,6 @@
 package com.vatly1.example.converter;
 
-import com.vatly1.example.dto.ClassDTO;
+import com.vatly1.example.dto.dto.ClassDTO;
 import com.vatly1.example.dto.request.CreateClassDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.Semester;

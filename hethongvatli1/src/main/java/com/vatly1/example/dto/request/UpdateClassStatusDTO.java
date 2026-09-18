@@ -1,8 +1,7 @@
 package com.vatly1.example.dto.request;
 
-import com.vatly1.example.dto.*;
+import com.vatly1.example.dto.dto.*;
 import com.vatly1.example.dto.request.*;
-import com.vatly1.example.dto.response.*;
 import com.vatly1.example.dto.response.*;
 
 import com.vatly1.example.entity.enums.ClassStatus;

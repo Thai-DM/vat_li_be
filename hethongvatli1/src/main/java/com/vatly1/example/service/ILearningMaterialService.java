@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
 import com.vatly1.example.dto.request.CreateLearningMaterialDTO;
-import com.vatly1.example.dto.LearningMaterialDTO;
+import com.vatly1.example.dto.dto.LearningMaterialDTO;
 
 import java.util.List;
 import java.util.UUID;

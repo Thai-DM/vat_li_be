@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
 import com.vatly1.example.dto.request.CreateSemesterDTO;
-import com.vatly1.example.dto.SemesterDTO;
+import com.vatly1.example.dto.dto.SemesterDTO;
 import com.vatly1.example.dto.request.UpdateSemesterDTO;
 
 import java.util.List;

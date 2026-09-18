@@ -100,4 +100,3 @@ public class RefreshTokenServiceImpl implements IRefreshTokenService {
     refreshTokenRepository.revokeAllByUsername(username);
   }
 }
-

@@ -1,15 +1,14 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
 
-import com.vatly1.example.entity.enums.ProgressStatus;
+import com.vatly1.example.entity.enums.AiMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,12 +16,13 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LearningProgressDTO {
-    private UUID progressId;
+public class AiConversationDTO {
+    private UUID conversationId;
     private UUID studentId;
     private UUID classId;
     private UUID topicId;
-    private ProgressStatus status;
-    private BigDecimal progressPercent;
-    private Instant lastAccessedAt;
+    private AiMode mode;
+    private Instant startedAt;
+    private Instant endedAt;
+    private Integer messageCount;
 }

@@ -1,4 +1,4 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;

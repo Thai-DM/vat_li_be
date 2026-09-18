@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.LearningProgressDTO;
+import com.vatly1.example.dto.dto.LearningProgressDTO;
 import com.vatly1.example.dto.request.UpdateLearningProgressDTO;
 
 import java.util.List;

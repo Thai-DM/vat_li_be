@@ -1,9 +1,8 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
 
-import com.vatly1.example.entity.enums.AiMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,13 +15,12 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AiConversationDTO {
-    private UUID conversationId;
-    private UUID studentId;
+public class ExperimentAssignmentDTO {
+    private UUID assignmentId;
+    private UUID experimentId;
     private UUID classId;
-    private UUID topicId;
-    private AiMode mode;
-    private Instant startedAt;
-    private Instant endedAt;
-    private Integer messageCount;
+    private UUID assignedBy;
+    private Instant dueDate;
+    private String instructionsOverride;
+    private Instant createdAt;
 }

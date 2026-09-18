@@ -1,8 +1,8 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.AiConversationDTO;
-import com.vatly1.example.dto.AiFeedbackDTO;
-import com.vatly1.example.dto.AiMessageDTO;
+import com.vatly1.example.dto.dto.AiConversationDTO;
+import com.vatly1.example.dto.dto.AiFeedbackDTO;
+import com.vatly1.example.dto.dto.AiMessageDTO;
 import com.vatly1.example.dto.request.SendAiMessageDTO;
 import com.vatly1.example.dto.request.StartAiConversationDTO;
 import com.vatly1.example.entity.AiConversation;

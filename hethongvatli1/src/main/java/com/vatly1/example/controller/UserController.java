@@ -28,7 +28,7 @@ import com.vatly1.example.dto.response.UserDataDTO;
 import com.vatly1.example.dto.response.UserResponseDTO;
 import com.vatly1.example.dto.request.UserUpdateDTO;
 import com.vatly1.example.dto.request.ChangePasswordDTO;
-import com.vatly1.example.dto.UserProfileDTO;
+import com.vatly1.example.dto.dto.UserProfileDTO;
 import com.vatly1.example.dto.request.UserProfileUpdateDTO;
 import com.vatly1.example.dto.request.AdminUpdateUserDTO;
 import com.vatly1.example.dto.request.ForgotPasswordRequestDTO;

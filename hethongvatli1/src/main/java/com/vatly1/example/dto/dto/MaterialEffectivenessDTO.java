@@ -1,4 +1,4 @@
-package com.vatly1.example.dto;
+package com.vatly1.example.dto.dto;
 
 import com.vatly1.example.dto.request.*;
 import com.vatly1.example.dto.response.*;
@@ -8,20 +8,20 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AiTopicGapDTO {
-    private UUID gapId;
-    private UUID subjectId;
+public class MaterialEffectivenessDTO {
+    private UUID materialId;
+    private String title;
     private UUID topicId;
     private String topicName;
-    private Integer refusalCount;
-    private String frequentQuerySample;
     private String period;
-    private Instant generatedAt;
+    private Integer viewCount;
+    private BigDecimal avgTimeSpentSeconds;
+    private BigDecimal correlatedScoreImprovement;
 }

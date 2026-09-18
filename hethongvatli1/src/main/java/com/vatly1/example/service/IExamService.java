@@ -2,8 +2,8 @@ package com.vatly1.example.service;
 
 import com.vatly1.example.dto.request.AddExamQuestionDTO;
 import com.vatly1.example.dto.request.CreateExamDTO;
-import com.vatly1.example.dto.ExamAttemptDTO;
-import com.vatly1.example.dto.ExamDTO;
+import com.vatly1.example.dto.dto.ExamAttemptDTO;
+import com.vatly1.example.dto.dto.ExamDTO;
 import com.vatly1.example.dto.request.SubmitAnswerDTO;
 
 import java.util.List;

@@ -10,7 +10,7 @@ import com.vatly1.example.dto.request.AdminCreateUserDTO;
 import com.vatly1.example.dto.request.AdminUpdateUserDTO;
 import com.vatly1.example.dto.request.ChangePasswordDTO;
 import com.vatly1.example.dto.request.UpdateUserStatusDTO;
-import com.vatly1.example.dto.UserProfileDTO;
+import com.vatly1.example.dto.dto.UserProfileDTO;
 import com.vatly1.example.dto.request.UserProfileUpdateDTO;
 import com.vatly1.example.dto.request.UserUpdateDTO;
 import org.springframework.data.domain.Page;

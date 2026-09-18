@@ -1,8 +1,8 @@
 package com.vatly1.example.service.impl;
 
 import com.vatly1.example.dto.request.CreateQuestionDTO;
-import com.vatly1.example.dto.QuestionBankDTO;
-import com.vatly1.example.dto.QuestionOptionDTO;
+import com.vatly1.example.dto.dto.QuestionBankDTO;
+import com.vatly1.example.dto.dto.QuestionOptionDTO;
 import com.vatly1.example.entity.QuestionBank;
 import com.vatly1.example.entity.QuestionOption;
 import com.vatly1.example.entity.enums.ApprovalStatus;
