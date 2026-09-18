@@ -1,9 +1,0 @@
-•	Xây dựng một hệ thống web độc lập cho học phần Vật lý 1, thống nhất học liệu, trợ giảng AI, ôn luyện, kiểm tra trắc nghiệm và thí nghiệm trực tuyến trong cùng tiến trình học tập; hệ thống tự quản lý tài khoản, lớp học và dữ liệu, không tích hợp hoặc đồng bộ với LMS trong phạm vi nhiệm vụ.
-
-•	Cung cấp trợ giảng Socratic AI bằng tiếng Việt qua văn bản và giọng nói, ưu tiên học liệu đã được Bộ môn phê duyệt, có dẫn nguồn và cơ chế từ chối khi thiếu căn cứ.
-
-•	Tích hợp 04 bài thí nghiệm ảo 3D; hỗ trợ giao bài, thu minh chứng, chấm theo rubric và giảng viên xác nhận kết quả.
-
-•	Chuẩn hóa ngân hàng câu hỏi, ma trận kiểm tra, quy trình giao bài, làm bài và chấm; bảng điều khiển tổng hợp tiến độ, kết quả, minh chứng và nhật ký để giảng viên đánh giá sinh viên.
-
-•	Tạo dữ liệu tổng hợp để giảng viên phát hiện nội dung khó, cải tiến học liệu và hỗ trợ người học; thiết kế lõi mô-đun, dữ liệu tách theo môn để sau này mở rộng thêm các môn của Khoa Cơ bản 1.

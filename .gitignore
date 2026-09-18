@@ -1,9 +1,26 @@
 # =============================================================================
-# Gitignore for Physics 1 LMS & Virtual Lab (Học phần Vật lý 1)
+# Gitignore - Hệ Thống Quản Lý Học Tập & Thí Nghiệm Ảo Vật Lý 1
+# Chỉ giữ lại các tệp mã nguồn và cấu hình cần thiết để build & chạy dự án
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Maven & Build Artifacts
+# 1. Tài Liệu Word, Markdown & Văn Bản (Không cần đẩy lên Git)
+# -----------------------------------------------------------------------------
+*.docx
+*.doc
+*.md
+*.txt
+*.pdf
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# -----------------------------------------------------------------------------
+# 2. Maven Build & Compiled Classes
 # -----------------------------------------------------------------------------
 target/
 **/target/
@@ -18,14 +35,16 @@ out/
 *.war
 *.ear
 
-# Large archives & standalone Maven binary distribution
+# Bộ cài Maven cục bộ & các file nén dung lượng lớn
 apache-maven-*/
+**/apache-maven-*/
 maven.zip
+**/maven.zip
 *.zip
 *.tar.gz
 *.rar
 
-# Preserved Maven Wrapper files
+# Giữ lại Maven Wrapper để chạy được lệnh build (mvnw, mvnw.cmd)
 !mvnw
 !mvnw.cmd
 !**/mvnw
@@ -36,7 +55,7 @@ maven.zip
 !**/.mvn/wrapper/maven-wrapper.properties
 
 # -----------------------------------------------------------------------------
-# User Uploads & Media Files (Tránh đẩy tệp PDF/EXE test 50MB+ lên GitHub)
+# 3. Dữ Liệu Tải Lên & File Upload (Tránh đẩy file test 50MB+)
 # -----------------------------------------------------------------------------
 uploads/*
 **/uploads/*
@@ -44,20 +63,21 @@ uploads/*
 !**/uploads/.gitkeep
 
 # -----------------------------------------------------------------------------
-# Environment Secrets & Credentials
+# 4. Bảo Mật & Biến Môi Trường (Secrets & Credentials)
 # -----------------------------------------------------------------------------
 .env
 .env.local
 .env.*.local
 *.env
 !*.env.example
+!**/*.env.example
 secrets/
 *.pem
 *.key
 *.p12
 
 # -----------------------------------------------------------------------------
-# Logs & Temporary Files
+# 5. Nhật Ký & Tệp Tạm Hệ Thống (Logs & Temp Files)
 # -----------------------------------------------------------------------------
 *.log
 logs/
@@ -67,21 +87,18 @@ logs/
 *.bak
 *.swp
 *~
-# Microsoft Office temp lock files
-~$*.docx
-~$*.xlsx
-~$*.pptx
 
 # -----------------------------------------------------------------------------
-# IDE & Code Editor Configurations
+# 6. Cấu Hình IDE & Code Editor
 # -----------------------------------------------------------------------------
 # IntelliJ IDEA
 .idea/
+**/.idea/
 *.iws
 *.iml
 *.ipr
 
-# Eclipse / Spring Tool Suite (STS)
+# Eclipse / STS
 .apt_generated/
 .classpath
 .factorypath
@@ -91,8 +108,7 @@ logs/
 
 # Visual Studio Code
 .vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
+**/.vscode/
 
 # NetBeans
 nbproject/private/
@@ -101,21 +117,12 @@ nbdist/
 .nb-gradle/
 
 # -----------------------------------------------------------------------------
-# Operating System Files
+# 7. Tệp Rác Hệ Điều Hành (OS specific)
 # -----------------------------------------------------------------------------
-# Windows
 Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
 Desktop.ini
 $RECYCLE.BIN/
-
-# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
-
-# Linux
-.directory

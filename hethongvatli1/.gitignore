@@ -1,9 +1,26 @@
 # =============================================================================
-# Gitignore for hethongvatli1 (Spring Boot Backend)
+# Gitignore - hethongvatli1 (Spring Boot Backend)
+# Chỉ giữ lại các tệp mã nguồn và cấu hình cần thiết để build & chạy dự án
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Maven & Build Artifacts
+# 1. Tài Liệu Word, Markdown & Văn Bản (Không cần đẩy lên Git)
+# -----------------------------------------------------------------------------
+*.docx
+*.doc
+*.md
+*.txt
+*.pdf
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# -----------------------------------------------------------------------------
+# 2. Maven Build Output & Compiled Classes
 # -----------------------------------------------------------------------------
 target/
 build/
@@ -13,26 +30,24 @@ out/
 *.jar
 *.war
 *.ear
-
-# Large archives
 *.zip
 *.tar.gz
 *.rar
 
-# Preserved Maven Wrapper
+# Giữ lại Maven Wrapper để build & run
 !mvnw
 !mvnw.cmd
 !.mvn/wrapper/maven-wrapper.jar
 !.mvn/wrapper/maven-wrapper.properties
 
 # -----------------------------------------------------------------------------
-# User Uploads & Media Files (Chống commit tệp test upload 50MB+)
+# 3. User Uploads (Tránh đẩy file test 50MB+)
 # -----------------------------------------------------------------------------
 uploads/*
 !uploads/.gitkeep
 
 # -----------------------------------------------------------------------------
-# Environment & Secrets
+# 4. Secrets & Credentials
 # -----------------------------------------------------------------------------
 .env
 .env.local
@@ -45,7 +60,7 @@ secrets/
 *.p12
 
 # -----------------------------------------------------------------------------
-# Logs & Temporary Files
+# 5. Logs & Temp Files
 # -----------------------------------------------------------------------------
 *.log
 logs/
@@ -54,40 +69,28 @@ logs/
 *.bak
 *.swp
 *~
-~$*.docx
-~$*.xlsx
-~$*.pptx
 
 # -----------------------------------------------------------------------------
-# IDE & Code Editor Configurations
+# 6. IDE Configurations
 # -----------------------------------------------------------------------------
-# IntelliJ IDEA
 .idea/
 *.iws
 *.iml
 *.ipr
-
-# Eclipse / Spring Tool Suite (STS)
+.vscode/
 .apt_generated/
 .classpath
 .factorypath
 .project
 .settings/
 .springBeans
-
-# Visual Studio Code
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
-
-# NetBeans
 nbproject/private/
 nbbuild/
 nbdist/
 .nb-gradle/
 
 # -----------------------------------------------------------------------------
-# Operating System Files
+# 7. OS Specific Files
 # -----------------------------------------------------------------------------
 Thumbs.db
 Desktop.ini
