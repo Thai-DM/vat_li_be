@@ -3,8 +3,7 @@
 [![Java](https://img.shields.io/badge/Java-17%20%7C%2021%20%7C%2024-orange.svg?style=flat&logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.3-brightgreen.svg?style=flat&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Spring Security](https://img.shields.io/badge/Spring%20Security-6-green.svg?style=flat&logo=springsecurity)](https://spring.io/projects/spring-security)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg?style=flat&logo=mysql)](https://www.mysql.com/)
-[![Redis](https://img.shields.io/badge/Redis-Cache%20%26%20RateLimit-red.svg?style=flat&logo=redis)](https://redis.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%7C%20Neon-336791.svg?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![MinIO](https://img.shields.io/badge/MinIO-Object%20Storage%20(S3)-c72c48.svg?style=flat&logo=minio)](https://min.io/)
 [![Tests](https://img.shields.io/badge/Tests-194%2F194%20Passing%20(100%25)-success.svg?style=flat&logo=checkmarx)](https://github.com/Thai-DM/vat_li_be)
 [![OpenAPI](https://img.shields.io/badge/Swagger-OpenAPI%203.0-yellow.svg?style=flat&logo=swagger)](http://localhost:8080/swagger-ui/index.html)
@@ -57,7 +56,7 @@ Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm �
   - Cron Job tự động tổng hợp dữ liệu định kỳ: độ khó chủ đề học tập, hiệu quả của tài liệu.
   - Bảng thống kê trực quan (Dashboard) cho Giảng viên và Quản trị viên theo dõi tiến độ cả lớp.
 - **Chống Nghẽn Mạng & Nhật Ký Kiểm Toán (Rate Limiting & Audit Logging):**
-  - Tích hợp bộ lọc giới hạn tần suất gọi API (Rate Limiting via Token Bucket/Bucket4j).
+  - Tích hợp bộ lọc giới hạn tần suất gọi API (In-Memory Sliding Window Rate Limiting bằng ConcurrentHashMap) bảo vệ các endpoint xác thực (signin, signup, forgot password) chống tấn công brute-force.
   - Ghi nhận đầy đủ Activity Log và Security Audit Log phục vụ truy vết.
 
 ---
@@ -69,14 +68,14 @@ Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm �
 | **Ngôn ngữ** | Java 17 / Java 21 / Java 24 | Môi trường chạy backend chính |
 | **Framework** | Spring Boot 3.4.3 | Khung ứng dụng backend RESTful API |
 | **Bảo mật** | Spring Security 6, JJWT 0.11.5 | Xác thực, phân quyền RBAC, mã hóa JWT |
-| **Cơ sở dữ liệu** | MySQL 8.0, Spring Data JPA / Hibernate | Quản lý dữ liệu quan hệ, ORM |
-| **Bộ nhớ đệm** | Redis, Spring Cache, Bucket4j | Caching dữ liệu & Giới hạn tần suất gọi API |
+| **Cơ sở dữ liệu** | PostgreSQL 16 / Neon Cloud, Spring Data JPA | Quản lý dữ liệu quan hệ, ORM |
+| **Rate Limiting** | In-Memory Sliding Window (ConcurrentHashMap) | Giới hạn tần suất request chống brute-force |
 | **Lưu trữ đối tượng** | MinIO Java SDK 8.5.7 | Lưu trữ tệp tin, ảnh, tài liệu theo chuẩn S3 |
 | **Xử lý tệp Excel** | Apache POI 5.2.5 (poi-ooxml) | Import ngân hàng câu hỏi & xuất template Excel |
 | **Tài liệu API** | Springdoc OpenAPI 2.7.0 (Swagger UI) | Tự động sinh tài liệu API trực quan tương tác |
 | **Tiện ích mã** | Project Lombok | Giảm thiểu boilerplate code (Getter, Setter, Builder) |
-| **Container** | Docker & Docker Compose | Đóng gói và chạy môi trường cơ sở dữ liệu, MinIO, Redis |
-| **Kiểm thử** | JUnit 5, Mockito, Spring Boot Test, H2/MySQL Test | 194 ca kiểm thử tích hợp và đơn vị tự động |
+| **Container** | Docker & Docker Compose | Đóng gói và chạy môi trường PostgreSQL và MinIO |
+| **Kiểm thử** | JUnit 5, Mockito, Spring Boot Test, H2/PostgreSQL Test | 194 ca kiểm thử tích hợp và đơn vị tự động |
 
 ---
 
@@ -107,7 +106,7 @@ import com.vatly1.example.model.dto.*;
 ### 2. Cấu trúc thư mục mã nguồn:
 ```text
 hethongvatli1/src/main/java/com/vatly1/example/
-├── configuration/            # Cấu hình Spring Beans, MinIO, Redis, OpenAPI, WebMvc
+├── configuration/            # Cấu hình Spring Beans, MinIO, OpenAPI, WebMvc
 ├── controller/               # REST API Controllers (User, Exam, Class, File, AI,...)
 ├── converter/                # Lớp chuyển đổi ánh xạ Entity <-> Model/DTO
 ├── model/                    # Tầng Data Models phân chia 3 thư mục con:
@@ -175,22 +174,21 @@ hethongvatli1/src/main/java/com/vatly1/example/
 ### 1. Yêu Cầu Môi Trường
 - **JDK**: Java 17 trở lên (đã kiểm thử tương thích tốt trên Java 17, 21 và 24).
 - **Maven**: 3.9+ (hoặc sử dụng trực tiếp Maven Wrapper `./mvnw` đính kèm dự án).
-- **Docker & Docker Compose**: Để khởi chạy MySQL, Redis và MinIO.
+- **Docker & Docker Compose**: Để khởi chạy PostgreSQL và MinIO.
 
 ### 2. Khởi Động Các Dịch Vụ Hạ Tầng (Docker Compose)
-Dự án đã chuẩn bị sẵn file `docker-compose.yml` định nghĩa MySQL, Redis và MinIO:
+Dự án đã chuẩn bị sẵn file `docker-compose.yml` định nghĩa PostgreSQL 16 và MinIO:
 
 ```bash
 # Di chuyển vào thư mục backend
 cd hethongvatli1
 
-# Khởi chạy các container nền (MySQL, Redis, MinIO)
+# Khởi chạy các container nền (PostgreSQL, MinIO)
 docker-compose up -d
 ```
 
 Sau khi khởi chạy thành công:
-- **MySQL**: `localhost:3306` (Database: `vatly1_db`, User: `root`, Password: `rootpassword`)
-- **Redis**: `localhost:6379`
+- **PostgreSQL**: `localhost:5432` (Database: `vatly1`, User: `vatly1`, Password: `vatly1_pass`)
 - **MinIO API**: `http://localhost:9000`
 - **MinIO Web Console**: `http://localhost:9001` (User: `minioadmin`, Password: `minioadmin`)
 
@@ -202,13 +200,13 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/vatly1_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: root
-    password: rootpassword
-  data:
-    redis:
-      host: localhost
-      port: 6379
+    url: jdbc:postgresql://localhost:5432/vatly1
+    username: vatly1
+    password: vatly1_pass
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
 
 minio:
   endpoint: http://localhost:9000
