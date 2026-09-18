@@ -9,6 +9,8 @@
 *.docx
 *.doc
 *.md
+!README.md
+!**/README.md
 *.txt
 *.pdf
 *.xlsx
