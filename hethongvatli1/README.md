@@ -82,18 +82,39 @@ Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm �
 
 ## 📁 Kiến Trúc & Cấu Trúc Mã Nguồn
 
-Dự án áp dụng mô hình kiến trúc phân tầng chuẩn hoá (**Controller - Service - Repository - Entity**). Toàn bộ các lớp DTO được tổ chức thành 3 package riêng biệt bên trong thư mục `model`:
+Dự án áp dụng mô hình kiến trúc phân tầng chuẩn hoá (**Controller - Service - Repository - Entity - Model**). Toàn bộ các đối tượng dữ liệu truyền tải được gom vào package trung tâm **`com.vatly1.example.model`**, phân tách thành đúng 3 subpackage chuyên biệt:
 
+### 1. Phân chia 3 Subpackage trong `model`:
+- **`com.vatly1.example.model.request`** (38 Request Models):
+  - Chuyên phục vụ tiếp nhận payload đầu vào từ Client cho các thao tác Tạo mới (`Create*`), Cập nhật (`Update*`), Xác thực (`Signin*`, `Refresh*`, `Reset*`), Nộp bài (`Submit*`), Phân quyền (`Assign*`, `Enroll*`), Cấu hình (`*Setting*`).
+- **`com.vatly1.example.model.response`** (7 Response Models):
+  - Chuyên phục vụ cấu trúc phản hồi chuẩn đầu ra cho Client:
+    - `ApiResponse`: Standard API Wrapper response (`status`, `message`, `data`, `timestamp`).
+    - `AuthResponseDTO`: Payload phản hồi đăng nhập / xác thực JWT token.
+    - `DashboardDataDTO`, `DashboardSnapshotDTO`: Dữ liệu thống kê tổng hợp dashboard.
+    - `QuestionImportResultDTO`: Kết quả import file câu hỏi Excel.
+    - `UserDataDTO`, `UserResponseDTO`: Dữ liệu tài khoản người dùng chuẩn hóa.
+- **`com.vatly1.example.model.dto`** (23 Domain / Transfer DTOs):
+  - Chuyên phục vụ các đối tượng dữ liệu nghiệp vụ dùng chung giữa Service, Converter và Controller (`ClassDTO`, `ExamDTO`, `SubjectDTO`, `TopicDTO`, `UserProfileDTO`, `EvidenceDTO`, `AiFeedbackDTO`, ...).
+
+```java
+// Ví dụ các câu lệnh import chuẩn mực và sáng sủa:
+import com.vatly1.example.model.request.*;
+import com.vatly1.example.model.response.*;
+import com.vatly1.example.model.dto.*;
+```
+
+### 2. Cấu trúc thư mục mã nguồn:
 ```text
 hethongvatli1/src/main/java/com/vatly1/example/
 ├── configuration/            # Cấu hình Spring Beans, MinIO, Redis, OpenAPI, WebMvc
 ├── controller/               # REST API Controllers (User, Exam, Class, File, AI,...)
-├── converter/                # Lớp chuyển đổi ánh xạ Entity <-> DTO
-├── model/                    # Gói Model phân chia 3 thư mục con:
-│   ├── request/              # 38 Request Payload DTOs (Create*, Update*, Signin*,...)
-│   ├── response/             # 7 Response Payload DTOs (ApiResponse, AuthResponse,...)
-│   └── dto/                  # 23 Domain / Entity DTOs (ClassDTO, ExamDTO, SubjectDTO,...)
-├── entity/                   # Các thực thể JPA (User, Class, Exam, Topic,...)
+├── converter/                # Lớp chuyển đổi ánh xạ Entity <-> Model/DTO
+├── model/                    # Tầng Data Models phân chia 3 thư mục con:
+│   ├── request/              # 38 Request Payload Models (Create*, Update*, Signin*,...)
+│   ├── response/             # 7 Response Payload Models (ApiResponse, AuthResponse,...)
+│   └── dto/                  # 23 Domain / Transfer DTOs (ClassDTO, ExamDTO, SubjectDTO,...)
+├── entity/                   # Các thực thể JPA ánh xạ CSDL (User, Class, Exam, Topic,...)
 │   └── enums/                # Các Enum định nghĩa trạng thái, vai trò hệ thống
 ├── exception/                # Bộ xử lý ngoại lệ tập trung (GlobalExceptionHandler)
 ├── filter/                   # Bộ lọc bảo mật JWT (JwtTokenFilter) & RateLimitFilter
