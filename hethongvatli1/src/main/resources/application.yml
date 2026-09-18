@@ -18,6 +18,14 @@ app:
     upload-dir: ${FILE_UPLOAD_DIR:uploads}
     max-size-mb: ${FILE_MAX_SIZE_MB:50}
 
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET_NAME:vatly1-bucket}
+  url-prefix: ${MINIO_URL_PREFIX:http://localhost:9000/vatly1-bucket}
+  enabled: ${MINIO_ENABLED:true}
+
 management:
   endpoints:
     web:

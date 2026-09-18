@@ -38,6 +38,7 @@ public class WebSecurityConfig {
     http.authorizeHttpRequests(auth -> auth
         .requestMatchers("/api/v1/users/signin", "/api/v1/users/signup", "/api/v1/users/refresh",
             "/api/v1/users/forgot-password", "/api/v1/users/reset-password").permitAll()
+        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/files/**").permitAll()
         .requestMatchers("/actuator/health").permitAll()
         .requestMatchers("/actuator/**").hasRole("ADMIN")
         .requestMatchers("/h2-console/**", "/error").permitAll()
