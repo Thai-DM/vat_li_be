@@ -1,9 +1,9 @@
 package com.vatly1.example.service.impl;
 
 import com.vatly1.example.converter.SubjectConverter;
-import com.vatly1.example.dto.request.CreateSubjectDTO;
-import com.vatly1.example.dto.dto.SubjectDTO;
-import com.vatly1.example.dto.request.UpdateSubjectDTO;
+import com.vatly1.example.model.request.CreateSubjectDTO;
+import com.vatly1.example.model.dto.SubjectDTO;
+import com.vatly1.example.model.request.UpdateSubjectDTO;
 import com.vatly1.example.entity.Subject;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.repository.ISubjectRepository;

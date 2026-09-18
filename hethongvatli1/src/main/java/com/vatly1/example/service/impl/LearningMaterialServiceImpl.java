@@ -1,7 +1,7 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.request.CreateLearningMaterialDTO;
-import com.vatly1.example.dto.dto.LearningMaterialDTO;
+import com.vatly1.example.model.request.CreateLearningMaterialDTO;
+import com.vatly1.example.model.dto.LearningMaterialDTO;
 import com.vatly1.example.entity.FileUpload;
 import com.vatly1.example.entity.LearningMaterial;
 import com.vatly1.example.entity.enums.ApprovalStatus;

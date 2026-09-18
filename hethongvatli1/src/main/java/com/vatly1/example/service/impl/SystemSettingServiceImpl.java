@@ -1,7 +1,7 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.request.BulkUpdateSettingsRequest;
-import com.vatly1.example.dto.request.UpdateSettingRequest;
+import com.vatly1.example.model.request.BulkUpdateSettingsRequest;
+import com.vatly1.example.model.request.UpdateSettingRequest;
 import com.vatly1.example.entity.SystemSetting;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.repository.ISystemSettingRepository;

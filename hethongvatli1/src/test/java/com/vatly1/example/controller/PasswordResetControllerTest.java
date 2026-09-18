@@ -2,9 +2,9 @@ package com.vatly1.example.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vatly1.example.app.JwtAuthServiceApp;
-import com.vatly1.example.dto.request.ForgotPasswordRequestDTO;
-import com.vatly1.example.dto.request.ResetPasswordRequestDTO;
-import com.vatly1.example.dto.request.SigninRequestDTO;
+import com.vatly1.example.model.request.ForgotPasswordRequestDTO;
+import com.vatly1.example.model.request.ResetPasswordRequestDTO;
+import com.vatly1.example.model.request.SigninRequestDTO;
 import com.vatly1.example.entity.PasswordResetToken;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.filter.RateLimitFilter;

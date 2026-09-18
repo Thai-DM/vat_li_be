@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.request.CreateTopicDTO;
-import com.vatly1.example.dto.dto.TopicDTO;
+import com.vatly1.example.model.request.CreateTopicDTO;
+import com.vatly1.example.model.dto.TopicDTO;
 
 import java.util.List;
 import java.util.UUID;

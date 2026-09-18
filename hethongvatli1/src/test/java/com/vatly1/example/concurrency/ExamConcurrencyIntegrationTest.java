@@ -1,7 +1,7 @@
 package com.vatly1.example.concurrency;
 
 import com.vatly1.example.app.JwtAuthServiceApp;
-import com.vatly1.example.dto.dto.ExamAttemptDTO;
+import com.vatly1.example.model.dto.ExamAttemptDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.Exam;
 import com.vatly1.example.entity.Semester;

@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.dto.LearningProgressDTO;
-import com.vatly1.example.dto.request.UpdateLearningProgressDTO;
+import com.vatly1.example.model.dto.LearningProgressDTO;
+import com.vatly1.example.model.request.UpdateLearningProgressDTO;
 
 import java.util.List;
 import java.util.UUID;

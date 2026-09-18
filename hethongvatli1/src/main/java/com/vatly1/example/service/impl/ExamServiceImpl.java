@@ -1,10 +1,10 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.request.AddExamQuestionDTO;
-import com.vatly1.example.dto.request.CreateExamDTO;
-import com.vatly1.example.dto.dto.ExamAttemptDTO;
-import com.vatly1.example.dto.dto.ExamDTO;
-import com.vatly1.example.dto.request.SubmitAnswerDTO;
+import com.vatly1.example.model.request.AddExamQuestionDTO;
+import com.vatly1.example.model.request.CreateExamDTO;
+import com.vatly1.example.model.dto.ExamAttemptDTO;
+import com.vatly1.example.model.dto.ExamDTO;
+import com.vatly1.example.model.request.SubmitAnswerDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.Exam;
 import com.vatly1.example.entity.ExamAnswer;

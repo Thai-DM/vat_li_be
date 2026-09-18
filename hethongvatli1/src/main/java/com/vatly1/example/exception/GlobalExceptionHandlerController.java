@@ -19,7 +19,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vatly1.example.dto.response.ApiResponse;
+import com.vatly1.example.model.response.ApiResponse;
 
 @RestControllerAdvice
 public class GlobalExceptionHandlerController {

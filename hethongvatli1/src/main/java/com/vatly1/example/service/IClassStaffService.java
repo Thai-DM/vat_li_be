@@ -1,7 +1,7 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.request.AssignStaffDTO;
-import com.vatly1.example.dto.dto.ClassStaffDTO;
+import com.vatly1.example.model.request.AssignStaffDTO;
+import com.vatly1.example.model.dto.ClassStaffDTO;
 
 import java.util.List;
 import java.util.UUID;

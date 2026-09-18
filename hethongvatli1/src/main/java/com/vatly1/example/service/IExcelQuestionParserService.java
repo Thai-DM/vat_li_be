@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.request.CreateQuestionDTO;
+import com.vatly1.example.model.request.CreateQuestionDTO;
 
 import java.io.InputStream;
 import java.util.List;

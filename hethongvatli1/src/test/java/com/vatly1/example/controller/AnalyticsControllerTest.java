@@ -2,7 +2,7 @@ package com.vatly1.example.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vatly1.example.app.JwtAuthServiceApp;
-import com.vatly1.example.dto.request.TriggerAggregationRequestDTO;
+import com.vatly1.example.model.request.TriggerAggregationRequestDTO;
 import com.vatly1.example.entity.AiTopicGapStat;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.LearningMaterial;

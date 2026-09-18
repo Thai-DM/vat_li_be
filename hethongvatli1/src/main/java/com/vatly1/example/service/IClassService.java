@@ -1,9 +1,9 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.dto.ClassDTO;
-import com.vatly1.example.dto.request.CreateClassDTO;
-import com.vatly1.example.dto.request.UpdateClassDTO;
-import com.vatly1.example.dto.request.UpdateClassStatusDTO;
+import com.vatly1.example.model.dto.ClassDTO;
+import com.vatly1.example.model.request.CreateClassDTO;
+import com.vatly1.example.model.request.UpdateClassDTO;
+import com.vatly1.example.model.request.UpdateClassStatusDTO;
 import com.vatly1.example.entity.enums.ClassStatus;
 import org.springframework.data.domain.Page;
 

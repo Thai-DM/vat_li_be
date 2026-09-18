@@ -1,8 +1,8 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.request.CreateQuestionDTO;
-import com.vatly1.example.dto.dto.QuestionBankDTO;
-import com.vatly1.example.dto.dto.QuestionOptionDTO;
+import com.vatly1.example.model.request.CreateQuestionDTO;
+import com.vatly1.example.model.dto.QuestionBankDTO;
+import com.vatly1.example.model.dto.QuestionOptionDTO;
 import com.vatly1.example.entity.QuestionBank;
 import com.vatly1.example.entity.QuestionOption;
 import com.vatly1.example.entity.enums.ApprovalStatus;
@@ -21,7 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.vatly1.example.dto.response.QuestionImportResultDTO;
+import com.vatly1.example.model.response.QuestionImportResultDTO;
 import com.vatly1.example.service.IExcelQuestionParserService;
 import org.springframework.web.multipart.MultipartFile;
 

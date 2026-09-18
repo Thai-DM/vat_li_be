@@ -1,6 +1,6 @@
 package com.vatly1.example.service.impl;
 
-import com.vatly1.example.dto.dto.EvidenceDTO;
+import com.vatly1.example.model.dto.EvidenceDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.ClassEnrollment;
 import com.vatly1.example.entity.EvidenceRepository;

@@ -1,6 +1,6 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.dto.dto.EvidenceDTO;
+import com.vatly1.example.model.dto.EvidenceDTO;
 import com.vatly1.example.entity.enums.EvidenceSourceType;
 
 import java.util.List;

@@ -82,14 +82,14 @@ Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm �
 
 ## 📁 Kiến Trúc & Cấu Trúc Mã Nguồn
 
-Dự án áp dụng mô hình kiến trúc phân tầng chuẩn hoá (**Controller - Service - Repository - Entity**). Toàn bộ các lớp DTO được tổ chức thành 3 package riêng biệt bên trong thư mục `dto`:
+Dự án áp dụng mô hình kiến trúc phân tầng chuẩn hoá (**Controller - Service - Repository - Entity**). Toàn bộ các lớp DTO được tổ chức thành 3 package riêng biệt bên trong thư mục `model`:
 
 ```text
 hethongvatli1/src/main/java/com/vatly1/example/
 ├── configuration/            # Cấu hình Spring Beans, MinIO, Redis, OpenAPI, WebMvc
 ├── controller/               # REST API Controllers (User, Exam, Class, File, AI,...)
 ├── converter/                # Lớp chuyển đổi ánh xạ Entity <-> DTO
-├── dto/                      # Gói DTO phân chia 3 thư mục con:
+├── model/                    # Gói Model phân chia 3 thư mục con:
 │   ├── request/              # 38 Request Payload DTOs (Create*, Update*, Signin*,...)
 │   ├── response/             # 7 Response Payload DTOs (ApiResponse, AuthResponse,...)
 │   └── dto/                  # 23 Domain / Entity DTOs (ClassDTO, ExamDTO, SubjectDTO,...)

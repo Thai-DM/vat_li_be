@@ -1,9 +1,9 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.response.ApiResponse;
-import com.vatly1.example.dto.request.CreateSubjectDTO;
-import com.vatly1.example.dto.dto.SubjectDTO;
-import com.vatly1.example.dto.request.UpdateSubjectDTO;
+import com.vatly1.example.model.response.ApiResponse;
+import com.vatly1.example.model.request.CreateSubjectDTO;
+import com.vatly1.example.model.dto.SubjectDTO;
+import com.vatly1.example.model.request.UpdateSubjectDTO;
 import com.vatly1.example.service.ISubjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

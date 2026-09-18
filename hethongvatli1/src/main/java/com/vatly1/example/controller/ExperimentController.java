@@ -1,13 +1,13 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.response.ApiResponse;
-import com.vatly1.example.dto.request.ConfirmSubmissionDTO;
-import com.vatly1.example.dto.request.CreateExperimentAssignmentDTO;
-import com.vatly1.example.dto.request.CreateExperimentDTO;
-import com.vatly1.example.dto.dto.ExperimentAssignmentDTO;
-import com.vatly1.example.dto.dto.ExperimentDTO;
-import com.vatly1.example.dto.request.GradeSubmissionDTO;
-import com.vatly1.example.dto.request.SubmitExperimentDTO;
+import com.vatly1.example.model.response.ApiResponse;
+import com.vatly1.example.model.request.ConfirmSubmissionDTO;
+import com.vatly1.example.model.request.CreateExperimentAssignmentDTO;
+import com.vatly1.example.model.request.CreateExperimentDTO;
+import com.vatly1.example.model.dto.ExperimentAssignmentDTO;
+import com.vatly1.example.model.dto.ExperimentDTO;
+import com.vatly1.example.model.request.GradeSubmissionDTO;
+import com.vatly1.example.model.request.SubmitExperimentDTO;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.service.IExperimentService;
 import io.swagger.v3.oas.annotations.Operation;

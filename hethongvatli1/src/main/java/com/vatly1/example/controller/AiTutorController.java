@@ -1,11 +1,11 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.dto.AiConversationDTO;
-import com.vatly1.example.dto.dto.AiFeedbackDTO;
-import com.vatly1.example.dto.dto.AiMessageDTO;
-import com.vatly1.example.dto.response.ApiResponse;
-import com.vatly1.example.dto.request.SendAiMessageDTO;
-import com.vatly1.example.dto.request.StartAiConversationDTO;
+import com.vatly1.example.model.dto.AiConversationDTO;
+import com.vatly1.example.model.dto.AiFeedbackDTO;
+import com.vatly1.example.model.dto.AiMessageDTO;
+import com.vatly1.example.model.response.ApiResponse;
+import com.vatly1.example.model.request.SendAiMessageDTO;
+import com.vatly1.example.model.request.StartAiConversationDTO;
 import com.vatly1.example.service.IAiTutorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

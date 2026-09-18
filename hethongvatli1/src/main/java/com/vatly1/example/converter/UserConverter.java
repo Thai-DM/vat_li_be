@@ -2,8 +2,8 @@ package com.vatly1.example.converter;
 
 import org.springframework.stereotype.Component;
 
-import com.vatly1.example.dto.response.UserDataDTO;
-import com.vatly1.example.dto.response.UserResponseDTO;
+import com.vatly1.example.model.response.UserDataDTO;
+import com.vatly1.example.model.response.UserResponseDTO;
 import com.vatly1.example.entity.User;
 
 @Component

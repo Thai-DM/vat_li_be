@@ -1,8 +1,8 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.response.ApiResponse;
-import com.vatly1.example.dto.request.CreateTopicDTO;
-import com.vatly1.example.dto.dto.TopicDTO;
+import com.vatly1.example.model.response.ApiResponse;
+import com.vatly1.example.model.request.CreateTopicDTO;
+import com.vatly1.example.model.dto.TopicDTO;
 import com.vatly1.example.service.ITopicService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

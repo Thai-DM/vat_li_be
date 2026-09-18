@@ -1,0 +1,20 @@
+package com.vatly1.example.model.request;
+
+import com.vatly1.example.model.dto.*;
+import com.vatly1.example.model.request.*;
+import com.vatly1.example.model.response.*;
+
+import com.vatly1.example.entity.enums.UserStatus;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateUserStatusDTO {
+
+  @NotNull(message = "Status is required")
+  private UserStatus status;
+}

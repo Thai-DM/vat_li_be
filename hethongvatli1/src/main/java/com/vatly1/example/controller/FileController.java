@@ -1,6 +1,6 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.dto.response.ApiResponse;
+import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.service.IFileStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
