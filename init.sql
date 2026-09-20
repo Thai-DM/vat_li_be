@@ -127,16 +127,18 @@ CREATE TABLE IF NOT EXISTS topics (
     UNIQUE (subject_id, topic_code)
 );
 
--- 11. learning_materials - Tai lieu hoc tap (slide, pdf, video, text)
+-- 11. learning_materials - Tai lieu hoc tap & Bai giang (slide, pdf, video, text)
 CREATE TABLE IF NOT EXISTS learning_materials (
     material_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     topic_id         UUID NOT NULL REFERENCES topics(topic_id) ON DELETE CASCADE,
+    file_id          UUID REFERENCES file_uploads(file_id) ON DELETE SET NULL,
     title            VARCHAR(255) NOT NULL,
     type             VARCHAR(50) NOT NULL DEFAULT 'PDF',
-    content_url      TEXT,
-    metadata_json    JSONB,
-    current_version  INT NOT NULL DEFAULT 1,
+    file_url         TEXT,
+    content_text     TEXT,
+    version          INT NOT NULL DEFAULT 1,
     approval_status  VARCHAR(50) NOT NULL DEFAULT 'APPROVED',
+    source_citation  TEXT,
     created_by       UUID REFERENCES users(user_id) ON DELETE SET NULL,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -575,6 +577,20 @@ VALUES
     ('d6666666-6666-6666-6666-666666666666', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CH06', 'Thuyết động học phân tử chất khí', 'Các định luật thực nghiệm về chất khí lý tưởng, phương trình Clapeyron - Mendeleev.', 6),
     ('d7777777-7777-7777-7777-777777777777', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CH07', 'Nhiệt động lực học', 'Nguyên lý thứ nhất và nguyên lý thứ hai của nhiệt động lực học, chu trình Carnot.', 7)
 ON CONFLICT (subject_id, topic_code) DO NOTHING;
+
+-- 8b. DANH SACH BAI GIANG & HOC LIEU SO (learning_materials)
+INSERT INTO learning_materials (material_id, topic_id, title, type, file_url, content_text, version, approval_status, source_citation, created_by)
+VALUES
+    ('m1111111-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Slide Bài giảng: Động học chất điểm', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_hoc.pdf', 'Tổng quan về chuyển động thẳng đều, thẳng biến đổi đều, gia tốc tiếp tuyến và pháp tuyến trong chuyển động cong.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I - NXB Giáo dục', '22222222-2222-2222-2222-222222222222'),
+    ('m1222222-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Tóm tắt công thức & Bài tập Động học chất điểm', 'PDF', 'http://localhost:9000/vatly1-bucket/materials/cong_thuc_dong_hoc.pdf', 'Tài liệu tóm tắt công thức trọng tâm và hướng dẫn giải các dạng bài toán ném ngang, ném xiên.', 1, 'APPROVED', 'Bộ môn Vật lý', '22222222-2222-2222-2222-222222222222'),
+    ('m2111111-2222-2222-2222-222222222222', 'd2222222-2222-2222-2222-222222222222', 'Slide Bài giảng: Động lực học chất điểm & Các định luật Newton', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_luc_hoc.pdf', 'Nội dung ba định luật Newton, các lực ma sát, phản lực và phương pháp tọa độ giải phương trình động lực học.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('m3111111-3333-3333-3333-333333333333', 'd3333333-3333-3333-3333-333333333333', 'Slide Bài giảng: Công, Năng lượng & Định luật bảo toàn cơ năng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_cong_nang_luong.pdf', 'Khái niệm công của lực, công suất, định lý biến thiên động năng, trường lực thế và thế năng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('m4111111-4444-4444-4444-444444444444', 'd4444444-4444-4444-4444-444444444444', 'Slide Bài giảng: Cơ học vật rắn & Chuyển động quay quanh trục cố định', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_vat_ran.pdf', 'Mômen lực, mômen quán tính, định lý Steiner-Huygens và phương trình cơ bản của chuyển động quay.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('m5111111-5555-5555-5555-555555555555', 'd5555555-5555-5555-5555-555555555555', 'Slide Bài giảng: Dao động điều hòa và Sự lan truyền sóng cơ', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dao_dong_song.pdf', 'Phương trình vi phân dao động điều hòa, con lắc lò xo, con lắc đơn, năng lượng dao động và sóng cơ.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('m6111111-6666-6666-6666-666666666666', 'd6666666-6666-6666-6666-666666666666', 'Slide Bài giảng: Thuyết động học phân tử chất khí lý tưởng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_khi_ly_tuong.pdf', 'Mô hình khí lý tưởng, phương trình cơ bản của thuyết động học phân tử, nhiệt độ và nội năng khí lý tưởng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('m7111111-7777-7777-7777-777777777777', 'd7777777-7777-7777-7777-777777777777', 'Slide Bài giảng: Các nguyên lý cơ bản của Nhiệt động lực học', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_nhiet_dong_luc_hoc.pdf', 'Nguyên lý thứ nhất và thứ hai nhiệt động lực học, các quá trình cân bằng của khí lý tưởng, chu trình Carnot và hiệu suất động cơ nhiệt.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222')
+ON CONFLICT (material_id) DO NOTHING;
+
 
 -- 9. NGAN HANG CAU HOI TRAC NGHIEM MAU (question_bank & question_options)
 -- Cau 1 (Chu de 1 - De)

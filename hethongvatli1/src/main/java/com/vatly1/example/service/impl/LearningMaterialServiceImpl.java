@@ -81,8 +81,17 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
                 .createdAt(Instant.now())
                 .build();
 
-        // Handle file upload
-        if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+        if (dto.getType() == MaterialType.MARKDOWN) {
+            if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
+                throw new CustomException("Nội dung bài giảng Markdown không được để trống", HttpStatus.BAD_REQUEST);
+            }
+            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+                throw new CustomException("Bài giảng dạng Markdown chỉ lưu nội dung văn bản trực tiếp trong cơ sở dữ liệu, không lưu dạng tệp đính kèm", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        // Handle file upload (chỉ áp dụng cho các định dạng lưu file như PDF, SLIDE, VIDEO, OTHER)
+        if (dto.getType() != MaterialType.MARKDOWN && dto.getFile() != null && !dto.getFile().isEmpty()) {
             org.springframework.web.multipart.MultipartFile file = dto.getFile();
             if (file.getSize() > 50L * 1024 * 1024) {
                 throw new CustomException("Kích thước file vượt quá giới hạn 50MB", HttpStatus.BAD_REQUEST);
@@ -153,8 +162,19 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
         material.setUpdatedAt(Instant.now());
         material.setApprovalStatus(ApprovalStatus.PENDING); // Needs re-approval after update
 
-        // Handle file update
-        if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+        if (dto.getType() == MaterialType.MARKDOWN) {
+            if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
+                throw new CustomException("Nội dung bài giảng Markdown không được để trống", HttpStatus.BAD_REQUEST);
+            }
+            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+                throw new CustomException("Bài giảng dạng Markdown chỉ lưu nội dung văn bản trực tiếp trong cơ sở dữ liệu, không lưu dạng tệp đính kèm", HttpStatus.BAD_REQUEST);
+            }
+            material.setFileId(null);
+            material.setFileUrl(null);
+        }
+
+        // Handle file update (chỉ áp dụng cho các định dạng lưu file)
+        if (dto.getType() != MaterialType.MARKDOWN && dto.getFile() != null && !dto.getFile().isEmpty()) {
             String fileUrl = fileStorageService.storeFile(dto.getFile());
             
             FileUpload fileUpload = FileUpload.builder()

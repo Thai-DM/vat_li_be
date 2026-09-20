@@ -5,7 +5,7 @@
 [![Spring Security](https://img.shields.io/badge/Spring%20Security-6-green.svg?style=flat&logo=springsecurity)](https://spring.io/projects/spring-security)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%7C%20Neon-336791.svg?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![MinIO](https://img.shields.io/badge/MinIO-Object%20Storage%20(S3)-c72c48.svg?style=flat&logo=minio)](https://min.io/)
-[![Tests](https://img.shields.io/badge/Tests-194%2F194%20Passing%20(100%25)-success.svg?style=flat&logo=checkmarx)](https://github.com/Thai-DM/vat_li_be)
+[![Tests](https://img.shields.io/badge/Tests-197%2F197%20Passing%20(100%25)-success.svg?style=flat&logo=checkmarx)](https://github.com/Thai-DM/vat_li_be)
 [![OpenAPI](https://img.shields.io/badge/Swagger-OpenAPI%203.0-yellow.svg?style=flat&logo=swagger)](http://localhost:8080/swagger-ui/index.html)
 
 Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm Ảo môn Vật Lý 1**, phục vụ toàn diện công tác giảng dạy lý thuyết, ngân hàng câu hỏi, tổ chức thi trắc nghiệm trực tuyến, quản lý thí nghiệm ảo và theo dõi tiến độ học tập có tích hợp **Trợ lý AI (AI Tutor)** và **Lưu trữ đối tượng phân tán MinIO**.
@@ -75,7 +75,7 @@ Backend RESTful API cho **Hệ Thống Quản Lý Học Tập & Thí Nghiệm �
 | **Tài liệu API** | Springdoc OpenAPI 2.7.0 (Swagger UI) | Tự động sinh tài liệu API trực quan tương tác |
 | **Tiện ích mã** | Project Lombok | Giảm thiểu boilerplate code (Getter, Setter, Builder) |
 | **Container** | Docker & Docker Compose | Đóng gói và chạy môi trường PostgreSQL và MinIO |
-| **Kiểm thử** | JUnit 5, Mockito, Spring Boot Test, H2/PostgreSQL Test | 194 ca kiểm thử tích hợp và đơn vị tự động |
+| **Kiểm thử** | JUnit 5, Mockito, Spring Boot Test, H2/PostgreSQL Test | 197 ca kiểm thử tích hợp và đơn vị tự động |
 
 ---
 
@@ -137,11 +137,13 @@ hethongvatli1/src/main/java/com/vatly1/example/
 - `GET/PUT /api/v1/users/me`: Quản lý thông tin cá nhân và đổi mật khẩu.
 - `GET/POST/PUT /api/v1/users/admin/**`: Quản trị viên quản lý danh sách tài khoản, khóa/mở khóa tài khoản.
 
-### 2. Phân Hệ Quản Lý Học Phần, Học Kỳ & Lớp Học
-- Quản lý danh mục Môn học (`/api/v1/subjects/**`), Học kỳ (`/api/v1/semesters/**`).
-- Quản lý Lớp học phần (`/api/v1/classes/**`): Tạo lớp, cập nhật trạng thái lớp.
-- Phân công Giảng viên / Trợ giảng (`/api/v1/classes/{classId}/staff/**`).
-- Ghi danh sinh viên vào lớp học (`/api/v1/classes/{classId}/enrollments/**`).
+### 2. Phân Hệ Quản Lý Học Phần, Học Kỳ, Lớp Học & Bài Giảng
+- Quản lý danh mục Môn học (`/api/v1/subjects/**`), Học kỳ (`/api/v1/semesters/**`), Chủ đề (`/api/v1/topics/**`).
+- Quản lý Lớp học phần (`/api/v1/classes/**`): Tạo lớp, phân công Giảng viên / Trợ giảng, ghi danh sinh viên.
+- **Quản lý Tài liệu & Bài giảng (`/api/v1/materials/**`):**
+  - Hỗ trợ các định dạng: `MARKDOWN`, `PDF`, `VIDEO`, `SLIDE`, `TEXT`, `OTHER`.
+  - **Đặc thù định dạng `MARKDOWN`**: Toàn bộ nội dung lý thuyết, công thức và đề mục được lưu trữ trực tiếp dưới dạng văn bản (raw Markdown text) trong cơ sở dữ liệu (`content_text` của PostgreSQL), hoàn toàn không lưu trữ tệp đính kèm (`file_id = null`, `file_url = null`).
+  - Các định dạng tệp khác (`PDF`, `VIDEO`, `SLIDE`...) được lưu trữ và truyền phát an toàn qua MinIO Object Storage (hoặc Smart Local Fallback).
 
 ### 3. Phân Hệ Ngân Hàng Câu Hỏi & Đề Thi Trắc Nghiệm
 - Quản lý câu hỏi theo môn và chủ đề (`/api/v1/questions/**`).
@@ -266,14 +268,14 @@ Dự án sở hữu bộ kiểm thử tự động toàn diện bao quát 23 ph�
 ...
 [INFO] Results:
 [INFO] 
-[INFO] Tests run: 194, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 197, Failures: 0, Errors: 0, Skipped: 0
 [INFO] 
 [INFO] --------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] --------------------------------------------------------
 ```
 
-### Danh Sách 23 Phân Hệ Kiểm Thử (194/194 PASS - 100%):
+### Danh Sách 23 Phân Hệ Kiểm Thử (197/197 PASS - 100%):
 1. `ActivityAndAuditLogTest` - Kiểm tra ghi nhận nhật ký kiểm toán & hoạt động.
 2. `ActuatorHealthTest` - Giám sát sức khỏe ứng dụng và các service phụ trợ.
 3. `AiTutorControllerTest` - Kiểm thử hội thoại AI và đánh giá phản hồi.
@@ -285,7 +287,7 @@ Dự án sở hữu bộ kiểm thử tự động toàn diện bao quát 23 ph�
 9. `ExperimentControllerTest` - Giao bài thí nghiệm, nộp bài và chấm điểm thực hành.
 10. `FileStorageIntegrationTest` - Upload ảnh, PDF, stream tệp qua MinIO và fallback an toàn.
 11. `IdorSecurityControllerTest` - Bảo vệ chống truy cập trái phép chéo tài nguyên.
-12. `LearningMaterialControllerTest` - Quản lý tài liệu học tập lý thuyết môn học.
+12. `LearningMaterialControllerTest` - Quản lý tài liệu học tập & bài giảng Markdown lưu trực tiếp trong DB.
 13. `LearningProgressControllerTest` - Theo dõi tiến độ hoàn thành bài học của sinh viên.
 14. `PasswordResetControllerTest` - Quy trình quên mật khẩu và đặt lại mật khẩu an toàn.
 15. `QuestionBankControllerTest` - Ngân hàng câu hỏi & Import hàng loạt từ tệp Excel.

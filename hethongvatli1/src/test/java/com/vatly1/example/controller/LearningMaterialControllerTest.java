@@ -202,4 +202,48 @@ public class LearningMaterialControllerTest {
             .andExpect(jsonPath("$.data", hasSize(1)))
             .andExpect(jsonPath("$.data[0].materialId").value(materialId));
     }
+
+    @Test
+    @DisplayName("MAT-06: Tạo bài giảng dạng MARKDOWN -> lưu nội dung trực tiếp trong DB (contentText), không lưu file")
+    void createMaterial_markdown_storedAsTextInDb_success() throws Exception {
+        String markdownText = "# Bài giảng: Động học chất điểm\n\n## 1. Vận tốc tức thời\n$$v = \\frac{dr}{dt}$$\n\n## 2. Gia tốc\n$$a = \\frac{dv}{dt}$$";
+
+        mockMvc.perform(MockMvcRequestBuilders.multipart("/api/v1/topics/" + topicId + "/materials")
+                .param("title", "Bài giảng lý thuyết Markdown")
+                .param("type", "MARKDOWN")
+                .param("contentText", markdownText)
+                .param("sourceCitation", "Giáo trình Vật lý đại cương")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.title").value("Bài giảng lý thuyết Markdown"))
+            .andExpect(jsonPath("$.data.type").value("MARKDOWN"))
+            .andExpect(jsonPath("$.data.contentText").value(markdownText))
+            .andExpect(jsonPath("$.data.fileUrl").doesNotExist())
+            .andExpect(jsonPath("$.data.fileId").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("MAT-07: Tạo bài giảng MARKDOWN nhưng cố đính kèm file -> bị từ chối 400 Bad Request")
+    void createMaterial_markdownWithFile_returns400() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "lecture.md", "text/markdown", "# Content".getBytes());
+
+        mockMvc.perform(MockMvcRequestBuilders.multipart("/api/v1/topics/" + topicId + "/materials")
+                .file(file)
+                .param("title", "Bài giảng Markdown lỗi")
+                .param("type", "MARKDOWN")
+                .param("contentText", "# Nội dung")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("MAT-08: Tạo bài giảng MARKDOWN nhưng để trống nội dung -> bị từ chối 400 Bad Request")
+    void createMaterial_markdownWithBlankContent_returns400() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.multipart("/api/v1/topics/" + topicId + "/materials")
+                .param("title", "Bài giảng Markdown không nội dung")
+                .param("type", "MARKDOWN")
+                .param("contentText", "   ")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isBadRequest());
+    }
 }
