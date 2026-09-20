@@ -28,8 +28,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -60,7 +58,6 @@ public class EvidenceControllerTest {
     @Autowired
     private IUserRepository userRepository;
 
-    private String adminToken;
     private String instructorToken;
     private String studentToken;
     private String studentBToken;
@@ -69,7 +66,6 @@ public class EvidenceControllerTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        adminToken = signin("admin", "admin123456");
         instructorToken = signin("gv_nguyen", "gv_nguyen123456");
         studentToken = signin("sv_an", "sv_an123456");
         studentBToken = signin("sv_binh", "sv_binh123456");

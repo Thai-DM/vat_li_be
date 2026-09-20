@@ -1,6 +1,5 @@
 package com.vatly1.example.service;
 
-import com.vatly1.example.entity.RefreshToken;
 
 public interface IRefreshTokenService {
     String issue(String username);

@@ -47,7 +47,6 @@ public class ExperimentControllerTest {
     private String adminToken;
     private String instructorToken;
     private String studentToken;
-    private String taToken;
     private String subjectId;
     private String classId;
     private String experimentId;
@@ -57,7 +56,6 @@ public class ExperimentControllerTest {
         adminToken = signin("admin", "admin123456");
         instructorToken = signin("gv_nguyen", "gv_nguyen123456");
         studentToken = signin("sv_an", "sv_an123456");
-        taToken = signin("ta_hung", "ta_hung123456");
 
         String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=1")
                 .header("Authorization", "Bearer " + adminToken))

@@ -64,7 +64,6 @@ public class IdorSecurityControllerTest {
 
     private String studentAToken; // sv_an
     private String studentBToken; // sv_binh
-    private String instructorAToken; // gv_nguyen (chủ nhiệm PHY101-01)
     private String instructorBToken; // gv_tran (chủ nhiệm PHY101-02)
     private User userA;
     private User userB;
@@ -78,7 +77,6 @@ public class IdorSecurityControllerTest {
     void setUp() throws Exception {
         studentAToken = signin("sv_an", "sv_an123456");
         studentBToken = signin("sv_binh", "sv_binh123456");
-        instructorAToken = signin("gv_nguyen", "gv_nguyen123456");
         instructorBToken = signin("gv_tran", "gv_tran123456");
 
         userA = userRepository.findByUsername("sv_an");

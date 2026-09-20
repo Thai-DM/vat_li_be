@@ -1,7 +1,5 @@
 package com.vatly1.example.model.dto;
 
-import com.vatly1.example.model.request.*;
-import com.vatly1.example.model.response.*;
 
 import com.vatly1.example.entity.enums.AttemptStatus;
 import lombok.AllArgsConstructor;

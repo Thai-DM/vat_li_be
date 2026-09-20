@@ -36,8 +36,6 @@ public class LearningProgressControllerTest {
     @Autowired
     private IClassRepository classRepository;
 
-    @Autowired
-    private IUserRepository userRepository;
 
     private String adminToken;
     private String studentToken;

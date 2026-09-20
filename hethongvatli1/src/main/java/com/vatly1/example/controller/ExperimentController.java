@@ -8,7 +8,6 @@ import com.vatly1.example.model.dto.ExperimentAssignmentDTO;
 import com.vatly1.example.model.dto.ExperimentDTO;
 import com.vatly1.example.model.request.GradeSubmissionDTO;
 import com.vatly1.example.model.request.SubmitExperimentDTO;
-import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.service.IExperimentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,7 +22,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController

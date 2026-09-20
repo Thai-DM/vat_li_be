@@ -71,7 +71,6 @@ public class ExamControllerTest {
     @Autowired
     private IUserRepository userRepository;
 
-    private String adminToken;
     private String instructorToken;
     private String instructorBToken;
     private String studentToken;
@@ -80,11 +79,9 @@ public class ExamControllerTest {
     private String subjectId;
     private UUID questionId;
     private UUID correctOptionId;
-    private UUID wrongOptionId;
 
     @BeforeEach
     void setUp() throws Exception {
-        adminToken = signin("admin", "admin123456");
         instructorToken = signin("gv_nguyen", "gv_nguyen123456");
         instructorBToken = signin("gv_tran", "gv_tran123456");
         studentToken = signin("sv_an", "sv_an123456");
@@ -123,7 +120,6 @@ public class ExamControllerTest {
         QuestionOption savedOpt1 = questionOptionRepository.save(opt1);
         QuestionOption savedOpt2 = questionOptionRepository.save(opt2);
         correctOptionId = savedOpt1.getOptionId();
-        wrongOptionId = savedOpt2.getOptionId();
     }
 
     private String signin(String username, String password) throws Exception {

@@ -1,8 +1,5 @@
 package com.vatly1.example.model.response;
 
-import com.vatly1.example.model.dto.*;
-import com.vatly1.example.model.request.*;
-import com.vatly1.example.model.response.*;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -11,7 +8,6 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.vatly1.example.entity.enums.UserRole;
 
 @Data
 @NoArgsConstructor

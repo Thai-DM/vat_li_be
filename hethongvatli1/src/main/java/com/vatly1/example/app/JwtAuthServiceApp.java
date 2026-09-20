@@ -19,7 +19,6 @@ import com.vatly1.example.repository.ISemesterRepository;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.IClassStaffRepository;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
-import com.vatly1.example.repository.ExperimentRepository;
 import com.vatly1.example.entity.Experiment;
 import com.vatly1.example.entity.Subject;
 import com.vatly1.example.entity.Semester;
@@ -33,7 +32,6 @@ import com.vatly1.example.entity.enums.EnrollmentStatus;
 import com.vatly1.example.service.IUserService;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 @SpringBootApplication
 @ComponentScan(basePackages = "com.vatly1.example")

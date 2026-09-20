@@ -1,8 +1,5 @@
 package com.vatly1.example.model.response;
 
-import com.vatly1.example.model.dto.*;
-import com.vatly1.example.model.request.*;
-import com.vatly1.example.model.response.*;
 
 import java.util.UUID;
 import io.swagger.v3.oas.annotations.media.Schema;

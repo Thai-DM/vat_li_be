@@ -1,8 +1,5 @@
 package com.vatly1.example.model.request;
 
-import com.vatly1.example.model.dto.*;
-import com.vatly1.example.model.request.*;
-import com.vatly1.example.model.response.*;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;

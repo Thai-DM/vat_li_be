@@ -3,9 +3,6 @@ package com.vatly1.example.converter;
 import com.vatly1.example.model.dto.ClassDTO;
 import com.vatly1.example.model.request.CreateClassDTO;
 import com.vatly1.example.entity.Class;
-import com.vatly1.example.entity.Semester;
-import com.vatly1.example.entity.Subject;
-import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.enums.ClassStatus;
 import org.springframework.stereotype.Component;
 
