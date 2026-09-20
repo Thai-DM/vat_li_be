@@ -189,8 +189,14 @@ docker-compose up -d
 
 Sau khi khởi chạy thành công:
 - **PostgreSQL**: `localhost:5432` (Database: `vatly1`, User: `vatly1`, Password: `vatly1_pass`)
+  - Tự động nạp sẵn toàn bộ schema 42 bảng và dữ liệu mẫu thông qua file `init.sql`.
 - **MinIO API**: `http://localhost:9000`
 - **MinIO Web Console**: `http://localhost:9001` (User: `minioadmin`, Password: `minioadmin`)
+
+> **🔑 Tài khoản mẫu khởi tạo sẵn trong `init.sql`:**
+> - **Quản trị viên (Admin):** `admin` / `admin123456`
+> - **Giảng viên (Instructor):** `gv_nguyen` / `gv123456`
+> - **Sinh viên (Student):** `sv_an` / `sv123456` hoặc `sv_cuong` / `sv123456`
 
 ### 3. Cấu Hình Ứng Dụng
 Xem cấu hình mẫu tại `src/main/resources/application.yml` hoặc chỉnh sửa các biến môi trường:
