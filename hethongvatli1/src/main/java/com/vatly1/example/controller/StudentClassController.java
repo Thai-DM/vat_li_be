@@ -29,7 +29,7 @@ public class StudentClassController {
 
     @Operation(summary = "Lấy danh sách lớp học của tôi", description = "Lấy danh sách các lớp học mà sinh viên đang ghi danh.")
     @GetMapping("/classes")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<Page<ClassDTO>>> getMyClasses(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,

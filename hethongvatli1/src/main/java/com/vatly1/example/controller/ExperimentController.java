@@ -86,7 +86,7 @@ public class ExperimentController {
 
     @Operation(summary = "Sinh viên nộp kết quả thí nghiệm ảo", description = "Tải lên file số liệu đo đạc, đồ thị và hình ảnh minh chứng.")
     @PostMapping(value = "/assignments/{assignmentId}/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> submitExperiment(
             @PathVariable UUID assignmentId,
             @Valid @ModelAttribute SubmitExperimentDTO submitDTO,
@@ -102,7 +102,7 @@ public class ExperimentController {
 
     @Operation(summary = "Chấm điểm bài thí nghiệm theo tiêu chí Rubric", description = "Giảng viên / Trợ giảng chấm điểm từng tiêu chí Rubric cho bài nộp.")
     @PostMapping("/submissions/{submissionId}/scores")
-    @PreAuthorize("hasAnyRole('INSTRUCTOR', 'TA')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
     public ResponseEntity<ApiResponse<Void>> gradeSubmission(
             @PathVariable UUID submissionId,
             @Valid @RequestBody(required = false) GradeSubmissionDTO scoreDTO,

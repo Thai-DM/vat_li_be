@@ -29,7 +29,7 @@ public class StudentActivityLogController {
 
     @Operation(summary = "Lấy nhật ký hoạt động cá nhân của sinh viên", description = "Xem lịch sử các thao tác học tập, nộp bài và tương tác của sinh viên đang đăng nhập.")
     @GetMapping("/me/activity-logs")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ActivityLog>>> getMyActivityLogs(HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         List<ActivityLog> logs = logService.getStudentActivityLogs(currentUserId);

@@ -63,7 +63,7 @@ public class DashboardController {
 
     @Operation(summary = "Lấy bảng điều khiển học tập cá nhân của tôi", description = "Sinh viên theo dõi điểm số, xếp hạng và lộ trình hoàn thành của bản thân.")
     @GetMapping("/me")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<DashboardSnapshotDTO>> getMyDashboard(HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         DashboardSnapshotDTO data = dashboardService.getMyDashboard(currentUserId);

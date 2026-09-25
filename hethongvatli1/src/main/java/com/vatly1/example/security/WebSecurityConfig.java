@@ -82,6 +82,22 @@ public class WebSecurityConfig {
     return authConfig.getAuthenticationManager();
   }
 
+  @Bean
+  public org.springframework.security.access.hierarchicalroles.RoleHierarchy roleHierarchy() {
+    return org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl.withDefaultRolePrefix()
+        .role("ADMIN").implies("INSTRUCTOR", "TA", "STUDENT")
+        .role("INSTRUCTOR").implies("TA")
+        .build();
+  }
+
+  @Bean
+  public org.springframework.security.access.expression.method.MethodSecurityExpressionHandler methodSecurityExpressionHandler(
+      org.springframework.security.access.hierarchicalroles.RoleHierarchy roleHierarchy) {
+    org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler expressionHandler =
+        new org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler();
+    expressionHandler.setRoleHierarchy(roleHierarchy);
+    return expressionHandler;
+  }
 }
 
 

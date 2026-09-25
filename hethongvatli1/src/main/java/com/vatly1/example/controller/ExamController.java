@@ -113,7 +113,7 @@ public class ExamController {
 
     @Operation(summary = "Sinh viên bắt đầu làm bài thi (Tạo lượt thi)", description = "Khởi tạo lượt làm bài mới, hỗ trợ multi-attempt cho đề luyện tập.")
     @PostMapping("/{examId}/attempts")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<ExamAttemptDTO>> startAttempt(
             @PathVariable UUID examId,
             HttpServletRequest request) {
@@ -128,7 +128,7 @@ public class ExamController {
 
     @Operation(summary = "Lưu câu trả lời tạm thời của sinh viên", description = "Ghi nhận phương án chọn cho từng câu hỏi trong quá trình làm bài.")
     @PostMapping("/attempts/{attemptId}/answers")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> submitAnswer(
             @PathVariable UUID attemptId,
             @Valid @RequestBody SubmitAnswerDTO dto,
@@ -144,7 +144,7 @@ public class ExamController {
 
     @Operation(summary = "Nộp bài thi và chấm điểm tự động", description = "Khóa bài thi bằng khóa bi quan (SELECT FOR UPDATE) chống race condition và tính điểm.")
     @PutMapping("/attempts/{attemptId}/submit")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<ExamAttemptDTO>> submitAttempt(
             @PathVariable UUID attemptId,
             HttpServletRequest request) {
@@ -159,7 +159,7 @@ public class ExamController {
 
     @Operation(summary = "Lấy lượt làm bài gần nhất của sinh viên hiện tại", description = "Xem thông tin hoặc tiếp tục bài thi đang làm dở.")
     @GetMapping("/{examId}/my-attempt")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<ExamAttemptDTO>> getMyAttempt(
             @PathVariable UUID examId,
             HttpServletRequest request) {
@@ -174,7 +174,7 @@ public class ExamController {
 
     @Operation(summary = "Lấy toàn bộ lịch sử các lượt làm bài của sinh viên cho kỳ thi", description = "Xem danh sách và điểm số tất cả các lần thi (đặc biệt cho đề thi luyện tập PRACTICE).")
     @GetMapping("/{examId}/my-attempts")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ExamAttemptDTO>>> getMyAttempts(
             @PathVariable UUID examId,
             HttpServletRequest request) {

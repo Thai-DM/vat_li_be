@@ -29,7 +29,7 @@ public class StudentProgressController {
 
     @Operation(summary = "Lấy tiến độ học tập của tôi theo lớp", description = "Sinh viên xem danh sách học liệu đã hoàn thành và tiến độ phần trăm theo lớp học.")
     @GetMapping
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<LearningProgressDTO>>> getMyProgress(
             @RequestParam UUID classId,
             HttpServletRequest request) {
@@ -45,7 +45,7 @@ public class StudentProgressController {
 
     @Operation(summary = "Cập nhật tiến độ học tập cá nhân", description = "Ghi nhận trạng thái hoàn thành hoặc thời gian tương tác với học liệu số.")
     @PutMapping
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<LearningProgressDTO>> updateProgress(
             @Valid @RequestBody UpdateLearningProgressDTO updateDTO,
             HttpServletRequest request) {

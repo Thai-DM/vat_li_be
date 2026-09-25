@@ -474,10 +474,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 -- 42. system_settings - Cai dat cau hinh he thong
 CREATE TABLE IF NOT EXISTS system_settings (
-    key         VARCHAR(100) NOT NULL,
-    subject_id  UUID REFERENCES subjects(subject_id) ON DELETE CASCADE,
-    value       JSONB NOT NULL,
-    PRIMARY KEY (key, subject_id)
+    key           VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    description   TEXT,
+    updated_by    UUID,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 43. password_reset_tokens - Token khoi phuc mat khau qua email
@@ -581,14 +582,14 @@ ON CONFLICT (subject_id, topic_code) DO NOTHING;
 -- 8b. DANH SACH BAI GIANG & HOC LIEU SO (learning_materials)
 INSERT INTO learning_materials (material_id, topic_id, title, type, file_url, content_text, version, approval_status, source_citation, created_by)
 VALUES
-    ('m1111111-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Slide Bài giảng: Động học chất điểm', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_hoc.pdf', 'Tổng quan về chuyển động thẳng đều, thẳng biến đổi đều, gia tốc tiếp tuyến và pháp tuyến trong chuyển động cong.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I - NXB Giáo dục', '22222222-2222-2222-2222-222222222222'),
-    ('m1222222-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Tóm tắt công thức & Bài tập Động học chất điểm', 'PDF', 'http://localhost:9000/vatly1-bucket/materials/cong_thuc_dong_hoc.pdf', 'Tài liệu tóm tắt công thức trọng tâm và hướng dẫn giải các dạng bài toán ném ngang, ném xiên.', 1, 'APPROVED', 'Bộ môn Vật lý', '22222222-2222-2222-2222-222222222222'),
-    ('m2111111-2222-2222-2222-222222222222', 'd2222222-2222-2222-2222-222222222222', 'Slide Bài giảng: Động lực học chất điểm & Các định luật Newton', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_luc_hoc.pdf', 'Nội dung ba định luật Newton, các lực ma sát, phản lực và phương pháp tọa độ giải phương trình động lực học.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
-    ('m3111111-3333-3333-3333-333333333333', 'd3333333-3333-3333-3333-333333333333', 'Slide Bài giảng: Công, Năng lượng & Định luật bảo toàn cơ năng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_cong_nang_luong.pdf', 'Khái niệm công của lực, công suất, định lý biến thiên động năng, trường lực thế và thế năng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
-    ('m4111111-4444-4444-4444-444444444444', 'd4444444-4444-4444-4444-444444444444', 'Slide Bài giảng: Cơ học vật rắn & Chuyển động quay quanh trục cố định', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_vat_ran.pdf', 'Mômen lực, mômen quán tính, định lý Steiner-Huygens và phương trình cơ bản của chuyển động quay.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
-    ('m5111111-5555-5555-5555-555555555555', 'd5555555-5555-5555-5555-555555555555', 'Slide Bài giảng: Dao động điều hòa và Sự lan truyền sóng cơ', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dao_dong_song.pdf', 'Phương trình vi phân dao động điều hòa, con lắc lò xo, con lắc đơn, năng lượng dao động và sóng cơ.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
-    ('m6111111-6666-6666-6666-666666666666', 'd6666666-6666-6666-6666-666666666666', 'Slide Bài giảng: Thuyết động học phân tử chất khí lý tưởng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_khi_ly_tuong.pdf', 'Mô hình khí lý tưởng, phương trình cơ bản của thuyết động học phân tử, nhiệt độ và nội năng khí lý tưởng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
-    ('m7111111-7777-7777-7777-777777777777', 'd7777777-7777-7777-7777-777777777777', 'Slide Bài giảng: Các nguyên lý cơ bản của Nhiệt động lực học', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_nhiet_dong_luc_hoc.pdf', 'Nguyên lý thứ nhất và thứ hai nhiệt động lực học, các quá trình cân bằng của khí lý tưởng, chu trình Carnot và hiệu suất động cơ nhiệt.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222')
+    ('a1111111-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Slide Bài giảng: Động học chất điểm', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_hoc.pdf', 'Tổng quan về chuyển động thẳng đều, thẳng biến đổi đều, gia tốc tiếp tuyến và pháp tuyến trong chuyển động cong.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I - NXB Giáo dục', '22222222-2222-2222-2222-222222222222'),
+    ('a1222222-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'Tóm tắt công thức & Bài tập Động học chất điểm', 'PDF', 'http://localhost:9000/vatly1-bucket/materials/cong_thuc_dong_hoc.pdf', 'Tài liệu tóm tắt công thức trọng tâm và hướng dẫn giải các dạng bài toán ném ngang, ném xiên.', 1, 'APPROVED', 'Bộ môn Vật lý', '22222222-2222-2222-2222-222222222222'),
+    ('a2111111-2222-2222-2222-222222222222', 'd2222222-2222-2222-2222-222222222222', 'Slide Bài giảng: Động lực học chất điểm & Các định luật Newton', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dong_luc_hoc.pdf', 'Nội dung ba định luật Newton, các lực ma sát, phản lực và phương pháp tọa độ giải phương trình động lực học.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('a3111111-3333-3333-3333-333333333333', 'd3333333-3333-3333-3333-333333333333', 'Slide Bài giảng: Công, Năng lượng & Định luật bảo toàn cơ năng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_cong_nang_luong.pdf', 'Khái niệm công của lực, công suất, định lý biến thiên động năng, trường lực thế và thế năng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('a4111111-4444-4444-4444-444444444444', 'd4444444-4444-4444-4444-444444444444', 'Slide Bài giảng: Cơ học vật rắn & Chuyển động quay quanh trục cố định', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_vat_ran.pdf', 'Mômen lực, mômen quán tính, định lý Steiner-Huygens và phương trình cơ bản của chuyển động quay.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('a5111111-5555-5555-5555-555555555555', 'd5555555-5555-5555-5555-555555555555', 'Slide Bài giảng: Dao động điều hòa và Sự lan truyền sóng cơ', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_dao_dong_song.pdf', 'Phương trình vi phân dao động điều hòa, con lắc lò xo, con lắc đơn, năng lượng dao động và sóng cơ.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('a6111111-6666-6666-6666-666666666666', 'd6666666-6666-6666-6666-666666666666', 'Slide Bài giảng: Thuyết động học phân tử chất khí lý tưởng', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_khi_ly_tuong.pdf', 'Mô hình khí lý tưởng, phương trình cơ bản của thuyết động học phân tử, nhiệt độ và nội năng khí lý tưởng.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222'),
+    ('a7111111-7777-7777-7777-777777777777', 'd7777777-7777-7777-7777-777777777777', 'Slide Bài giảng: Các nguyên lý cơ bản của Nhiệt động lực học', 'SLIDE', 'http://localhost:9000/vatly1-bucket/materials/slide_nhiet_dong_luc_hoc.pdf', 'Nguyên lý thứ nhất và thứ hai nhiệt động lực học, các quá trình cân bằng của khí lý tưởng, chu trình Carnot và hiệu suất động cơ nhiệt.', 1, 'APPROVED', 'Giáo trình Vật lý đại cương I', '22222222-2222-2222-2222-222222222222')
 ON CONFLICT (material_id) DO NOTHING;
 
 
@@ -601,10 +602,11 @@ ON CONFLICT (question_id) DO NOTHING;
 
 INSERT INTO question_options (option_id, question_id, option_label, option_text, is_correct, order_index)
 VALUES
-    (gen_random_uuid(), 'e1111111-1111-1111-1111-111111111111', 'A', 'Biến thiên liên tục theo hàm bậc nhất của thời gian', false, 1),
-    (gen_random_uuid(), 'e1111111-1111-1111-1111-111111111111', 'B', 'Không đổi cả về phương, chiều và độ lớn theo thời gian', true, 2),
-    (gen_random_uuid(), 'e1111111-1111-1111-1111-111111111111', 'C', 'Luôn luôn bằng không', false, 3),
-    (gen_random_uuid(), 'e1111111-1111-1111-1111-111111111111', 'D', 'Tăng dần đều theo thời gian', false, 4);
+    ('b1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'A', 'Biến thiên liên tục theo hàm bậc nhất của thời gian', false, 1),
+    ('b1111111-1111-1111-1111-111111111112', 'e1111111-1111-1111-1111-111111111111', 'B', 'Không đổi cả về phương, chiều và độ lớn theo thời gian', true, 2),
+    ('b1111111-1111-1111-1111-111111111113', 'e1111111-1111-1111-1111-111111111111', 'C', 'Luôn luôn bằng không', false, 3),
+    ('b1111111-1111-1111-1111-111111111114', 'e1111111-1111-1111-1111-111111111111', 'D', 'Tăng dần đều theo thời gian', false, 4)
+ON CONFLICT (option_id) DO NOTHING;
 
 -- Cau 2 (Chu de 2 - Trung binh)
 INSERT INTO question_bank (question_id, topic_id, question_text, question_type, difficulty, explanation, is_active)
@@ -614,10 +616,11 @@ ON CONFLICT (question_id) DO NOTHING;
 
 INSERT INTO question_options (option_id, question_id, option_label, option_text, is_correct, order_index)
 VALUES
-    (gen_random_uuid(), 'e2222222-2222-2222-2222-222222222222', 'A', 'Cùng hướng và tỉ lệ thuận với hợp lực tác dụng lên vật', true, 1),
-    (gen_random_uuid(), 'e2222222-2222-2222-2222-222222222222', 'B', 'Ngược hướng với hợp lực tác dụng lên vật', false, 2),
-    (gen_random_uuid(), 'e2222222-2222-2222-2222-222222222222', 'C', 'Tỉ lệ thuận với khối lượng của vật', false, 3),
-    (gen_random_uuid(), 'e2222222-2222-2222-2222-222222222222', 'D', 'Không phụ thuộc vào khối lượng của vật', false, 4);
+    ('b2222222-2222-2222-2222-222222222221', 'e2222222-2222-2222-2222-222222222222', 'A', 'Cùng hướng và tỉ lệ thuận với hợp lực tác dụng lên vật', true, 1),
+    ('b2222222-2222-2222-2222-222222222222', 'e2222222-2222-2222-2222-222222222222', 'B', 'Ngược hướng với hợp lực tác dụng lên vật', false, 2),
+    ('b2222222-2222-2222-2222-222222222223', 'e2222222-2222-2222-2222-222222222222', 'C', 'Tỉ lệ thuận với khối lượng của vật', false, 3),
+    ('b2222222-2222-2222-2222-222222222224', 'e2222222-2222-2222-2222-222222222222', 'D', 'Không phụ thuộc vào khối lượng của vật', false, 4)
+ON CONFLICT (option_id) DO NOTHING;
 
 -- Cau 3 (Chu de 3 - Kho)
 INSERT INTO question_bank (question_id, topic_id, question_text, question_type, difficulty, explanation, is_active)
@@ -627,10 +630,11 @@ ON CONFLICT (question_id) DO NOTHING;
 
 INSERT INTO question_options (option_id, question_id, option_label, option_text, is_correct, order_index)
 VALUES
-    (gen_random_uuid(), 'e3333333-3333-3333-3333-333333333333', 'A', 'v = g * h', false, 1),
-    (gen_random_uuid(), 'e3333333-3333-3333-3333-333333333333', 'B', 'v = sqrt(g * h)', false, 2),
-    (gen_random_uuid(), 'e3333333-3333-3333-3333-333333333333', 'C', 'v = sqrt(2 * g * h)', true, 3),
-    (gen_random_uuid(), 'e3333333-3333-3333-3333-333333333333', 'D', 'v = 2 * g * h', false, 4);
+    ('b3333333-3333-3333-3333-333333333331', 'e3333333-3333-3333-3333-333333333333', 'A', 'v = g * h', false, 1),
+    ('b3333333-3333-3333-3333-333333333332', 'e3333333-3333-3333-3333-333333333333', 'B', 'v = sqrt(g * h)', false, 2),
+    ('b3333333-3333-3333-3333-333333333333', 'e3333333-3333-3333-3333-333333333333', 'C', 'v = sqrt(2 * g * h)', true, 3),
+    ('b3333333-3333-3333-3333-333333333334', 'e3333333-3333-3333-3333-333333333333', 'D', 'v = 2 * g * h', false, 4)
+ON CONFLICT (option_id) DO NOTHING;
 
 -- 10. BAI THI NGHIEM AO MAU (experiments & experiment_assignments)
 INSERT INTO experiments (experiment_id, subject_id, title, description, instruction, is_active)
@@ -647,13 +651,13 @@ VALUES
 ON CONFLICT (assignment_id) DO NOTHING;
 
 -- 11. CAI DAT HE THONG MAC DINH (system_settings)
-INSERT INTO system_settings (key, subject_id, value)
+INSERT INTO system_settings (key, setting_value)
 VALUES
-    ('exam.max_attempts', NULL, '{"value": 3}'),
-    ('exam.pass_percentage', NULL, '{"value": 50}'),
-    ('ai.tutor_enabled', NULL, '{"value": true}'),
-    ('file.max_size_mb', NULL, '{"value": 50}')
-ON CONFLICT (key, subject_id) DO NOTHING;
+    ('exam.max_attempts', '3'),
+    ('exam.pass_percentage', '50'),
+    ('ai.tutor_enabled', 'true'),
+    ('file.max_upload_mb', '50')
+ON CONFLICT (key) DO NOTHING;
 
 -- =============================================================================
 -- HOAN TAT KHOI TAO CO SO DU LIEU

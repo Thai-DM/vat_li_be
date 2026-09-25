@@ -30,7 +30,7 @@ public class EvidenceController {
 
     @Operation(summary = "Lấy kho minh chứng thí nghiệm của sinh viên hiện tại", description = "Trả về danh sách kết quả đo đạc, báo cáo thí nghiệm ảo của sinh viên đang đăng nhập.")
     @GetMapping("/students/me/evidence")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<EvidenceDTO>>> getMyEvidence(HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         List<EvidenceDTO> data = evidenceService.getMyEvidence(currentUserId);

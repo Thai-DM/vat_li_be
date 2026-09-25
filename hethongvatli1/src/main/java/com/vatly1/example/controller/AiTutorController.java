@@ -38,7 +38,7 @@ public class AiTutorController {
 
     @Operation(summary = "Khởi tạo phiên hội thoại mới với trợ giảng AI Socratic", description = "Mở phiên thảo luận bài tập, giải đáp khái niệm vật lý theo phương pháp Socratic.")
     @PostMapping("/conversations")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<AiConversationDTO>> startConversation(
             @Valid @RequestBody StartAiConversationDTO dto,
             HttpServletRequest request) {
@@ -53,7 +53,7 @@ public class AiTutorController {
 
     @Operation(summary = "Gửi câu hỏi / tin nhắn cho trợ giảng AI", description = "Nhận phản hồi gợi mở, gợi ý tư duy kèm trích dẫn tài liệu học tập chính thức.")
     @PostMapping("/conversations/{conversationId}/messages")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<AiMessageDTO>> sendMessage(
             @PathVariable UUID conversationId,
             @Valid @RequestBody SendAiMessageDTO dto,
@@ -69,7 +69,7 @@ public class AiTutorController {
 
     @Operation(summary = "Lấy lịch sử tin nhắn trong phiên hội thoại AI", description = "Xem lại toàn bộ trao đổi giữa sinh viên và trợ giảng AI.")
     @GetMapping("/conversations/{conversationId}/messages")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<AiMessageDTO>>> getConversationHistory(
             @PathVariable UUID conversationId,
             HttpServletRequest request) {
@@ -84,7 +84,7 @@ public class AiTutorController {
 
     @Operation(summary = "Lấy danh sách các phiên hội thoại AI của sinh viên", description = "Xem danh sách các phiên thảo luận trợ giảng AI của sinh viên đang đăng nhập.")
     @GetMapping("/conversations/my")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<AiConversationDTO>>> getMyConversations(
             HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
@@ -98,7 +98,7 @@ public class AiTutorController {
 
     @Operation(summary = "Kết thúc phiên hội thoại AI", description = "Đóng phiên thảo luận sau khi sinh viên đã giải quyết xong thắc mắc.")
     @PutMapping("/conversations/{conversationId}/end")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<AiConversationDTO>> endConversation(
             @PathVariable UUID conversationId,
             HttpServletRequest request) {
@@ -113,7 +113,7 @@ public class AiTutorController {
 
     @Operation(summary = "Gửi phản hồi / đánh giá câu trả lời của AI", description = "Đánh giá chất lượng trợ giảng (hữu ích, chưa rõ ràng, từ chối đúng/sai).")
     @PostMapping("/messages/{messageId}/feedback")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> submitFeedback(
             @PathVariable UUID messageId,
             @Valid @RequestBody AiFeedbackDTO dto,
