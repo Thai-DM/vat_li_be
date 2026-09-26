@@ -63,10 +63,10 @@ class StudentClassControllerTest {
     }
 
     @Test
-    void getMyClasses_asAdmin_returns403() throws Exception {
-        // Admin doesn't have role STUDENT
+    void getMyClasses_asAdmin_returns200() throws Exception {
+        // Admin has full access
         mockMvc.perform(get("/api/v1/students/me/classes")
                 .header("Authorization", "Bearer " + adminToken))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isOk());
     }
 }

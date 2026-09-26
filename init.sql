@@ -100,6 +100,22 @@ CREATE TABLE IF NOT EXISTS class_enrollments (
     UNIQUE (class_id, student_id)
 );
 
+-- 8b. class_schedules - Thoi khoa bieu / Lich hoc cua lop
+CREATE TABLE IF NOT EXISTS class_schedules (
+    schedule_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    class_id       UUID NOT NULL REFERENCES classes(class_id) ON DELETE CASCADE,
+    day_of_week    INT NOT NULL CHECK (day_of_week BETWEEN 2 AND 8),
+    start_period   INT,
+    end_period     INT,
+    start_time     TIME,
+    end_time       TIME,
+    room           VARCHAR(100),
+    building       VARCHAR(100),
+    lesson_type    VARCHAR(50) NOT NULL DEFAULT 'THEORY',
+    notes          TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 9. file_uploads - Nhat ky luu tru tep tin va anh (MinIO / Storage)
 CREATE TABLE IF NOT EXISTS file_uploads (
     file_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -497,6 +513,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username         ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);
 CREATE INDEX IF NOT EXISTS idx_classes_subject        ON classes(subject_id);
 CREATE INDEX IF NOT EXISTS idx_classes_semester       ON classes(semester_id);
+CREATE INDEX IF NOT EXISTS idx_class_schedules_class   ON class_schedules(class_id);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student    ON class_enrollments(student_id);
 CREATE INDEX IF NOT EXISTS idx_topics_subject         ON topics(subject_id);
 CREATE INDEX IF NOT EXISTS idx_materials_topic        ON learning_materials(topic_id);
@@ -566,6 +583,13 @@ VALUES
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333', 'ACTIVE'),
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', '44444444-4444-4444-4444-444444444444', 'ACTIVE')
 ON CONFLICT (class_id, student_id) DO NOTHING;
+
+-- 7b. THOI KHOA BIEU / LICH HOC (class_schedules)
+INSERT INTO class_schedules (schedule_id, class_id, day_of_week, start_period, end_period, start_time, end_time, room, building, lesson_type, notes)
+VALUES
+    ('e1111111-1111-1111-1111-111111111111', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 2, 1, 3, '07:00:00', '09:30:00', 'A1-203', 'Nhà A1', 'THEORY', 'Học lý thuyết Cơ - Nhiệt'),
+    ('e2222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 5, 7, 9, '13:00:00', '15:30:00', 'Lab Vật lý 102', 'Khu Thí nghiệm', 'LAB', 'Thực hành thí nghiệm ảo và đo lường')
+ON CONFLICT (schedule_id) DO NOTHING;
 
 -- 8. DANH SACH 7 CHU DE BAI HOC (topics)
 INSERT INTO topics (topic_id, subject_id, topic_code, topic_name, description, order_index)

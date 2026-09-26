@@ -17,6 +17,8 @@ public interface IClassEnrollmentRepository extends JpaRepository<ClassEnrollmen
     
     Page<ClassEnrollment> findByStudentId(UUID studentId, Pageable pageable);
     Page<ClassEnrollment> findByStudentIdAndStatus(UUID studentId, EnrollmentStatus status, Pageable pageable);
+    java.util.List<ClassEnrollment> findByStudentId(UUID studentId);
+    java.util.List<ClassEnrollment> findByStudentIdAndStatus(UUID studentId, EnrollmentStatus status);
     
     boolean existsByClassIdAndStudentId(UUID classId, UUID studentId);
     Optional<ClassEnrollment> findByClassIdAndStudentId(UUID classId, UUID studentId);
