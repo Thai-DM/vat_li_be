@@ -39,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -651,5 +652,125 @@ public class ExamControllerTest {
                 .andExpect(jsonPath("$.data[0].attemptNumber").value(1))
                 .andExpect(jsonPath("$.data[1].attemptId").value(attemptId2))
                 .andExpect(jsonPath("$.data[1].attemptNumber").value(2));
+    }
+
+    @Test
+    @DisplayName("EXAM-18: Chuyển sinh viên sang ca thi lớp khác cùng môn và kiểm tra quyền làm bài")
+    void testExam18_CrossClassTransferAndAttempt() throws Exception {
+        // gv_tran là giảng viên của lớp PHY101-02
+        Class class2 = classRepository.findAll().stream()
+                .filter(c -> "PHY101-02".equals(c.getClassCode()))
+                .findFirst()
+                .orElseThrow();
+        String class2Id = class2.getClassId().toString();
+
+        // Tạo bài thi cho lớp PHY101-02 bởi gv_tran
+        String examId = createExamHelper(instructorBToken, class2Id, "Kiểm tra ca 2 - Lớp 02", "PRACTICE", null, null);
+
+        // Thêm câu hỏi vào đề
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorBToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"questionId\":\"" + questionId + "\", \"scoreWeight\": 10.0}"))
+                .andExpect(status().isOk());
+
+        // sv_cuong thuộc lớp PHY101-01 nhưng KHÔNG thuộc lớp PHY101-02
+        String studentCToken = signin("sv_cuong", "sv_cuong123456");
+        User svCuong = userRepository.findByUsername("sv_cuong");
+
+        // Khi chưa chuyển ca: sv_cuong bắt đầu làm bài bị từ chối 403 FORBIDDEN
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentCToken))
+                .andExpect(status().isForbidden());
+
+        // Giảng viên gv_tran chuyển sinh viên sv_cuong vào ca thi này
+        String transferPayload = """
+                {
+                    "studentId": "%s",
+                    "reason": "Trùng lịch thi lớp PHY101-01, xin thi ghép ca 2"
+                }
+                """.formatted(svCuong.getUserId());
+
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/transfers")
+                        .header("Authorization", "Bearer " + instructorBToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transferPayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.studentId").value(svCuong.getUserId().toString()))
+                .andExpect(jsonPath("$.data.studentName").value("Trần Hùng Cường"))
+                .andExpect(jsonPath("$.data.originalClassCode").value("PHY101-01"))
+                .andExpect(jsonPath("$.data.targetClassCode").value("PHY101-02"));
+
+        // Chuyển trùng lặp -> Báo lỗi 409 CONFLICT
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/transfers")
+                        .header("Authorization", "Bearer " + instructorBToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transferPayload))
+                .andExpect(status().isConflict());
+
+        // Sinh viên sv_cuong tra cứu danh sách ca thi ghép của mình
+        mockMvc.perform(get("/api/v1/exams/my-transferred-exams")
+                        .header("Authorization", "Bearer " + studentCToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].examId").value(examId));
+
+        // Giảng viên tra cứu danh sách thí sinh của ca thi (roster)
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/roster")
+                        .header("Authorization", "Bearer " + instructorBToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.transferredStudents", hasSize(1)))
+                .andExpect(jsonPath("$.data.transferredStudents[0].studentId").value(svCuong.getUserId().toString()))
+                .andExpect(jsonPath("$.data.transferredStudentCount").value(1));
+
+        // Sau khi đã chuyển ca: sv_cuong bắt đầu làm bài thành công 201 CREATED
+        String attemptRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentCToken))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String attemptId = objectMapper.readTree(attemptRes).get("data").get("attemptId").asText();
+
+        // Nộp bài
+        mockMvc.perform(put("/api/v1/exams/attempts/" + attemptId + "/submit")
+                        .header("Authorization", "Bearer " + studentCToken))
+                .andExpect(status().isOk());
+
+        // Xóa thí sinh chuyển ca
+        mockMvc.perform(delete("/api/v1/exams/" + examId + "/transfers/" + svCuong.getUserId())
+                        .header("Authorization", "Bearer " + instructorBToken))
+                .andExpect(status().isOk());
+
+        // Sau khi xóa, roster không còn sv_cuong
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/roster")
+                        .header("Authorization", "Bearer " + instructorBToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.transferredStudentCount").value(0));
+    }
+
+    @Test
+    @DisplayName("EXAM-19: Từ chối chuyển ca thi nếu sinh viên không học môn tương ứng")
+    void testExam19_CrossSubjectTransferRejection() throws Exception {
+        Class class2 = classRepository.findAll().stream()
+                .filter(c -> "PHY101-02".equals(c.getClassCode()))
+                .findFirst()
+                .orElseThrow();
+        String class2Id = class2.getClassId().toString();
+
+        String examId = createExamHelper(instructorBToken, class2Id, "Kiểm tra ca 2 - Lớp 02 reject test", "PRACTICE", null, null);
+
+        // gv_nguyen là giảng viên (không phải là sinh viên học môn PHY101)
+        User gvNguyen = userRepository.findByUsername("gv_nguyen");
+
+        String transferPayload = """
+                {
+                    "studentId": "%s",
+                    "reason": "Test non enrolled"
+                }
+                """.formatted(gvNguyen.getUserId());
+
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/transfers")
+                        .header("Authorization", "Bearer " + instructorBToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transferPayload))
+                .andExpect(status().isBadRequest());
     }
 }

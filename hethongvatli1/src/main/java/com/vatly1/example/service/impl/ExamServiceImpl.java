@@ -65,6 +65,7 @@ public class ExamServiceImpl implements IExamService {
     private final QuestionOptionRepository questionOptionRepository;
     private final com.vatly1.example.service.ISystemSettingService systemSettingService;
     private final com.vatly1.example.service.INotificationService notificationService;
+    private final com.vatly1.example.repository.IExamParticipantRepository examParticipantRepository;
 
     @Override
     @Transactional
@@ -221,6 +222,16 @@ public class ExamServiceImpl implements IExamService {
     public ExamAttemptDTO startAttempt(UUID examId, UUID studentId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        User studentUser = userRepository.findById(studentId).orElse(null);
+        boolean isAdmin = studentUser != null && studentUser.getRole() == UserRole.ADMIN;
+        if (!isAdmin) {
+            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), studentId);
+            boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
+            if (!isEnrolled && !isTransferred) {
+                throw new CustomException("Bạn không có tên trong danh sách ca thi này", HttpStatus.FORBIDDEN);
+            }
+        }
 
         Instant now = Instant.now();
         if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {

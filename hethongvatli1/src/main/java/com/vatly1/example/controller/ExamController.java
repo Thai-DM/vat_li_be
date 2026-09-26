@@ -1,11 +1,15 @@
 package com.vatly1.example.controller;
 
 import com.vatly1.example.model.request.AddExamQuestionDTO;
-import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.request.CreateExamDTO;
+import com.vatly1.example.model.request.SubmitAnswerDTO;
+import com.vatly1.example.model.request.TransferStudentDTO;
+import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.dto.ExamAttemptDTO;
 import com.vatly1.example.model.dto.ExamDTO;
-import com.vatly1.example.model.request.SubmitAnswerDTO;
+import com.vatly1.example.model.dto.ExamParticipantDTO;
+import com.vatly1.example.model.dto.ExamRosterDTO;
+import com.vatly1.example.service.IExamParticipantService;
 import com.vatly1.example.service.IExamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -16,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +41,7 @@ import java.util.UUID;
 public class ExamController {
 
     private final IExamService examService;
+    private final IExamParticipantService examParticipantService;
 
     @Operation(summary = "Tạo kỳ thi mới", description = "Tạo kỳ thi với cấu hình thời gian, số câu, ma trận đề và hình thức thi.")
     @PostMapping
@@ -200,6 +206,68 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(attempt)
+                .build());
+    }
+
+    @Operation(summary = "Thêm sinh viên thi ghép vào ca thi", description = "Chuyển sinh viên từ lớp khác cùng môn học sang làm bài trong ca thi này.")
+    @PostMapping("/{examId}/transfers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ExamParticipantDTO>> transferStudentToExam(
+            @PathVariable UUID examId,
+            @Valid @RequestBody TransferStudentDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamParticipantDTO result = examParticipantService.transferStudentToExam(examId, dto, currentUserId, role);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<ExamParticipantDTO>builder()
+                .status(HttpStatus.CREATED.value())
+                .message("Chuyển sinh viên sang ca thi thành công")
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Hủy sinh viên thi ghép khỏi ca thi", description = "Xóa sinh viên khỏi danh sách thi ghép của ca thi này.")
+    @DeleteMapping("/{examId}/transfers/{studentId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<Void>> removeTransferredStudent(
+            @PathVariable UUID examId,
+            @PathVariable UUID studentId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        examParticipantService.removeTransferredStudent(examId, studentId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Đã hủy quyền thi ghép của sinh viên tại ca thi này")
+                .build());
+    }
+
+    @Operation(summary = "Danh sách thí sinh đầy đủ của ca thi", description = "Xem toàn bộ thí sinh chính thức của lớp và thí sinh thi ghép.")
+    @GetMapping("/{examId}/roster")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<ExamRosterDTO>> getExamRoster(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamRosterDTO roster = examParticipantService.getExamRoster(examId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<ExamRosterDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(roster)
+                .build());
+    }
+
+    @Operation(summary = "Xem các ca thi thi ghép của tôi", description = "Sinh viên xem danh sách các bài thi mà mình được cấp quyền thi ghép từ lớp khác cùng môn.")
+    @GetMapping("/my-transferred-exams")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<ExamDTO>>> getMyTransferredExams(HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        List<ExamDTO> exams = examParticipantService.getTransferredExamsForStudent(currentUserId);
+        return ResponseEntity.ok(ApiResponse.<List<ExamDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(exams)
                 .build());
     }
 }

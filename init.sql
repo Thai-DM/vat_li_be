@@ -522,6 +522,18 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 45. exam_participants - Sinh vien chuyen ca thi / thi ghep khac lop
+CREATE TABLE IF NOT EXISTS exam_participants (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    exam_id           UUID NOT NULL REFERENCES exams(exam_id) ON DELETE CASCADE,
+    student_id        UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    original_class_id UUID REFERENCES classes(class_id) ON DELETE SET NULL,
+    reason            VARCHAR(255),
+    approved_by       UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (exam_id, student_id)
+);
+
 -- INDEXES
 CREATE INDEX IF NOT EXISTS idx_users_username         ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);
@@ -531,6 +543,8 @@ CREATE INDEX IF NOT EXISTS idx_class_schedules_class   ON class_schedules(class_
 CREATE INDEX IF NOT EXISTS idx_enrollments_student    ON class_enrollments(student_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read    ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_exam_participants_exam     ON exam_participants(exam_id);
+CREATE INDEX IF NOT EXISTS idx_exam_participants_student  ON exam_participants(student_id);
 CREATE INDEX IF NOT EXISTS idx_topics_subject         ON topics(subject_id);
 CREATE INDEX IF NOT EXISTS idx_materials_topic        ON learning_materials(topic_id);
 CREATE INDEX IF NOT EXISTS idx_ai_conv_student        ON ai_conversations(student_id);
