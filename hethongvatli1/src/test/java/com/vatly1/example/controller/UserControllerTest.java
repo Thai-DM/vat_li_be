@@ -3,6 +3,7 @@ package com.vatly1.example.controller;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +23,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.vatly1.example.app.JwtAuthServiceApp;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.repository.IUserRepository;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.mock.web.MockMultipartFile;
+import java.io.ByteArrayOutputStream;
 
 @SpringBootTest(classes = JwtAuthServiceApp.class)
 @AutoConfigureMockMvc
@@ -473,5 +478,100 @@ class UserControllerTest {
             .content(statusBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+  }
+
+  @Test
+  @DisplayName("USR-25: GET /api/v1/users/import-excel/template Tải tệp Excel mẫu danh sách sinh viên")
+  void downloadStudentTemplate_success() throws Exception {
+    String adminToken = signinAs("admin", "admin123456");
+
+    mockMvc.perform(get("/api/v1/users/import-excel/template")
+            .header("Authorization", "Bearer " + adminToken))
+        .andExpect(status().isOk())
+        .andExpect(result -> {
+          byte[] bytes = result.getResponse().getContentAsByteArray();
+          assertTrue(bytes.length > 0);
+        });
+  }
+
+  @Test
+  @DisplayName("USR-26: POST /api/v1/users/import-excel Nhập danh sách sinh viên hàng loạt từ tệp Excel")
+  void importStudentsFromExcel_success() throws Exception {
+    String adminToken = signinAs("admin", "admin123456");
+
+    // Tạo file Excel test trong bộ nhớ
+    byte[] excelBytes;
+    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+      Sheet sheet = workbook.createSheet("SinhVien");
+      Row header = sheet.createRow(0);
+      header.createCell(0).setCellValue("STT");
+      header.createCell(1).setCellValue("Mã sinh viên (*)");
+      header.createCell(2).setCellValue("Họ và tên (*)");
+      header.createCell(3).setCellValue("Email (*)");
+      header.createCell(4).setCellValue("Tên đăng nhập (Tùy chọn)");
+      header.createCell(5).setCellValue("Mật khẩu (Tùy chọn)");
+      header.createCell(6).setCellValue("Ngày sinh (dd/MM/yyyy)");
+      header.createCell(7).setCellValue("Giới tính (Nam/Nữ)");
+      header.createCell(8).setCellValue("Số điện thoại");
+      header.createCell(9).setCellValue("Mã lớp (Tùy chọn)");
+
+      Row r1 = sheet.createRow(1);
+      r1.createCell(0).setCellValue(1);
+      r1.createCell(1).setCellValue("SVTEST001");
+      r1.createCell(2).setCellValue("Đỗ Hoàng Long");
+      r1.createCell(3).setCellValue("long.do@student.edu.vn");
+      r1.createCell(4).setCellValue("sv_long01");
+      r1.createCell(5).setCellValue("LongPass123");
+      r1.createCell(6).setCellValue("10/10/2004");
+      r1.createCell(7).setCellValue("Nam");
+      r1.createCell(8).setCellValue("0911223344");
+      r1.createCell(9).setCellValue("PHY101-01");
+
+      Row r2 = sheet.createRow(2);
+      r2.createCell(0).setCellValue(2);
+      r2.createCell(1).setCellValue("SVTEST002");
+      r2.createCell(2).setCellValue("Vũ Thùy Trang");
+      r2.createCell(3).setCellValue("trang.vu@student.edu.vn");
+      r2.createCell(4).setCellValue("");
+      r2.createCell(5).setCellValue("");
+      r2.createCell(6).setCellValue("25/12/2004");
+      r2.createCell(7).setCellValue("Nữ");
+      r2.createCell(8).setCellValue("0922334455");
+      r2.createCell(9).setCellValue("");
+
+      workbook.write(baos);
+      excelBytes = baos.toByteArray();
+    }
+
+    MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "danh_sach_sv.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        excelBytes
+    );
+
+    mockMvc.perform(multipart("/api/v1/users/import-excel")
+            .file(file)
+            .header("Authorization", "Bearer " + adminToken))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.totalCreated").value(2))
+        .andExpect(jsonPath("$.data.totalSkipped").value(0))
+        .andExpect(jsonPath("$.data.totalEnrolled").value(1));
+
+    // Kiểm tra đăng nhập với tài khoản vừa tạo
+    String studentToken = signinAs("sv_long01", "LongPass123");
+    assertTrue(studentToken != null && !studentToken.isBlank());
+
+    // Tài khoản thứ 2 dùng username mặc định là svtest002 và mật khẩu mặc định Vatly1@123
+    String student2Token = signinAs("svtest002", "Vatly1@123");
+    assertTrue(student2Token != null && !student2Token.isBlank());
+
+    // Nạp lại lần 2 -> Kiểm tra tự động phát hiện trùng lặp
+    mockMvc.perform(multipart("/api/v1/users/import-excel")
+            .file(file)
+            .header("Authorization", "Bearer " + adminToken))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.totalCreated").value(0))
+        .andExpect(jsonPath("$.data.totalSkipped").value(2));
   }
 }

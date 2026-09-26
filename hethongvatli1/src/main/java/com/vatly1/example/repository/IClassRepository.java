@@ -31,4 +31,7 @@ public interface IClassRepository extends JpaRepository<Class, UUID> {
     
     @Query("SELECT c FROM Class c WHERE c.classId IN (SELECT ce.classId FROM ClassEnrollment ce WHERE ce.studentId = :studentId)")
     Page<Class> findByStudentId(@Param("studentId") UUID studentId, Pageable pageable);
+
+    java.util.Optional<Class> findByClassCode(String classCode);
+    boolean existsByClassCode(String classCode);
 }

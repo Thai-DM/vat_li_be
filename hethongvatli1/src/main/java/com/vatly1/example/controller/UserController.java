@@ -35,11 +35,18 @@ import com.vatly1.example.model.request.AdminUpdateUserDTO;
 import com.vatly1.example.model.request.ForgotPasswordRequestDTO;
 import com.vatly1.example.model.request.ResetPasswordRequestDTO;
 import com.vatly1.example.model.request.UpdateUserStatusDTO;
+import com.vatly1.example.model.response.StudentImportResultDTO;
+import com.vatly1.example.service.IStudentExcelService;
 import com.vatly1.example.service.IUserService;
 
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
@@ -49,6 +56,7 @@ import org.springdoc.core.annotations.ParameterObject;
 public class UserController {
 
   private final IUserService userService;
+  private final IStudentExcelService studentExcelService;
 
   @PostMapping("/signin")
   @Operation(summary = "Đăng nhập hệ thống (nhận Access/Refresh Token)", description = "Áp dụng cơ chế Rate Limiting để ngăn chặn tấn công dò mật khẩu (brute-force).")
@@ -234,5 +242,30 @@ public class UserController {
   @Operation(summary = "Khóa / Mở khóa trạng thái người dùng (Chỉ Admin)")
   public ResponseEntity<ApiResponse<UserResponseDTO>> adminUpdateUserStatus(@PathVariable UUID id, @RequestBody @Valid UpdateUserStatusDTO request) {
     return ResponseEntity.ok(ApiResponse.success(userService.adminUpdateUserStatus(id, request)));
+  }
+
+  @GetMapping("/import-excel/template")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+  @Operation(summary = "Tải file mẫu Excel nhập danh sách sinh viên", description = "Tải xuống file Excel (.xlsx) chuẩn hóa để quản trị viên / giảng viên điền danh sách sinh viên cần tạo tài khoản hàng loạt.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ResponseEntity<byte[]> downloadStudentTemplate() {
+    byte[] excelBytes = studentExcelService.downloadStudentExcelTemplate();
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=mau_import_sinh_vien.xlsx")
+        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(excelBytes);
+  }
+
+  @PostMapping(value = "/import-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+  @Operation(summary = "Tạo tài khoản sinh viên hàng loạt từ file Excel", description = "Tải lên tệp Excel (.xlsx, .xls) chứa danh sách sinh viên để tạo hàng loạt tài khoản người dùng và hồ sơ sinh viên. Có thể tự động ghi danh vào lớp học phần.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ResponseEntity<ApiResponse<StudentImportResultDTO>> importStudentsFromExcel(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "defaultPassword", required = false, defaultValue = "Vatly1@123") String defaultPassword,
+      @RequestParam(value = "classId", required = false) UUID classId) {
+    StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId);
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ApiResponse.success(result, "Xử lý nhập danh sách sinh viên từ Excel hoàn tất"));
   }
 }
