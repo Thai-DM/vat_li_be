@@ -60,6 +60,10 @@ secrets/
 *.pem
 *.key
 *.p12
+*local*.yml
+*local*.yaml
+*local*.properties
+**/application-local.*
 
 # -----------------------------------------------------------------------------
 # 5. Logs & Temp Files

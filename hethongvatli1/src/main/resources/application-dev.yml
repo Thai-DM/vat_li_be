@@ -1,9 +1,9 @@
-# Development profile: in-memory H2, default port
+# Development profile: PostgreSQL (Local or Cloud via Environment Variables)
 spring:
   datasource:
-    url: jdbc:postgresql://ep-noisy-star-aeavcjvp-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require
-    username: neondb_owner
-    password: npg_x1SelkBH9poZ
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vatly1}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   tomcat:
     max-wait: 20000
@@ -20,4 +20,4 @@ spring:
           new_generator_mappings: false
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
