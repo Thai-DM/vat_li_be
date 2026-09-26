@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface IClassEnrollmentRepository extends JpaRepository<ClassEnrollment, UUID> {
     Page<ClassEnrollment> findByClassId(UUID classId, Pageable pageable);
     Page<ClassEnrollment> findByClassIdAndStatus(UUID classId, EnrollmentStatus status, Pageable pageable);
+    java.util.List<ClassEnrollment> findByClassIdAndStatus(UUID classId, EnrollmentStatus status);
     
     Page<ClassEnrollment> findByStudentId(UUID studentId, Pageable pageable);
     Page<ClassEnrollment> findByStudentIdAndStatus(UUID studentId, EnrollmentStatus status, Pageable pageable);

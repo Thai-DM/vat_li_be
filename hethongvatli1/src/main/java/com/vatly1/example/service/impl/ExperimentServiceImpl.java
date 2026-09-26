@@ -48,6 +48,7 @@ public class ExperimentServiceImpl implements IExperimentService {
     private final FileUploadRepository fileUploadRepository;
     private final IFileStorageService fileStorageService;
     private final IClassEnrollmentRepository enrollmentRepository;
+    private final com.vatly1.example.service.INotificationService notificationService;
 
     @Override
     public List<ExperimentDTO> getExperimentsBySubject(UUID subjectId) {
@@ -196,6 +197,15 @@ public class ExperimentServiceImpl implements IExperimentService {
                 .build();
         try {
             experimentConfirmationRepository.saveAndFlush(confirmation);
+
+            notificationService.sendNotification(
+                    submission.getStudentId(),
+                    "Kết quả bài nộp thí nghiệm",
+                    "Bài nộp thí nghiệm của bạn đã được giảng viên chấm và xác nhận kết quả.",
+                    com.vatly1.example.entity.enums.NotificationType.EXPERIMENT_GRADED,
+                    submissionId,
+                    "EXPERIMENT_SUBMISSION"
+            );
         } catch (DataIntegrityViolationException e) {
             throw new CustomException("Bài nộp đã được xác nhận kết quả trước đó, không thể sửa đổi", HttpStatus.BAD_REQUEST);
         }

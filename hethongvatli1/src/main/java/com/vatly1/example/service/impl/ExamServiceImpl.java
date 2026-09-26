@@ -64,6 +64,7 @@ public class ExamServiceImpl implements IExamService {
     private final QuestionBankRepository questionBankRepository;
     private final QuestionOptionRepository questionOptionRepository;
     private final com.vatly1.example.service.ISystemSettingService systemSettingService;
+    private final com.vatly1.example.service.INotificationService notificationService;
 
     @Override
     @Transactional
@@ -95,6 +96,19 @@ public class ExamServiceImpl implements IExamService {
 
         if (dto.getMatrixId() != null) {
             populateQuestionsFromMatrix(savedExam.getExamId(), dto.getMatrixId());
+        }
+
+        try {
+            notificationService.sendNotificationToClass(
+                    savedExam.getClassId(),
+                    "Bài thi mới: " + savedExam.getTitle(),
+                    "Lớp học vừa có bài thi mới: " + savedExam.getTitle() + " (Thời lượng: " + savedExam.getDurationMinutes() + " phút). Vui lòng hoàn thành đúng thời hạn.",
+                    com.vatly1.example.entity.enums.NotificationType.EXAM_NEW,
+                    savedExam.getExamId(),
+                    "EXAM"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send exam notification: {}", e.getMessage());
         }
 
         return toExamDTO(savedExam);
@@ -357,6 +371,20 @@ public class ExamServiceImpl implements IExamService {
         attempt.setTotalScore(totalScore);
 
         ExamAttempt saved = examAttemptRepository.save(attempt);
+
+        try {
+            notificationService.sendNotification(
+                    saved.getStudentId(),
+                    "Kết quả bài thi: " + exam.getTitle(),
+                    "Bạn đã hoàn thành bài thi " + exam.getTitle() + ". Điểm số đạt được: " + totalScore + " điểm.",
+                    com.vatly1.example.entity.enums.NotificationType.EXAM_GRADED,
+                    saved.getAttemptId(),
+                    "EXAM_ATTEMPT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send exam result notification: {}", e.getMessage());
+        }
+
         return toAttemptDTO(saved);
     }
 

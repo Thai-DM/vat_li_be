@@ -508,6 +508,20 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 44. notifications - Thong bao nguoi dung (bai thi moi, diem so, nhac lich hoc)
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    title           VARCHAR(255) NOT NULL,
+    content         TEXT NOT NULL,
+    type            VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    reference_id    UUID,
+    reference_type  VARCHAR(50),
+    is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+    read_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- INDEXES
 CREATE INDEX IF NOT EXISTS idx_users_username         ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);
@@ -515,6 +529,8 @@ CREATE INDEX IF NOT EXISTS idx_classes_subject        ON classes(subject_id);
 CREATE INDEX IF NOT EXISTS idx_classes_semester       ON classes(semester_id);
 CREATE INDEX IF NOT EXISTS idx_class_schedules_class   ON class_schedules(class_id);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student    ON class_enrollments(student_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read    ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_topics_subject         ON topics(subject_id);
 CREATE INDEX IF NOT EXISTS idx_materials_topic        ON learning_materials(topic_id);
 CREATE INDEX IF NOT EXISTS idx_ai_conv_student        ON ai_conversations(student_id);
@@ -682,6 +698,14 @@ VALUES
     ('ai.tutor_enabled', 'true'),
     ('file.max_upload_mb', '50')
 ON CONFLICT (key) DO NOTHING;
+
+-- 12. THONG BAO MAU (notifications)
+INSERT INTO notifications (notification_id, user_id, title, content, type, reference_id, reference_type, is_read)
+VALUES
+    ('91111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', 'Bài thi mới: Kiểm tra giữa kỳ Vật lý 1', 'Lớp PHY101-01 vừa mở bài kiểm tra giữa kỳ. Thời lượng: 45 phút.', 'EXAM_NEW', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'EXAM', false),
+    ('92222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', 'Nhắc lịch học: Vật lý đại cương 1', 'Bạn có lịch học lớp PHY101-01 vào Thứ Hai lúc 07:00 (Tiết 1-3) tại phòng A1-203.', 'SCHEDULE_REMINDER', 'e1111111-1111-1111-1111-111111111111', 'SCHEDULE', false),
+    ('93333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333', 'Đã có điểm bài thi: Luyện tập Cơ học', 'Bạn đã hoàn thành bài luyện tập Cơ học. Điểm số: 9.0/10.', 'EXAM_GRADED', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'EXAM_ATTEMPT', true)
+ON CONFLICT (notification_id) DO NOTHING;
 
 -- =============================================================================
 -- HOAN TAT KHOI TAO CO SO DU LIEU
