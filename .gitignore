@@ -11,6 +11,7 @@
 *.md
 !README.md
 !**/README.md
+!api_documentation.md
 *.txt
 *.pdf
 *.xlsx
