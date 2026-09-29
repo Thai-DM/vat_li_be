@@ -3,16 +3,19 @@ package com.vatly1.example.concurrency;
 import com.vatly1.example.app.JwtAuthServiceApp;
 import com.vatly1.example.model.dto.ExamAttemptDTO;
 import com.vatly1.example.entity.Class;
+import com.vatly1.example.entity.ClassEnrollment;
 import com.vatly1.example.entity.Exam;
 import com.vatly1.example.entity.Semester;
 import com.vatly1.example.entity.Subject;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.enums.AttemptStatus;
 import com.vatly1.example.entity.enums.ClassStatus;
+import com.vatly1.example.entity.enums.EnrollmentStatus;
 import com.vatly1.example.entity.enums.ExamType;
 import com.vatly1.example.entity.enums.UserRole;
 import com.vatly1.example.entity.enums.UserStatus;
 import com.vatly1.example.exception.CustomException;
+import com.vatly1.example.repository.IClassEnrollmentRepository;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.IExamAttemptRepository;
 import com.vatly1.example.repository.IExamRepository;
@@ -68,6 +71,9 @@ class ExamConcurrencyIntegrationTest {
 
     @Autowired
     private IClassRepository classRepository;
+
+    @Autowired
+    private IClassEnrollmentRepository classEnrollmentRepository;
 
     private User teacher;
     private User student;
@@ -224,6 +230,14 @@ class ExamConcurrencyIntegrationTest {
                         .email(username + "@test.vn")
                         .role(UserRole.STUDENT)
                         .status(UserStatus.ACTIVE)
+                        .build());
+            }
+            if (!classEnrollmentRepository.existsByClassIdAndStudentId(officialExam.getClassId(), u.getUserId())) {
+                classEnrollmentRepository.save(ClassEnrollment.builder()
+                        .classId(officialExam.getClassId())
+                        .studentId(u.getUserId())
+                        .status(EnrollmentStatus.ACTIVE)
+                        .enrolledAt(Instant.now())
                         .build());
             }
             students.add(u);

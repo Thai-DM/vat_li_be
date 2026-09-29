@@ -25,6 +25,7 @@ public interface IExamService {
     ExamAttemptDTO getMyAttempt(UUID examId, UUID studentId);
     List<ExamAttemptDTO> getMyAttempts(UUID examId, UUID studentId);
     ExamAttemptDTO getAttemptDetail(UUID attemptId, UUID currentUserId, String role);
+    List<com.vatly1.example.model.dto.StudentExamQuestionDTO> getAttemptQuestions(UUID attemptId, UUID currentUserId, String role);
 
     List<ExamQuestionDetailDTO> getExamQuestions(UUID examId, UUID currentUserId, String role);
     void removeQuestionFromExam(UUID examId, UUID questionId, UUID instructorId);

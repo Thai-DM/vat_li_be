@@ -6,6 +6,7 @@ import com.vatly1.example.model.dto.ExamDTO;
 import com.vatly1.example.model.dto.ExamParticipantDTO;
 import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
 import com.vatly1.example.model.dto.ExamRosterDTO;
+import com.vatly1.example.model.dto.StudentExamQuestionDTO;
 import com.vatly1.example.model.request.AddExamQuestionDTO;
 import com.vatly1.example.model.request.CreateExamDTO;
 import com.vatly1.example.model.request.GradeAttemptDTO;
@@ -153,7 +154,7 @@ public class ExamController {
     }
 
     @Operation(summary = "Nộp bài thi và chấm điểm tự động", description = "Khóa bài thi bằng khóa bi quan (SELECT FOR UPDATE) chống race condition và tính điểm.")
-    @PutMapping("/attempts/{attemptId}/submit")
+    @RequestMapping(value = "/attempts/{attemptId}/submit", method = {org.springframework.web.bind.annotation.RequestMethod.PUT, org.springframework.web.bind.annotation.RequestMethod.POST})
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<ExamAttemptDTO>> submitAttempt(
             @PathVariable UUID attemptId,
@@ -210,6 +211,22 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(attempt)
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách câu hỏi theo lượt thi", description = "Lấy danh sách câu hỏi và các lựa chọn cho sinh viên làm bài. Ẩn đáp án đúng trong lúc làm bài và lưu lại lựa chọn đã chọn.")
+    @GetMapping("/attempts/{attemptId}/questions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<List<StudentExamQuestionDTO>>> getAttemptQuestions(
+            @PathVariable UUID attemptId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<StudentExamQuestionDTO> questions = examService.getAttemptQuestions(attemptId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<StudentExamQuestionDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(questions)
                 .build());
     }
 
@@ -277,7 +294,7 @@ public class ExamController {
 
     @Operation(summary = "Xem câu hỏi đã có trong đề thi", description = "Lấy danh sách các câu hỏi cùng các phương án lựa chọn trong đề thi.")
     @GetMapping("/{examId}/questions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
     public ResponseEntity<ApiResponse<List<ExamQuestionDetailDTO>>> getExamQuestions(
             @PathVariable UUID examId,
             HttpServletRequest request) {

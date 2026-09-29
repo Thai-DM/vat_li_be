@@ -24,4 +24,12 @@ public class ExamAttemptDTO {
     private Instant submittedAt;
     private AttemptStatus status;
     private BigDecimal totalScore;
+
+    // Thông tin kỳ thi và câu hỏi theo lượt thi (attempt)
+    private String examTitle;
+    private Integer durationMinutes;
+    private Instant examStartTime;
+    private Instant examEndTime;
+    private Integer totalQuestions;
+    private java.util.List<StudentExamQuestionDTO> questions;
 }

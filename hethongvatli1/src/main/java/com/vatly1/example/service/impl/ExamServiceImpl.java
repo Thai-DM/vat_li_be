@@ -22,6 +22,8 @@ import com.vatly1.example.entity.UserProfile;
 import com.vatly1.example.model.dto.ExamAttemptSummaryDTO;
 import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
 import com.vatly1.example.model.dto.QuestionOptionDTO;
+import com.vatly1.example.model.dto.StudentExamQuestionDTO;
+import com.vatly1.example.model.dto.StudentQuestionOptionDTO;
 import com.vatly1.example.model.request.GradeAttemptDTO;
 import com.vatly1.example.model.request.UpdateExamDTO;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
@@ -294,7 +296,15 @@ public class ExamServiceImpl implements IExamService {
                     .build();
 
             ExamAttempt saved = examAttemptRepository.saveAndFlush(attempt);
-            return toAttemptDTO(saved);
+            ExamAttemptDTO result = toAttemptDTO(saved);
+            List<StudentExamQuestionDTO> questions = buildStudentQuestionsForAttempt(saved, exam, "STUDENT");
+            result.setQuestions(questions);
+            result.setExamTitle(exam.getTitle());
+            result.setDurationMinutes(exam.getDurationMinutes());
+            result.setExamStartTime(exam.getStartTime());
+            result.setExamEndTime(exam.getEndTime());
+            result.setTotalQuestions(questions != null ? questions.size() : 0);
+            return result;
         } catch (DataIntegrityViolationException e) {
             log.warn("Concurrent exam attempt detected for student {} on exam {}", studentId, examId);
             throw new CustomException("Attempt already exists for this exam", HttpStatus.CONFLICT);
@@ -427,14 +437,14 @@ public class ExamServiceImpl implements IExamService {
     public ExamAttemptDTO getAttemptDetail(UUID attemptId, UUID currentUserId, String role) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
 
         if ("STUDENT".equalsIgnoreCase(role)) {
             if (!Objects.equals(attempt.getStudentId(), currentUserId)) {
                 throw new CustomException("Access denied: You cannot view another student's exam attempt", HttpStatus.FORBIDDEN);
             }
         } else if ("INSTRUCTOR".equalsIgnoreCase(role)) {
-            Exam exam = examRepository.findById(attempt.getExamId())
-                    .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
             Class clazz = classRepository.findById(exam.getClassId())
                     .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
             boolean isInstructor = Objects.equals(clazz.getInstructorId(), currentUserId);
@@ -444,7 +454,40 @@ public class ExamServiceImpl implements IExamService {
             }
         }
 
-        return toAttemptDTO(attempt);
+        ExamAttemptDTO dto = toAttemptDTO(attempt);
+        List<StudentExamQuestionDTO> questions = buildStudentQuestionsForAttempt(attempt, exam, role);
+        dto.setQuestions(questions);
+        dto.setExamTitle(exam.getTitle());
+        dto.setDurationMinutes(exam.getDurationMinutes());
+        dto.setExamStartTime(exam.getStartTime());
+        dto.setExamEndTime(exam.getEndTime());
+        dto.setTotalQuestions(questions != null ? questions.size() : 0);
+        return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentExamQuestionDTO> getAttemptQuestions(UUID attemptId, UUID currentUserId, String role) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if ("STUDENT".equalsIgnoreCase(role)) {
+            if (!Objects.equals(attempt.getStudentId(), currentUserId)) {
+                throw new CustomException("Access denied: You cannot view another student's exam attempt", HttpStatus.FORBIDDEN);
+            }
+        } else if ("INSTRUCTOR".equalsIgnoreCase(role)) {
+            Class clazz = classRepository.findById(exam.getClassId())
+                    .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
+            boolean isInstructor = Objects.equals(clazz.getInstructorId(), currentUserId);
+            boolean isStaff = classStaffRepository.existsByClassIdAndUserId(clazz.getClassId(), currentUserId);
+            if (!isInstructor && !isStaff) {
+                throw new CustomException("Access denied: You are not authorized to view attempts for this class", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        return buildStudentQuestionsForAttempt(attempt, exam, role);
     }
 
     @Override
@@ -461,8 +504,13 @@ public class ExamServiceImpl implements IExamService {
             if (!isEnrolled && !isParticipant) {
                 throw new CustomException("Access denied: You are not authorized to view questions for this exam", HttpStatus.FORBIDDEN);
             }
+            Instant now = Instant.now();
+            if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {
+                throw new CustomException("Exam has not started yet", HttpStatus.BAD_REQUEST);
+            }
         }
 
+        boolean hideAnswers = "STUDENT".equalsIgnoreCase(role);
         List<ExamQuestion> examQuestions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(examId);
         List<ExamQuestionDetailDTO> results = new ArrayList<>();
 
@@ -484,7 +532,7 @@ public class ExamServiceImpl implements IExamService {
                             .optionId(opt.getOptionId())
                             .questionId(opt.getQuestionId())
                             .content(opt.getOptionText())
-                            .isCorrect(opt.getIsCorrect())
+                            .isCorrect(hideAnswers ? null : opt.getIsCorrect())
                             .orderIndex(opt.getOrderIndex())
                             .build())
                     .collect(Collectors.toList());
@@ -500,6 +548,62 @@ public class ExamServiceImpl implements IExamService {
                     .orderIndex(eq.getOrderIndex())
                     .scoreWeight(eq.getScoreWeight())
                     .options(optionDTOs)
+                    .build());
+        }
+
+        return results;
+    }
+
+    private List<StudentExamQuestionDTO> buildStudentQuestionsForAttempt(ExamAttempt attempt, Exam exam, String role) {
+        boolean isGraded = attempt.getStatus() == AttemptStatus.GRADED;
+        boolean canSeeAnswers = "ADMIN".equalsIgnoreCase(role) || "INSTRUCTOR".equalsIgnoreCase(role) || "TA".equalsIgnoreCase(role) || isGraded;
+
+        List<ExamQuestion> examQuestions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(attempt.getExamId());
+        List<ExamAnswer> studentAnswers = examAnswerRepository.findByAttemptId(attempt.getAttemptId());
+        Map<UUID, ExamAnswer> answerMap = studentAnswers.stream()
+                .collect(Collectors.toMap(ExamAnswer::getQuestionId, a -> a, (a1, a2) -> a1));
+
+        List<StudentExamQuestionDTO> results = new ArrayList<>();
+        for (ExamQuestion eq : examQuestions) {
+            QuestionBank qb = questionBankRepository.findById(eq.getQuestionId()).orElse(null);
+            if (qb == null) continue;
+
+            String topicName = null;
+            if (qb.getTopicId() != null) {
+                Topic topic = topicRepository.findById(qb.getTopicId()).orElse(null);
+                if (topic != null) {
+                    topicName = topic.getTopicName();
+                }
+            }
+
+            List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
+            List<StudentQuestionOptionDTO> optionDTOs = options.stream()
+                    .map(opt -> StudentQuestionOptionDTO.builder()
+                            .optionId(opt.getOptionId())
+                            .questionId(opt.getQuestionId())
+                            .content(opt.getOptionText())
+                            .orderIndex(opt.getOrderIndex())
+                            .isCorrect(canSeeAnswers ? opt.getIsCorrect() : null)
+                            .build())
+                    .collect(Collectors.toList());
+
+            ExamAnswer ans = answerMap.get(eq.getQuestionId());
+
+            results.add(StudentExamQuestionDTO.builder()
+                    .examId(exam.getExamId())
+                    .questionId(qb.getQuestionId())
+                    .content(qb.getContent())
+                    .questionType(qb.getQuestionType())
+                    .difficultyLevel(qb.getDifficultyLevel())
+                    .topicId(qb.getTopicId())
+                    .topicName(topicName)
+                    .orderIndex(eq.getOrderIndex())
+                    .scoreWeight(eq.getScoreWeight())
+                    .options(optionDTOs)
+                    .selectedOptionIds(ans != null && ans.getSelectedOptionIds() != null ? ans.getSelectedOptionIds() : new ArrayList<>())
+                    .answerText(ans != null ? ans.getAnswerText() : null)
+                    .isCorrect(isGraded && ans != null ? ans.getIsCorrect() : null)
+                    .score(isGraded && ans != null ? ans.getScore() : null)
                     .build());
         }
 

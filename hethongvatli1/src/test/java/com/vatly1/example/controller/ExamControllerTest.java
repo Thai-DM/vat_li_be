@@ -39,6 +39,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -939,5 +941,105 @@ public class ExamControllerTest {
         mockMvc.perform(delete("/api/v1/exams/" + examId)
                         .header("Authorization", "Bearer " + instructorToken))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("EXAM-24: Sinh viên lấy danh sách câu hỏi an toàn theo attempt (không lộ đáp án khi đang thi, khôi phục lựa chọn, hiển thị kết quả sau khi nộp)")
+    void testExam24_StudentCanFetchQuestionsSecurelyDuringAttempt() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Bài kiểm tra câu hỏi an toàn", null, null);
+
+        // Giảng viên thêm câu hỏi vào đề
+        String qPayload = """
+            {
+                "questionId": "%s",
+                "scoreWeight": 10.0,
+                "orderIndex": 1
+            }
+            """.formatted(questionId);
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(qPayload))
+                .andExpect(status().isOk());
+
+        // Sinh viên xem câu hỏi đề thi qua GET /api/v1/exams/{examId}/questions (đáp án đúng phải bị ẩn)
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].options[0].isCorrect").value(nullValue()));
+
+        // Sinh viên bắt đầu làm bài -> startAttempt phải trả về danh sách câu hỏi và ẩn isCorrect
+        String startRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.questions", hasSize(1)))
+                .andExpect(jsonPath("$.data.questions[0].options[0].isCorrect").value(nullValue()))
+                .andReturn().getResponse().getContentAsString();
+
+        String attemptId = objectMapper.readTree(startRes).get("data").get("attemptId").asText();
+
+        // Sinh viên gọi API chuyên dụng: GET /api/v1/exams/attempts/{attemptId}/questions
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/questions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].questionId").value(questionId.toString()))
+                .andExpect(jsonPath("$.data[0].options[0].isCorrect").value(nullValue()))
+                .andExpect(jsonPath("$.data[0].selectedOptionIds", hasSize(0)));
+
+        // Sinh viên lưu đáp án tạm thời
+        String answerPayload = """
+            {
+                "questionId": "%s",
+                "selectedOptionIds": ["%s"]
+            }
+            """.formatted(questionId, correctOptionId);
+        mockMvc.perform(post("/api/v1/exams/attempts/" + attemptId + "/answers")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(answerPayload))
+                .andExpect(status().isOk());
+
+        // Sinh viên reload trang và gọi lại GET /attempts/{attemptId}/questions -> lựa chọn đã được lưu phải trả về
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/questions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].selectedOptionIds", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].selectedOptionIds[0]").value(correctOptionId.toString()))
+                .andExpect(jsonPath("$.data[0].options[0].isCorrect").value(nullValue()));
+
+        // Sinh viên nộp bài
+        mockMvc.perform(post("/api/v1/exams/attempts/" + attemptId + "/submit")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("GRADED"));
+
+        // Sau khi nộp bài: Gọi lại GET /attempts/{attemptId}/questions -> đáp án isCorrect và điểm được mở
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/questions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].isCorrect").value(true))
+                .andExpect(jsonPath("$.data[0].score").value(10.0))
+                .andExpect(jsonPath("$.data[0].options[0].isCorrect").value(notNullValue()));
+    }
+
+    @Test
+    @DisplayName("EXAM-25: Sinh viên khác không thể xem câu hỏi/lựa chọn trong lượt thi của người khác")
+    void testExam25_StudentCannotViewAnotherStudentsAttemptQuestions() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Bài thi kiểm tra bảo mật attempt", null, null);
+
+        // Sinh viên A bắt đầu làm bài
+        String startRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        String attemptId = objectMapper.readTree(startRes).get("data").get("attemptId").asText();
+
+        // Sinh viên B cố tình gọi API attempt questions của sinh viên A -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/questions")
+                        .header("Authorization", "Bearer " + studentBToken))
+                .andExpect(status().isForbidden());
     }
 }
