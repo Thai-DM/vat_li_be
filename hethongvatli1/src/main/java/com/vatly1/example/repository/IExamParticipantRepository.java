@@ -20,4 +20,8 @@ public interface IExamParticipantRepository extends JpaRepository<ExamParticipan
     Optional<ExamParticipant> findByExamIdAndStudentId(UUID examId, UUID studentId);
 
     void deleteByExamIdAndStudentId(UUID examId, UUID studentId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM ExamParticipant ep WHERE ep.examId = :examId")
+    void deleteByExamId(UUID examId);
 }

@@ -30,6 +30,9 @@ public class ExamMatrix {
     @Column(name = "subject_id")
     private java.util.UUID subjectId;
 
+    @Column(name = "matrix_name")
+    private String matrixName;
+
     @Column(name = "exam_type")
     @Enumerated(EnumType.STRING)
     private ExamType examType;
@@ -37,5 +40,10 @@ public class ExamMatrix {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "total_points")
+    private java.math.BigDecimal totalPoints;
 
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private java.time.Instant createdAt;
 }

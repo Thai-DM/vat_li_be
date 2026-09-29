@@ -1,14 +1,18 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.model.request.AddExamQuestionDTO;
-import com.vatly1.example.model.request.CreateExamDTO;
-import com.vatly1.example.model.request.SubmitAnswerDTO;
-import com.vatly1.example.model.request.TransferStudentDTO;
-import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.dto.ExamAttemptDTO;
+import com.vatly1.example.model.dto.ExamAttemptSummaryDTO;
 import com.vatly1.example.model.dto.ExamDTO;
 import com.vatly1.example.model.dto.ExamParticipantDTO;
+import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
 import com.vatly1.example.model.dto.ExamRosterDTO;
+import com.vatly1.example.model.request.AddExamQuestionDTO;
+import com.vatly1.example.model.request.CreateExamDTO;
+import com.vatly1.example.model.request.GradeAttemptDTO;
+import com.vatly1.example.model.request.SubmitAnswerDTO;
+import com.vatly1.example.model.request.TransferStudentDTO;
+import com.vatly1.example.model.request.UpdateExamDTO;
+import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.service.IExamParticipantService;
 import com.vatly1.example.service.IExamService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -268,6 +272,99 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(exams)
+                .build());
+    }
+
+    @Operation(summary = "Xem câu hỏi đã có trong đề thi", description = "Lấy danh sách các câu hỏi cùng các phương án lựa chọn trong đề thi.")
+    @GetMapping("/{examId}/questions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<List<ExamQuestionDetailDTO>>> getExamQuestions(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<ExamQuestionDetailDTO> questions = examService.getExamQuestions(examId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<ExamQuestionDetailDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(questions)
+                .build());
+    }
+
+    @Operation(summary = "Gỡ câu hỏi khỏi đề thi", description = "Xóa câu hỏi khỏi đề thi khi chưa có sinh viên làm bài.")
+    @DeleteMapping("/{examId}/questions/{questionId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<Void>> removeQuestionFromExam(
+            @PathVariable UUID examId,
+            @PathVariable UUID questionId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        examService.removeQuestionFromExam(examId, questionId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Question removed from exam successfully")
+                .build());
+    }
+
+    @Operation(summary = "Cập nhật cấu hình đề thi", description = "Sửa tên đề, thời gian làm bài, thời gian mở/đóng, hình thức thi.")
+    @PutMapping("/{examId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ExamDTO>> updateExam(
+            @PathVariable UUID examId,
+            @RequestBody UpdateExamDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamDTO updated = examService.updateExam(examId, dto, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<ExamDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Exam updated successfully")
+                .data(updated)
+                .build());
+    }
+
+    @Operation(summary = "Xóa đề thi chưa mở", description = "Xóa kỳ thi khi chưa có sinh viên nào thực hiện làm bài.")
+    @DeleteMapping("/{examId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<Void>> deleteExam(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        examService.deleteExam(examId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Exam deleted successfully")
+                .build());
+    }
+
+    @Operation(summary = "Xem danh sách lượt làm bài của đề thi", description = "Giảng viên xem danh sách các lượt làm bài, trạng thái và kết quả điểm thi.")
+    @GetMapping("/{examId}/attempts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<List<ExamAttemptSummaryDTO>>> getExamAttempts(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<ExamAttemptSummaryDTO> attempts = examService.getExamAttempts(examId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<ExamAttemptSummaryDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(attempts)
+                .build());
+    }
+
+    @Operation(summary = "Chấm thủ công hoặc điều chỉnh điểm lượt làm bài", description = "Giảng viên chấm câu tự luận hoặc điều chỉnh điểm tổng kết của lượt thi.")
+    @PutMapping("/attempts/{attemptId}/grade")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ExamAttemptDTO>> gradeAttempt(
+            @PathVariable UUID attemptId,
+            @Valid @RequestBody GradeAttemptDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamAttemptDTO updated = examService.gradeAttempt(attemptId, dto, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<ExamAttemptDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Attempt graded successfully")
+                .data(updated)
                 .build());
     }
 }

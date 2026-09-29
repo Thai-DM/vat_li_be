@@ -10,4 +10,6 @@ import java.util.UUID;
 @Repository
 public interface IExamMatrixRepository extends JpaRepository<ExamMatrix, UUID> {
     List<ExamMatrix> findBySubjectId(UUID subjectId);
+    List<ExamMatrix> findBySubjectIdOrderByCreatedAtDesc(UUID subjectId);
+    List<ExamMatrix> findAllByOrderByCreatedAtDesc();
 }

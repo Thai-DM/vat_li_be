@@ -17,6 +17,13 @@ import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.enums.AttemptStatus;
 import com.vatly1.example.entity.enums.UserRole;
 import com.vatly1.example.exception.CustomException;
+import com.vatly1.example.entity.Topic;
+import com.vatly1.example.entity.UserProfile;
+import com.vatly1.example.model.dto.ExamAttemptSummaryDTO;
+import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
+import com.vatly1.example.model.dto.QuestionOptionDTO;
+import com.vatly1.example.model.request.GradeAttemptDTO;
+import com.vatly1.example.model.request.UpdateExamDTO;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.IClassStaffRepository;
@@ -25,9 +32,11 @@ import com.vatly1.example.repository.IExamAttemptRepository;
 import com.vatly1.example.repository.IExamMatrixDetailRepository;
 import com.vatly1.example.repository.IExamQuestionRepository;
 import com.vatly1.example.repository.IExamRepository;
+import com.vatly1.example.repository.IUserProfileRepository;
 import com.vatly1.example.repository.IUserRepository;
 import com.vatly1.example.repository.QuestionBankRepository;
 import com.vatly1.example.repository.QuestionOptionRepository;
+import com.vatly1.example.repository.TopicRepository;
 import com.vatly1.example.service.IExamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +70,8 @@ public class ExamServiceImpl implements IExamService {
     private final IClassEnrollmentRepository classEnrollmentRepository;
     private final IClassStaffRepository classStaffRepository;
     private final IUserRepository userRepository;
+    private final IUserProfileRepository userProfileRepository;
+    private final TopicRepository topicRepository;
     private final QuestionBankRepository questionBankRepository;
     private final QuestionOptionRepository questionOptionRepository;
     private final com.vatly1.example.service.ISystemSettingService systemSettingService;
@@ -434,6 +445,215 @@ public class ExamServiceImpl implements IExamService {
         }
 
         return toAttemptDTO(attempt);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExamQuestionDetailDTO> getExamQuestions(UUID examId, UUID currentUserId, String role) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if ("INSTRUCTOR".equalsIgnoreCase(role)) {
+            checkExamOwnership(exam, currentUserId);
+        } else if ("STUDENT".equalsIgnoreCase(role)) {
+            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), currentUserId);
+            boolean isParticipant = examParticipantRepository.existsByExamIdAndStudentId(examId, currentUserId);
+            if (!isEnrolled && !isParticipant) {
+                throw new CustomException("Access denied: You are not authorized to view questions for this exam", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        List<ExamQuestion> examQuestions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(examId);
+        List<ExamQuestionDetailDTO> results = new ArrayList<>();
+
+        for (ExamQuestion eq : examQuestions) {
+            QuestionBank qb = questionBankRepository.findById(eq.getQuestionId()).orElse(null);
+            if (qb == null) continue;
+
+            String topicName = null;
+            if (qb.getTopicId() != null) {
+                Topic topic = topicRepository.findById(qb.getTopicId()).orElse(null);
+                if (topic != null) {
+                    topicName = topic.getTopicName();
+                }
+            }
+
+            List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
+            List<QuestionOptionDTO> optionDTOs = options.stream()
+                    .map(opt -> QuestionOptionDTO.builder()
+                            .optionId(opt.getOptionId())
+                            .questionId(opt.getQuestionId())
+                            .content(opt.getOptionText())
+                            .isCorrect(opt.getIsCorrect())
+                            .orderIndex(opt.getOrderIndex())
+                            .build())
+                    .collect(Collectors.toList());
+
+            results.add(ExamQuestionDetailDTO.builder()
+                    .examId(examId)
+                    .questionId(qb.getQuestionId())
+                    .content(qb.getContent())
+                    .questionType(qb.getQuestionType())
+                    .difficultyLevel(qb.getDifficultyLevel())
+                    .topicId(qb.getTopicId())
+                    .topicName(topicName)
+                    .orderIndex(eq.getOrderIndex())
+                    .scoreWeight(eq.getScoreWeight())
+                    .options(optionDTOs)
+                    .build());
+        }
+
+        return results;
+    }
+
+    @Override
+    @Transactional
+    public void removeQuestionFromExam(UUID examId, UUID questionId, UUID instructorId) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+        checkExamOwnership(exam, instructorId);
+
+        if (examAttemptRepository.countByExamId(examId) > 0) {
+            throw new CustomException("Cannot remove question from an exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!examQuestionRepository.existsByExamIdAndQuestionId(examId, questionId)) {
+            throw new CustomException("Question not found in this exam", HttpStatus.NOT_FOUND);
+        }
+
+        examQuestionRepository.deleteByExamIdAndQuestionId(examId, questionId);
+    }
+
+    @Override
+    @Transactional
+    public ExamDTO updateExam(UUID examId, UpdateExamDTO dto, UUID instructorId) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+        checkExamOwnership(exam, instructorId);
+
+        if (dto.getTitle() != null && !dto.getTitle().isBlank()) {
+            exam.setTitle(dto.getTitle().trim());
+        }
+        if (dto.getExamType() != null) {
+            exam.setExamType(dto.getExamType());
+        }
+        if (dto.getDurationMinutes() != null) {
+            exam.setDurationMinutes(dto.getDurationMinutes());
+        }
+        if (dto.getStartTime() != null) {
+            exam.setStartTime(dto.getStartTime());
+        }
+        if (dto.getEndTime() != null) {
+            exam.setEndTime(dto.getEndTime());
+        }
+        if (dto.getMatrixId() != null) {
+            exam.setMatrixId(dto.getMatrixId());
+        }
+
+        Exam updated = examRepository.save(exam);
+        return toExamDTO(updated);
+    }
+
+    @Override
+    @Transactional
+    public void deleteExam(UUID examId, UUID instructorId) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+        checkExamOwnership(exam, instructorId);
+
+        if (examAttemptRepository.countByExamId(examId) > 0) {
+            throw new CustomException("Cannot delete exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        examQuestionRepository.deleteByExamId(examId);
+        examParticipantRepository.deleteByExamId(examId);
+        examRepository.delete(exam);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExamAttemptSummaryDTO> getExamAttempts(UUID examId, UUID currentUserId, String role) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if (!"ADMIN".equalsIgnoreCase(role)) {
+            checkExamOwnership(exam, currentUserId);
+        }
+
+        List<ExamAttempt> attempts = examAttemptRepository.findByExamIdOrderByStartedAtDesc(examId);
+        int totalQuestions = (int) examQuestionRepository.countByExamId(examId);
+
+        List<ExamAttemptSummaryDTO> results = new ArrayList<>();
+        for (ExamAttempt att : attempts) {
+            User student = userRepository.findById(att.getStudentId()).orElse(null);
+            UserProfile profile = userProfileRepository.findById(att.getStudentId()).orElse(null);
+
+            String username = student != null ? student.getUsername() : null;
+            String studentName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : username;
+            String studentCode = profile != null ? profile.getStudentCode() : null;
+
+            List<ExamAnswer> answers = examAnswerRepository.findByAttemptId(att.getAttemptId());
+            int correctCount = (int) answers.stream().filter(a -> Boolean.TRUE.equals(a.getIsCorrect())).count();
+
+            results.add(ExamAttemptSummaryDTO.builder()
+                    .attemptId(att.getAttemptId())
+                    .examId(att.getExamId())
+                    .examTitle(exam.getTitle())
+                    .studentId(att.getStudentId())
+                    .studentUsername(username)
+                    .studentName(studentName)
+                    .studentCode(studentCode)
+                    .attemptNumber(att.getAttemptNumber())
+                    .status(att.getStatus())
+                    .startedAt(att.getStartedAt())
+                    .submittedAt(att.getSubmittedAt())
+                    .totalScore(att.getTotalScore())
+                    .totalQuestions(totalQuestions)
+                    .correctAnswersCount(correctCount)
+                    .build());
+        }
+
+        return results;
+    }
+
+    @Override
+    @Transactional
+    public ExamAttemptDTO gradeAttempt(UUID attemptId, GradeAttemptDTO dto, UUID instructorId) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        User user = userRepository.findById(instructorId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+        if (!isAdmin) {
+            checkExamOwnership(exam, instructorId);
+        }
+
+        attempt.setTotalScore(dto.getTotalScore());
+        attempt.setStatus(AttemptStatus.GRADED);
+        if (attempt.getSubmittedAt() == null) {
+            attempt.setSubmittedAt(Instant.now());
+        }
+        ExamAttempt saved = examAttemptRepository.save(attempt);
+
+        try {
+            String feedbackMsg = (dto.getFeedback() != null && !dto.getFeedback().isBlank())
+                    ? ". Nhận xét: " + dto.getFeedback().trim()
+                    : "";
+            notificationService.sendNotification(
+                    saved.getStudentId(),
+                    "Điểm thi đã được cập nhật: " + exam.getTitle(),
+                    "Giảng viên đã chấm/điều chỉnh điểm bài thi " + exam.getTitle() + ". Điểm số: " + dto.getTotalScore() + feedbackMsg,
+                    com.vatly1.example.entity.enums.NotificationType.EXAM_GRADED,
+                    saved.getAttemptId(),
+                    "EXAM_ATTEMPT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send grade notification: {}", e.getMessage());
+        }
+
+        return toAttemptDTO(saved);
     }
 
     private void checkExamOwnership(Exam exam, UUID instructorId) {

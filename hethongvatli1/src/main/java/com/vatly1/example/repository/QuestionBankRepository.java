@@ -19,4 +19,6 @@ public interface QuestionBankRepository extends JpaRepository<QuestionBank, UUID
     Page<QuestionBank> findBySubjectId(UUID subjectId, Pageable pageable);
     List<QuestionBank> findByTopicIdAndDifficultyLevel(UUID topicId, DifficultyLevel difficultyLevel);
     List<QuestionBank> findByTopicId(UUID topicId);
+    long countByTopicIdAndDifficultyLevel(UUID topicId, DifficultyLevel difficultyLevel);
+    long countByTopicId(UUID topicId);
 }

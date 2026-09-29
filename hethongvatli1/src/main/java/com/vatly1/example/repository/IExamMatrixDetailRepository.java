@@ -10,4 +10,6 @@ import java.util.UUID;
 @Repository
 public interface IExamMatrixDetailRepository extends JpaRepository<ExamMatrixDetail, UUID> {
     List<ExamMatrixDetail> findByMatrixId(UUID matrixId);
+    void deleteByMatrixId(UUID matrixId);
+    long countByMatrixId(UUID matrixId);
 }

@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface IExamRepository extends JpaRepository<Exam, UUID> {
     List<Exam> findByClassId(UUID classId);
     boolean existsByExamIdAndCreatedBy(UUID examId, UUID createdBy);
+    boolean existsByMatrixId(UUID matrixId);
+    long countByMatrixId(UUID matrixId);
 }

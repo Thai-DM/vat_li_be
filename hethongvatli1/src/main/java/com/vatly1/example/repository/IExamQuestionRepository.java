@@ -11,6 +11,13 @@ import java.util.UUID;
 public interface IExamQuestionRepository extends JpaRepository<ExamQuestion, ExamQuestion.ExamQuestionId> {
     List<ExamQuestion> findByExamIdOrderByOrderIndexAsc(UUID examId);
     boolean existsByExamIdAndQuestionId(UUID examId, UUID questionId);
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM ExamQuestion eq WHERE eq.examId = :examId AND eq.questionId = :questionId")
+    void deleteByExamIdAndQuestionId(UUID examId, UUID questionId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM ExamQuestion eq WHERE eq.examId = :examId")
     void deleteByExamId(UUID examId);
+
     long countByExamId(UUID examId);
 }

@@ -33,6 +33,9 @@ public interface IExamAttemptRepository extends JpaRepository<ExamAttempt, UUID>
     List<ExamAttempt> findByStudentId(UUID studentId);
 
     List<ExamAttempt> findByExamId(UUID examId);
+    List<ExamAttempt> findByExamIdOrderByStartedAtDesc(UUID examId);
+    long countByExamId(UUID examId);
+    boolean existsByExamId(UUID examId);
 
     List<ExamAttempt> findByExamIdAndStudentIdOrderByAttemptNumberAsc(UUID examId, UUID studentId);
 

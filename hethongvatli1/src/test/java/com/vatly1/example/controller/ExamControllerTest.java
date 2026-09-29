@@ -773,4 +773,171 @@ public class ExamControllerTest {
                         .content(transferPayload))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("EXAM-20: Giảng viên xem danh sách câu hỏi trong đề và gỡ câu hỏi khỏi đề")
+    void testExam20_GetAndRemoveExamQuestions() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Đề thi kiểm tra xem và gỡ câu hỏi", null, null);
+
+        String payload = """
+            {
+                "questionId": "%s",
+                "scoreWeight": 5.0,
+                "orderIndex": 1
+            }
+            """.formatted(questionId);
+
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk());
+
+        // 1. GET /api/v1/exams/{examId}/questions: Xem câu hỏi đã có trong đề
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].questionId").value(questionId.toString()))
+                .andExpect(jsonPath("$.data[0].options", hasSize(2)));
+
+        // 2. DELETE /api/v1/exams/{examId}/questions/{questionId}: Gỡ câu hỏi khỏi đề
+        mockMvc.perform(delete("/api/v1/exams/" + examId + "/questions/" + questionId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Question removed from exam successfully"));
+
+        // Sau khi gỡ, danh sách câu hỏi rỗng
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("EXAM-21: Cập nhật cấu hình đề thi, xem danh sách lượt làm bài và chấm thủ công điểm")
+    void testExam21_UpdateExam_AttemptsListing_AndManualGrading() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Đề thi ban đầu", null, null);
+
+        // 1. PUT /api/v1/exams/{examId}: Sửa cấu hình đề
+        String updatePayload = """
+            {
+                "title": "Đề thi sau khi đổi tên và thời gian",
+                "durationMinutes": 60,
+                "examType": "MIDTERM"
+            }
+            """;
+        mockMvc.perform(put("/api/v1/exams/" + examId)
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updatePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Đề thi sau khi đổi tên và thời gian"))
+                .andExpect(jsonPath("$.data.durationMinutes").value(60))
+                .andExpect(jsonPath("$.data.examType").value("MIDTERM"));
+
+        // Thêm câu hỏi
+        String qPayload = """
+            {
+                "questionId": "%s",
+                "scoreWeight": 10.0,
+                "orderIndex": 1
+            }
+            """.formatted(questionId);
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(qPayload))
+                .andExpect(status().isOk());
+
+        // Sinh viên làm bài
+        String startRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String attemptId = objectMapper.readTree(startRes).get("data").get("attemptId").asText();
+
+        // Nộp bài
+        mockMvc.perform(put("/api/v1/exams/attempts/" + attemptId + "/submit")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        // 2. GET /api/v1/exams/{examId}/attempts: Giảng viên xem danh sách lượt làm bài
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].attemptId").value(attemptId))
+                .andExpect(jsonPath("$.data[0].studentUsername").value("sv_an"));
+
+        // 3. PUT /api/v1/exams/attempts/{attemptId}/grade: Chấm thủ công hoặc điều chỉnh điểm
+        String gradePayload = """
+            {
+                "totalScore": 9.5,
+                "feedback": "Bài làm tốt, có giải thích rõ ràng."
+            }
+            """;
+        mockMvc.perform(put("/api/v1/exams/attempts/" + attemptId + "/grade")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(gradePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.attemptId").value(attemptId))
+                .andExpect(jsonPath("$.data.totalScore").value(9.5))
+                .andExpect(jsonPath("$.data.status").value("GRADED"));
+    }
+
+    @Test
+    @DisplayName("EXAM-22: Xóa đề thi chưa mở thành công")
+    void testExam22_DeleteExamWithoutAttempts() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Đề thi sẽ bị xóa", null, null);
+
+        // DELETE /api/v1/exams/{examId}
+        mockMvc.perform(delete("/api/v1/exams/" + examId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Exam deleted successfully"));
+
+        // Kiểm tra đề không còn tồn tại
+        mockMvc.perform(get("/api/v1/exams/" + examId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("EXAM-23: Từ chối xóa đề thi hoặc gỡ câu hỏi khi đã có sinh viên làm bài")
+    void testExam23_CannotDeleteExamOrRemoveQuestionWhenAttemptsExist() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Đề thi đã có sinh viên làm bài", null, null);
+
+        String qPayload = """
+            {
+                "questionId": "%s",
+                "scoreWeight": 10.0,
+                "orderIndex": 1
+            }
+            """.formatted(questionId);
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(qPayload))
+                .andExpect(status().isOk());
+
+        // Sinh viên bắt đầu làm bài
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated());
+
+        // Cố gắng gỡ câu hỏi khỏi đề -> 400
+        mockMvc.perform(delete("/api/v1/exams/" + examId + "/questions/" + questionId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isBadRequest());
+
+        // Cố gắng xóa đề thi -> 400
+        mockMvc.perform(delete("/api/v1/exams/" + examId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isBadRequest());
+    }
 }
