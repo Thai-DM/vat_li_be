@@ -2,8 +2,12 @@ package com.vatly1.example.service.impl;
 
 import com.vatly1.example.model.request.AddExamQuestionDTO;
 import com.vatly1.example.model.request.CreateExamDTO;
+import com.vatly1.example.model.dto.BatchSaveResultDTO;
 import com.vatly1.example.model.dto.ExamAttemptDTO;
+import com.vatly1.example.model.dto.ExamAttemptPolicyDTO;
+import com.vatly1.example.model.dto.ExamAttemptProgressDTO;
 import com.vatly1.example.model.dto.ExamDTO;
+import com.vatly1.example.model.request.BatchSubmitAnswerDTO;
 import com.vatly1.example.model.request.SubmitAnswerDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.Exam;
@@ -799,6 +803,173 @@ public class ExamServiceImpl implements IExamService {
                 .submittedAt(attempt.getSubmittedAt())
                 .status(attempt.getStatus())
                 .totalScore(attempt.getTotalScore())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExamAttemptProgressDTO getAttemptProgress(UUID attemptId, UUID currentUserId, String role) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if ("STUDENT".equalsIgnoreCase(role)) {
+            if (!Objects.equals(attempt.getStudentId(), currentUserId)) {
+                throw new CustomException("Access denied: You cannot view another student's exam attempt", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        List<ExamQuestion> examQuestions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(attempt.getExamId());
+        int totalQuestions = examQuestions != null ? examQuestions.size() : 0;
+
+        List<ExamAnswer> answers = examAnswerRepository.findByAttemptId(attemptId);
+        int answeredQuestions = 0;
+        if (answers != null) {
+            for (ExamAnswer ans : answers) {
+                boolean hasSelected = ans.getSelectedOptionIds() != null && !ans.getSelectedOptionIds().isEmpty();
+                boolean hasText = ans.getAnswerText() != null && !ans.getAnswerText().trim().isEmpty();
+                if (hasSelected || hasText) {
+                    answeredQuestions++;
+                }
+            }
+        }
+
+        Instant startedAt = attempt.getStartedAt();
+        Integer durationMinutes = exam.getDurationMinutes();
+        Instant expiresAt = null;
+        long remainingSeconds = 0;
+        boolean isExpired = false;
+
+        if (startedAt != null && durationMinutes != null) {
+            Instant calculatedExpiry = startedAt.plus(durationMinutes, java.time.temporal.ChronoUnit.MINUTES);
+            if (exam.getEndTime() != null && exam.getEndTime().isBefore(calculatedExpiry)) {
+                expiresAt = exam.getEndTime();
+            } else {
+                expiresAt = calculatedExpiry;
+            }
+
+            Instant now = Instant.now();
+            if (now.isAfter(expiresAt)) {
+                remainingSeconds = 0;
+                isExpired = true;
+            } else {
+                remainingSeconds = java.time.Duration.between(now, expiresAt).getSeconds();
+            }
+        }
+
+        return ExamAttemptProgressDTO.builder()
+                .attemptId(attempt.getAttemptId())
+                .examId(exam.getExamId())
+                .examTitle(exam.getTitle())
+                .status(attempt.getStatus())
+                .totalQuestions(totalQuestions)
+                .answeredQuestions(answeredQuestions)
+                .startedAt(startedAt)
+                .submittedAt(attempt.getSubmittedAt())
+                .durationMinutes(durationMinutes)
+                .expiresAt(expiresAt)
+                .remainingSeconds(remainingSeconds)
+                .isExpired(isExpired)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public BatchSaveResultDTO autosaveAnswers(UUID attemptId, BatchSubmitAnswerDTO dto, UUID studentId) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(attempt.getStudentId(), studentId)) {
+            throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+        }
+
+        if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
+            throw new CustomException("Cannot autosave answer: Attempt is already completed", HttpStatus.BAD_REQUEST);
+        }
+
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot autosave answer: Exam has already ended", HttpStatus.BAD_REQUEST);
+        }
+
+        int count = 0;
+        if (dto != null && dto.getAnswers() != null) {
+            for (SubmitAnswerDTO answerDTO : dto.getAnswers()) {
+                if (answerDTO.getQuestionId() == null) continue;
+                submitAnswer(attemptId, answerDTO, studentId);
+                count++;
+            }
+        }
+
+        return BatchSaveResultDTO.builder()
+                .attemptId(attemptId)
+                .savedCount(count)
+                .savedAt(Instant.now())
+                .message("Autosaved " + count + " answers successfully")
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExamAttemptPolicyDTO getExamAttemptPolicy(UUID examId, UUID studentId) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        User studentUser = userRepository.findById(studentId).orElse(null);
+        boolean isAdmin = studentUser != null && studentUser.getRole() == UserRole.ADMIN;
+        if (!isAdmin) {
+            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), studentId);
+            boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
+            if (!isEnrolled && !isTransferred) {
+                throw new CustomException("Bạn không có tên trong danh sách ca thi này", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        Instant now = Instant.now();
+        boolean isStarted = exam.getStartTime() == null || !now.isBefore(exam.getStartTime());
+        boolean isEnded = exam.getEndTime() != null && now.isAfter(exam.getEndTime());
+
+        int maxAttempts = 1;
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
+            maxAttempts = 10;
+            if (systemSettingService != null) {
+                try {
+                    com.vatly1.example.entity.SystemSetting maxSetting = systemSettingService.getSettingByKey("exam.max_attempts");
+                    if (maxSetting != null && maxSetting.getSettingValue() != null) {
+                        maxAttempts = Integer.parseInt(maxSetting.getSettingValue().trim());
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        long usedCount = examAttemptRepository.countByExamIdAndStudentId(examId, studentId);
+        int usedAttempts = (int) usedCount;
+        int remainingAttempts = Math.max(0, maxAttempts - usedAttempts);
+
+        java.util.Optional<ExamAttempt> inProgress = examAttemptRepository.findFirstByExamIdAndStudentIdAndStatus(
+                examId, studentId, AttemptStatus.IN_PROGRESS);
+        boolean hasInProgress = inProgress.isPresent();
+        UUID currentAttemptId = inProgress.map(ExamAttempt::getAttemptId).orElse(null);
+
+        boolean canStart = isStarted && !isEnded && !hasInProgress && remainingAttempts > 0;
+
+        return ExamAttemptPolicyDTO.builder()
+                .examId(exam.getExamId())
+                .examTitle(exam.getTitle())
+                .examType(exam.getExamType())
+                .maxAttempts(maxAttempts)
+                .usedAttempts(usedAttempts)
+                .remainingAttempts(remainingAttempts)
+                .canStartAttempt(canStart)
+                .hasInProgressAttempt(hasInProgress)
+                .currentAttemptId(currentAttemptId)
+                .startTime(exam.getStartTime())
+                .endTime(exam.getEndTime())
+                .isStarted(isStarted)
+                .isEnded(isEnded)
+                .durationMinutes(exam.getDurationMinutes())
                 .build();
     }
 }

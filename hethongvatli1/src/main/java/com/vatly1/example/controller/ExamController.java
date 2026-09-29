@@ -1,12 +1,16 @@
 package com.vatly1.example.controller;
 
+import com.vatly1.example.model.dto.BatchSaveResultDTO;
 import com.vatly1.example.model.dto.ExamAttemptDTO;
+import com.vatly1.example.model.dto.ExamAttemptPolicyDTO;
+import com.vatly1.example.model.dto.ExamAttemptProgressDTO;
 import com.vatly1.example.model.dto.ExamAttemptSummaryDTO;
 import com.vatly1.example.model.dto.ExamDTO;
 import com.vatly1.example.model.dto.ExamParticipantDTO;
 import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
 import com.vatly1.example.model.dto.ExamRosterDTO;
 import com.vatly1.example.model.dto.StudentExamQuestionDTO;
+import com.vatly1.example.model.request.BatchSubmitAnswerDTO;
 import com.vatly1.example.model.request.AddExamQuestionDTO;
 import com.vatly1.example.model.request.CreateExamDTO;
 import com.vatly1.example.model.request.GradeAttemptDTO;
@@ -227,6 +231,53 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(questions)
+                .build());
+    }
+
+    @Operation(summary = "Tiến độ làm bài thi", description = "Trả về số câu đã trả lời, tổng số câu, thời gian còn lại (giây) và trạng thái lượt làm.")
+    @GetMapping("/attempts/{attemptId}/progress")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<ExamAttemptProgressDTO>> getAttemptProgress(
+            @PathVariable UUID attemptId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamAttemptProgressDTO progress = examService.getAttemptProgress(attemptId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<ExamAttemptProgressDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(progress)
+                .build());
+    }
+
+    @Operation(summary = "Lưu nháp câu trả lời theo lô (Autosave batch)", description = "Lưu nháp hàng loạt câu trả lời một lần để tối ưu mạng và chống mất dữ liệu.")
+    @PostMapping("/attempts/{attemptId}/autosave")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<BatchSaveResultDTO>> autosaveAnswers(
+            @PathVariable UUID attemptId,
+            @Valid @RequestBody BatchSubmitAnswerDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        BatchSaveResultDTO result = examService.autosaveAnswers(attemptId, dto, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<BatchSaveResultDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message(result.getMessage())
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Chính sách lượt thi & điều kiện làm bài", description = "Kiểm tra số lượt tối đa, số lượt đã dùng, có lượt dở dang hay không và thời điểm được thi.")
+    @GetMapping("/{examId}/attempt-policy")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<ExamAttemptPolicyDTO>> getExamAttemptPolicy(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamAttemptPolicyDTO policy = examService.getExamAttemptPolicy(examId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<ExamAttemptPolicyDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(policy)
                 .build());
     }
 

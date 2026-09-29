@@ -69,4 +69,42 @@ class StudentClassControllerTest {
                 .header("Authorization", "Bearer " + adminToken))
             .andExpect(status().isOk());
     }
+
+    @Test
+    void getMyExperimentAssignments_asStudent_returns200() throws Exception {
+        mockMvc.perform(get("/api/v1/students/me/experiment-assignments")
+                .header("Authorization", "Bearer " + studentToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void getMyAgenda_asStudent_returnsUnifiedAgenda() throws Exception {
+        mockMvc.perform(get("/api/v1/students/me/agenda")
+                .header("Authorization", "Bearer " + studentToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.schedules").isArray())
+            .andExpect(jsonPath("$.data.exams").isArray())
+            .andExpect(jsonPath("$.data.experiments").isArray());
+    }
+
+    @Test
+    void getMyMaterials_asStudent_returnsMaterials() throws Exception {
+        mockMvc.perform(get("/api/v1/students/me/materials")
+                .header("Authorization", "Bearer " + studentToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void getMyUpcomingTasks_asStudent_returnsTasksList() throws Exception {
+        mockMvc.perform(get("/api/v1/students/me/upcoming-tasks")
+                .header("Authorization", "Bearer " + studentToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray());
+    }
 }

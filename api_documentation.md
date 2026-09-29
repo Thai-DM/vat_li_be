@@ -79,12 +79,12 @@ Hệ thống Quản lý Học tập & Thí nghiệm Ảo Vật lý 1 (Physics 1 
 | 3 | `SemesterController` | `/api/v1/semesters` | 5 | Quản lý học kỳ, năm học niên khóa |
 | 4 | `TopicController` | `/api/v1/subjects/{subjectId}/topics` | 5 | Chương mục kiến thức Vật lý (Cơ học, Nhiệt học, Dao động...) |
 | 5 | `ClassController` | `/api/v1/classes` | 14 | Lớp học phần, phân công giảng viên/trợ giảng, ghi danh sinh viên |
-| 6 | `StudentClassController` | `/api/v1/students/me` | 2 | Tra cứu danh sách lớp học phần sinh viên đang theo học |
+| 6 | `StudentClassController` | `/api/v1/students/me` | 6 | Tra cứu danh sách lớp học phần sinh viên đang theo học |
 | 7 | `QuestionBankController` | `/api/v1/questions` | 8 | Ngân hàng câu hỏi trắc nghiệm, phê duyệt, nhập đề từ PDF qua AI OCR |
-| 8 | `ExamController` | `/api/v1/exams` | 21 | Cấu hình kỳ thi, gỡ câu hỏi, thi ghép ca khác, chấm điểm thủ công, lịch sử lượt thi |
+| 8 | `ExamController` | `/api/v1/exams` | 25 | Cấu hình kỳ thi, gỡ câu hỏi, thi ghép ca khác, chấm điểm thủ công, lịch sử lượt thi |
 | 9 | `ExamMatrixController` | `/api/v1/exam-matrices` | 6 | Quản lý ma trận đề thi, phân bố Bloom/chương mục, đối soát ngân hàng câu hỏi |
 | 10 | `ExperimentController` | `/api/v1/experiments` | 7 | Thí nghiệm ảo 3D Vật lý 1, giao bài, nộp số liệu, chấm điểm Rubric |
-| 11 | `LearningMaterialController` | `/api/v1/topics/{topicId}/materials` | 6 | Học liệu số (PDF, Video, Bài giảng), kiểm duyệt học liệu |
+| 11 | `LearningMaterialController` & `MaterialManagementController` | `/api/v1` | 7 | Học liệu số (PDF, Video, Bài giảng), kiểm duyệt học liệu |
 | 12 | `EvidenceController` | `/api/v1` | 3 | Kho lưu trữ minh chứng kết quả đo thực nghiệm (có IDOR protection) |
 | 13 | `LearningProgressController` | `/api/v1/classes/{classId}/progress` | 1 | Báo cáo tiến độ học liệu của toàn lớp (Giảng viên) |
 | 14 | `StudentProgressController` | `/api/v1/students/me/progress` | 2 | Theo dõi và cập nhật tiến độ học tập cá nhân (Sinh viên) |
@@ -839,6 +839,138 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
+#### GET `/api/v1/students/me/experiment-assignments` — Danh sách bài thí nghiệm được giao
+
+**Xác thực:** role `STUDENT`  
+**Mô tả:** Trả về toàn bộ bài thí nghiệm được giao thuộc các lớp sinh viên đang ghi danh, kèm hạn nộp, trạng thái (CHƯA NỘP / ĐÃ NỘP / ĐÃ CHẤM), điểm số, nhận xét và đường dẫn bài nộp.
+
+**Response 200:** `ApiResponse<List<StudentExperimentAssignmentDTO>>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": [
+    {
+      "assignmentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "experimentId": "d3b07384-d113-40e1-bbd5-f86a24682c3f",
+      "experimentTitle": "Khảo sát chuyển động rơi tự do",
+      "classId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "classCode": "PHY101-01",
+      "dueDate": "2026-10-15T23:59:59",
+      "maxScore": 10.0,
+      "rubricConfig": "{"criteria": [{"name": "Độ chính xác", "points": 5}]}",
+      "isOverdue": false,
+      "submissionStatus": "SUBMITTED",
+      "submissionId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "score": 9.5,
+      "feedback": "Báo cáo trình bày rõ ràng, sai số thực nghiệm nhỏ.",
+      "submissionFileUrl": "http://localhost:8080/api/v1/files/b4c297.../download?token=...",
+      "submittedAt": "2026-10-10T14:30:00"
+    }
+  ]
+}
+```
+
+---
+
+#### GET `/api/v1/students/me/agenda` — Lịch học, lịch thi và hạn nộp thí nghiệm hợp nhất
+
+**Xác thực:** role `STUDENT`  
+**Mô tả:** Gộp tất cả các lịch học, ca thi và deadline bài tập thí nghiệm trong 1 API duy nhất, loại bỏ việc Frontend phải gọi nhiều API rồi tự ghép nối dữ liệu.
+
+**Response 200:** `ApiResponse<StudentAgendaDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    "classSchedules": [
+      {
+        "scheduleId": "a1b2c3d4-...",
+        "classId": "9b1deb4d-...",
+        "classCode": "PHY101-01",
+        "subjectName": "Vật lý 1",
+        "startTime": "2026-10-05T07:30:00",
+        "endTime": "2026-10-05T10:00:00",
+        "room": "A2-301",
+        "type": "THEORY"
+      }
+    ],
+    "exams": [
+      {
+        "examId": "e1f2a3b4-...",
+        "examTitle": "Kiểm tra giữa kỳ Cơ học Vật lý 1",
+        "classId": "9b1deb4d-...",
+        "classCode": "PHY101-01",
+        "startTime": "2026-10-20T08:00:00",
+        "endTime": "2026-10-20T09:00:00",
+        "durationMinutes": 60,
+        "totalQuestions": 40,
+        "isSubmitted": false
+      }
+    ],
+    "experimentDeadlines": [
+      {
+        "assignmentId": "3fa85f64-...",
+        "experimentTitle": "Đo gia tốc trọng trường g",
+        "classId": "9b1deb4d-...",
+        "classCode": "PHY101-01",
+        "dueDate": "2026-10-15T23:59:59",
+        "submissionStatus": "NOT_SUBMITTED",
+        "isOverdue": false
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### GET `/api/v1/students/me/materials` — Danh sách học liệu theo lớp sinh viên đã ghi danh
+
+**Xác thực:** role `STUDENT`  
+**Query Params:**
+- `classId` (UUID, tùy chọn): Lọc theo lớp học phần
+- `topicId` (UUID, tùy chọn): Lọc theo chương mục kiến thức
+- `type` (Enum `MaterialType`, tùy chọn): `PDF`, `VIDEO`, `SIMULATION_GUIDE`, `SLIDE`, `OTHER`
+
+**Mô tả:** Trả về các học liệu đã được phê duyệt (`APPROVED`) thuộc các môn học/chương mục mà sinh viên đang theo học.
+
+**Response 200:** `ApiResponse<List<LearningMaterialDTO>>`
+
+---
+
+#### GET `/api/v1/students/me/upcoming-tasks` — Nhiệm vụ và sự kiện sắp đến hạn
+
+**Xác thực:** role `STUDENT`  
+**Query Params:** `limit` (mặc định 10)  
+**Mô tả:** Trả về danh sách công việc sắp đến hạn (Kỳ thi, Bài thí nghiệm, Học liệu bắt buộc) sắp xếp theo deadline gần nhất tăng dần, thay thế dữ liệu mock trên màn hình Dashboard sinh viên.
+
+**Response 200:** `ApiResponse<List<UpcomingTaskDTO>>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": [
+    {
+      "taskId": "task-assign-3fa85f64...",
+      "title": "Nộp báo cáo: Khảo sát rơi tự do",
+      "taskType": "EXPERIMENT",
+      "deadline": "2026-10-15T23:59:59",
+      "classCode": "PHY101-01",
+      "status": "PENDING",
+      "targetId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "isOverdue": false
+    }
+  ]
+}
+```
+
+---
+
 ### 3.7. Question Bank
 
 **Base path:** `/api/v1/questions`  
@@ -1347,6 +1479,140 @@ Score_10 = (Số câu đúng / Tổng số câu) × 10
 
 ---
 
+#### GET `/api/v1/exams/attempts/{attemptId}/questions` — Lấy danh sách câu hỏi & lựa chọn cho lượt thi (Bảo mật sinh viên)
+
+**Xác thực:** role `STUDENT`, `ADMIN` (Sinh viên chỉ được lấy đề của đúng lượt thi do mình tạo)  
+**Mô tả:** Trả về danh sách câu hỏi và các lựa chọn trắc nghiệm theo đúng thứ tự xáo đề của lượt làm bài.  
+> [!IMPORTANT]
+> **Quy tắc bảo mật chống gian lận:** Khi lượt thi đang ở trạng thái `IN_PROGRESS`, hệ thống **tuyệt đối không trả về `isCorrect`** (trả về `null`) và **không trả về `explanation`** (trả về `null`). Đồng thời trả về `savedAnswerKey` và `savedNumericAnswer` để sinh viên khôi phục giao diện nếu tải lại trang.
+
+**Response 200:** `ApiResponse<List<StudentExamQuestionDTO>>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": [
+    {
+      "questionId": "8f14e45f-...",
+      "content": "Một vật rơi tự do từ độ cao h xuống đất. Gia tốc rơi tự do là g. Vận tốc lúc chạm đất tính theo công thức:",
+      "questionType": "MULTIPLE_CHOICE",
+      "points": 0.25,
+      "displayOrder": 1,
+      "savedAnswerKey": "B",
+      "savedNumericAnswer": null,
+      "options": [
+        { "optionKey": "A", "content": "v = 2gh", "displayOrder": 1, "isCorrect": null },
+        { "optionKey": "B", "content": "v = \sqrt{2gh}", "displayOrder": 2, "isCorrect": null },
+        { "optionKey": "C", "content": "v = gh", "displayOrder": 3, "isCorrect": null },
+        { "optionKey": "D", "content": "v = \sqrt{gh}", "displayOrder": 4, "isCorrect": null }
+      ],
+      "explanation": null
+    }
+  ]
+}
+```
+
+---
+
+#### GET `/api/v1/exams/attempts/{attemptId}/progress` — Kiểm tra tiến độ và thời gian còn lại của lượt thi
+
+**Xác thực:** role `STUDENT`, `ADMIN`  
+**Mô tả:** Trả về số câu đã trả lời, tổng số câu hỏi, số giây còn lại và cờ hết hạn (`isExpired`), phục vụ đồng hồ đếm ngược và thanh tiến độ trên giao diện làm bài.
+
+**Response 200:** `ApiResponse<ExamAttemptProgressDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    "attemptId": "5c123456-...",
+    "examId": "e1f2a3b4-...",
+    "examTitle": "Kiểm tra giữa kỳ Cơ học Vật lý 1",
+    "status": "IN_PROGRESS",
+    "totalQuestions": 40,
+    "answeredCount": 28,
+    "remainingSeconds": 1420,
+    "isExpired": false,
+    "startedAt": "2026-10-20T08:00:00",
+    "submittedAt": null
+  }
+}
+```
+
+---
+
+#### POST `/api/v1/exams/attempts/{attemptId}/autosave` — Tự động lưu nháp câu trả lời theo lô (Batch Autosave)
+
+**Xác thực:** role `STUDENT`, `ADMIN`  
+**Mô tả:** Cho phép Frontend gửi lưu một mảng câu trả lời theo batch (ví dụ định kỳ 15 giây hoặc khi mạng kết nối lại), tránh gửi dồn dập nhiều request lẻ và chống mất dữ liệu của thí sinh.
+
+**Request Body:** `BatchSubmitAnswerDTO`
+```json
+{
+  "answers": [
+    {
+      "questionId": "8f14e45f-...",
+      "selectedOptionKey": "B",
+      "numericAnswer": null
+    },
+    {
+      "questionId": "9b23f56a-...",
+      "selectedOptionKey": null,
+      "numericAnswer": 9.81
+    }
+  ]
+}
+```
+
+**Response 200:** `ApiResponse<BatchSaveResultDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Batch saved successfully",
+  "data": {
+    "savedCount": 2,
+    "totalSubmitted": 2,
+    "message": "Lưu nháp thành công 2 câu trả lời",
+    "savedAt": "2026-10-20T08:15:30"
+  }
+}
+```
+
+---
+
+#### GET `/api/v1/exams/{examId}/attempt-policy` — Chính sách dự thi và kiểm tra quyền vào thi của sinh viên
+
+**Xác thực:** role `STUDENT`, `ADMIN`  
+**Mô tả:** Kiểm tra sinh viên đã dùng bao nhiêu lượt thi, còn lượt thi không, ca thi đã mở/đóng chưa, và có lượt làm dở dang hay không trước khi hiển thị nút "Vào thi".
+
+**Response 200:** `ApiResponse<ExamAttemptPolicyDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    "examId": "e1f2a3b4-...",
+    "examTitle": "Kiểm tra giữa kỳ Cơ học",
+    "maxAttempts": 1,
+    "usedAttempts": 0,
+    "hasInProgressAttempt": false,
+    "activeAttemptId": null,
+    "startTime": "2026-10-20T08:00:00",
+    "endTime": "2026-10-20T09:30:00",
+    "durationMinutes": 60,
+    "isStarted": true,
+    "isEnded": false,
+    "canStartAttempt": true
+  }
+}
+```
+
+---
+
 ### 3.8.b. Quản Lý Ma Trận Đề Thi (Exam Matrix Management)
 
 **Base path:** `/api/v1/exam-matrices`  
@@ -1757,6 +2023,76 @@ Score_lab = Σ(điểm_tiêu_chí_i × trọng_số_i)
 #### DELETE `/api/v1/topics/{topicId}/materials/{materialId}` — Xóa học liệu
 
 **Xác thực:** role `ADMIN` hoặc `INSTRUCTOR`
+
+---
+
+#### POST `/api/v1/materials/migrate-legacy-types` — Chuẩn hóa kiểu dữ liệu học liệu cũ (Admin Migration)
+
+**Base path:** `/api/v1/materials/migrate-legacy-types`  
+**Xác thực:** role `ADMIN`  
+**Mô tả:** Endpoint bảo trì một lần chuyển đổi toàn bộ bản ghi có enum kiểu tài liệu cũ trong CSDL (`DOCUMENT`, `DOC`, `DOCX`...) sang chuẩn `PDF`. Chỉ dùng nội bộ quản trị hệ thống, không mở cho sinh viên.
+
+**Response 200:**
+```json
+{
+  "code": 200,
+  "message": "Migration completed successfully",
+  "data": {
+    "updatedCount": 12,
+    "migratedTo": "PDF"
+  }
+}
+```
+
+---
+
+
+### 3.10.b. Secure File Storage & Temporary Download URL (Lưu Trữ Tệp Tin)
+
+**Base path:** `/api/v1/files`  
+**Xác thực:** Bearer Token
+
+---
+
+#### POST `/api/v1/files/upload` — Tải lên tệp đính kèm
+
+**Xác thực:** Mọi người dùng đã đăng nhập  
+**Content-Type:** `multipart/form-data` (`file`)  
+**Response 200:** `FileMetadataDTO`
+
+---
+
+#### POST `/api/v1/files/{fileId}/download-url` — Sinh URL tải tệp tạm thời có chữ ký bảo mật
+
+**Xác thực:** Người dùng có quyền truy cập tệp (Admin, Giảng viên phụ trách, hoặc Sinh viên sở hữu tệp)  
+**Mô tả:** Sinh Signed URL có gắn token HMAC-SHA256 và thời gian hết hạn (mặc định 15 phút). Giải pháp này ngăn chặn tấn công lộ lọt đường dẫn lưu trữ vật lý và ngăn chặn IDOR (Insecure Direct Object References).
+
+**Response 200:** `ApiResponse<FileDownloadUrlDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Temporary download URL generated successfully",
+  "data": {
+    "fileId": "101eb438-d510-4a77-a186-5c4701985f62",
+    "fileName": "bao_cao_thi_nghiem.pdf",
+    "downloadUrl": "http://localhost:8080/api/v1/files/101eb438-d510-4a77-a186-5c4701985f62/download?token=a1b2c3d4e5f6...&expires=1790691500",
+    "expiresAt": "2026-10-20T10:15:00",
+    "expiresInSeconds": 900
+  }
+}
+```
+
+---
+
+#### GET `/api/v1/files/{fileId}/download` — Tải xuống luồng tệp tin với Signed Token
+
+**Xác thực:** Công khai thông qua xác thực chữ ký số HMAC của `token` và `expires`.  
+**Query Params:**
+- `token` (String, bắt buộc): Chữ ký bảo mật HMAC-SHA256
+- `expires` (Long, bắt buộc): Timestamp Unix hết hạn (giây)
+
+**Response 200:** Luồng tệp nhị phân (`application/octet-stream` hoặc MIME thực tế) kèm header `Content-Disposition: attachment; filename="..."`.
 
 ---
 

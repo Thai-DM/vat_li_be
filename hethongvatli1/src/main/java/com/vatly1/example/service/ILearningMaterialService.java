@@ -13,4 +13,5 @@ public interface ILearningMaterialService {
     LearningMaterialDTO updateMaterial(UUID materialId, CreateLearningMaterialDTO dto, UUID currentUserId, String role);
     LearningMaterialDTO approveMaterial(UUID materialId);
     void deleteMaterial(UUID materialId, UUID currentUserId, String role);
+    int migrateLegacyTypes();
 }

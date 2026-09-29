@@ -27,6 +27,12 @@ public class FileStorageIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.vatly1.example.repository.FileUploadRepository fileUploadRepository;
+
+    @Autowired
+    private com.vatly1.example.repository.IUserRepository userRepository;
+
     private String adminToken;
 
     @BeforeEach
@@ -117,6 +123,30 @@ public class FileStorageIntegrationTest {
 
         mockMvc.perform(multipart("/api/v1/files/upload")
                         .file(testFile))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("FILE-06: Sinh URL tải tệp tạm thời có chữ ký số và kiểm tra bảo mật token")
+    void generateDownloadUrl_and_validateToken() throws Exception {
+        com.vatly1.example.entity.User admin = userRepository.findByUsername("admin");
+        com.vatly1.example.entity.FileUpload upload = fileUploadRepository.save(com.vatly1.example.entity.FileUpload.builder()
+                .uploaderId(admin.getUserId())
+                .originalFilename("secure_doc.pdf")
+                .storedUrl("/api/v1/files/materials/secure_doc.pdf")
+                .mimeType("application/pdf")
+                .fileSizeBytes(2048L)
+                .build());
+
+        String res = mockMvc.perform(post("/api/v1/files/" + upload.getFileId() + "/download-url")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.downloadUrl").isNotEmpty())
+                .andExpect(jsonPath("$.data.fileName").value("secure_doc.pdf"))
+                .andReturn().getResponse().getContentAsString();
+
+        // Cố tình truy cập với token sai -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/files/" + upload.getFileId() + "/download?token=invalid_token&expires=" + System.currentTimeMillis()))
                 .andExpect(status().isForbidden());
     }
 }

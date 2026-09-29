@@ -33,4 +33,8 @@ public interface IExamService {
     void deleteExam(UUID examId, UUID instructorId);
     List<ExamAttemptSummaryDTO> getExamAttempts(UUID examId, UUID currentUserId, String role);
     ExamAttemptDTO gradeAttempt(UUID attemptId, GradeAttemptDTO dto, UUID instructorId);
+
+    com.vatly1.example.model.dto.ExamAttemptProgressDTO getAttemptProgress(UUID attemptId, UUID currentUserId, String role);
+    com.vatly1.example.model.dto.BatchSaveResultDTO autosaveAnswers(UUID attemptId, com.vatly1.example.model.request.BatchSubmitAnswerDTO dto, UUID studentId);
+    com.vatly1.example.model.dto.ExamAttemptPolicyDTO getExamAttemptPolicy(UUID examId, UUID studentId);
 }

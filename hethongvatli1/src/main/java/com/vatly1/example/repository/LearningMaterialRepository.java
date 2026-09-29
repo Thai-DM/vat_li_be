@@ -10,4 +10,9 @@ import java.util.UUID;
 @Repository
 public interface LearningMaterialRepository extends JpaRepository<LearningMaterial, UUID> {
     List<LearningMaterial> findByTopicIdOrderByCreatedAtDesc(UUID topicId);
+    List<LearningMaterial> findByTopicIdIn(List<UUID> topicIds);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE learning_materials SET type = 'PDF' WHERE UPPER(type) IN ('DOCUMENT', 'DOC', 'DOCX')", nativeQuery = true)
+    int migrateLegacyTypes();
 }

@@ -1042,4 +1042,106 @@ public class ExamControllerTest {
                         .header("Authorization", "Bearer " + studentBToken))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("EXAM-26: Sinh viên theo dõi tiến độ làm bài thi (Progress API)")
+    void testExam26_GetAttemptProgress() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Bài thi kiểm tra tiến độ", null, null);
+
+        // Add 1 question
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"questionId\":\"" + questionId + "\", \"scoreWeight\": 10.0}"))
+                .andExpect(status().isOk());
+
+        // Start attempt
+        String startRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String attemptId = objectMapper.readTree(startRes).get("data").get("attemptId").asText();
+
+        // Check progress initially (0 answered)
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/progress")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalQuestions").value(1))
+                .andExpect(jsonPath("$.data.answeredQuestions").value(0))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.isExpired").value(false));
+
+        // Submit 1 answer
+        String answerPayload = "{\"questionId\":\"" + questionId + "\", \"selectedOptionIds\":[\"" + correctOptionId + "\"]}";
+        mockMvc.perform(post("/api/v1/exams/attempts/" + attemptId + "/answers")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(answerPayload))
+                .andExpect(status().isOk());
+
+        // Check progress again (1 answered)
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/progress")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answeredQuestions").value(1));
+    }
+
+    @Test
+    @DisplayName("EXAM-27: Lưu nháp hàng loạt câu trả lời một lần (Autosave Batch API)")
+    void testExam27_AutosaveAnswersBatch() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Bài thi lưu nháp hàng loạt", null, null);
+
+        // Add 1 question
+        mockMvc.perform(post("/api/v1/exams/" + examId + "/questions")
+                        .header("Authorization", "Bearer " + instructorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"questionId\":\"" + questionId + "\", \"scoreWeight\": 10.0}"))
+                .andExpect(status().isOk());
+
+        // Start attempt
+        String startRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String attemptId = objectMapper.readTree(startRes).get("data").get("attemptId").asText();
+
+        // Autosave batch
+        String batchPayload = """
+            {
+                "answers": [
+                    {
+                        "questionId": "%s",
+                        "selectedOptionIds": ["%s"]
+                    }
+                ]
+            }
+            """.formatted(questionId, correctOptionId);
+
+        mockMvc.perform(post("/api/v1/exams/attempts/" + attemptId + "/autosave")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.savedCount").value(1));
+
+        // Verify that question state is retrieved
+        mockMvc.perform(get("/api/v1/exams/attempts/" + attemptId + "/questions")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].selectedOptionIds[0]").value(correctOptionId.toString()));
+    }
+
+    @Test
+    @DisplayName("EXAM-28: Kiểm tra chính sách và điều kiện làm bài thi (Attempt Policy API)")
+    void testExam28_GetExamAttemptPolicy() throws Exception {
+        String examId = createExamHelper(instructorToken, classId, "Bài thi kiểm tra điều kiện", null, null);
+
+        mockMvc.perform(get("/api/v1/exams/" + examId + "/attempt-policy")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.maxAttempts").isNumber())
+                .andExpect(jsonPath("$.data.usedAttempts").value(0))
+                .andExpect(jsonPath("$.data.hasInProgressAttempt").value(false))
+                .andExpect(jsonPath("$.data.canStartAttempt").value(true));
+    }
 }

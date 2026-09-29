@@ -246,4 +246,19 @@ public class LearningMaterialControllerTest {
                 .header("Authorization", "Bearer " + adminToken))
             .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("MAT-09: Admin migrate legacy material types sang PDF thành công")
+    void testMigrateLegacyTypes() throws Exception {
+        mockMvc.perform(post("/api/v1/materials/migrate-legacy-types")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.targetType").value("PDF"));
+
+        // Student forbidden
+        mockMvc.perform(post("/api/v1/materials/migrate-legacy-types")
+                .header("Authorization", "Bearer " + studentToken))
+            .andExpect(status().isForbidden());
+    }
 }

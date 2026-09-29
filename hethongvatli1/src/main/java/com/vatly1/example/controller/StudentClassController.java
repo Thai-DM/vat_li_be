@@ -2,12 +2,17 @@ package com.vatly1.example.controller;
 
 import com.vatly1.example.model.dto.ClassDTO;
 import com.vatly1.example.model.dto.ClassScheduleDTO;
+import com.vatly1.example.model.dto.LearningMaterialDTO;
+import com.vatly1.example.model.dto.StudentAgendaDTO;
+import com.vatly1.example.model.dto.StudentExperimentAssignmentDTO;
+import com.vatly1.example.model.dto.UpcomingTaskDTO;
 import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.service.IClassScheduleService;
 import com.vatly1.example.service.IClassService;
+import com.vatly1.example.service.IStudentPortalService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +35,7 @@ public class StudentClassController {
 
     private final IClassService classService;
     private final IClassScheduleService scheduleService;
+    private final IStudentPortalService studentPortalService;
 
     @Operation(summary = "Lấy danh sách lớp học của tôi", description = "Lấy danh sách các lớp học mà sinh viên đang ghi danh.")
     @GetMapping("/classes")
@@ -54,5 +60,41 @@ public class StudentClassController {
         String role = (String) request.getAttribute("role");
         UUID targetStudentId = (role != null && role.equalsIgnoreCase("ADMIN") && studentId != null) ? studentId : currentUserId;
         return ResponseEntity.ok(ApiResponse.success(scheduleService.getStudentSchedule(targetStudentId, semesterId, currentUserId, role)));
+    }
+
+    @Operation(summary = "Danh sách bài thí nghiệm được giao", description = "Lấy danh sách các bài thí nghiệm ảo được giao theo các lớp học phần sinh viên đang tham gia, hạn nộp, trạng thái và bài nộp.")
+    @GetMapping("/experiment-assignments")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<StudentExperimentAssignmentDTO>>> getMyExperimentAssignments(HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        return ResponseEntity.ok(ApiResponse.success(studentPortalService.getMyExperimentAssignments(currentUserId)));
+    }
+
+    @Operation(summary = "Lịch trình học tập & thi cử tích hợp (Agenda)", description = "Gộp chung toàn bộ thời khóa biểu, lịch thi, và hạn chót nộp bài thí nghiệm trong một API duy nhất.")
+    @GetMapping("/agenda")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<StudentAgendaDTO>> getMyAgenda(HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        return ResponseEntity.ok(ApiResponse.success(studentPortalService.getMyAgenda(currentUserId)));
+    }
+
+    @Operation(summary = "Học liệu theo các lớp đã ghi danh", description = "Danh sách tài liệu học tập đã duyệt theo các lớp sinh viên tham gia, có thể lọc theo classId, topicId, type.")
+    @GetMapping("/materials")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<LearningMaterialDTO>>> getMyMaterials(
+            HttpServletRequest request,
+            @RequestParam(required = false) UUID classId,
+            @RequestParam(required = false) UUID topicId,
+            @RequestParam(required = false) com.vatly1.example.entity.enums.MaterialType type) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        return ResponseEntity.ok(ApiResponse.success(studentPortalService.getMyMaterials(currentUserId, classId, topicId, type)));
+    }
+
+    @Operation(summary = "Nhiệm vụ sắp tới hạn", description = "Danh sách các nhiệm vụ sắp tới hạn (kỳ thi, bài thí nghiệm, học liệu) xếp theo thời gian tăng dần.")
+    @GetMapping("/upcoming-tasks")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<UpcomingTaskDTO>>> getMyUpcomingTasks(HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        return ResponseEntity.ok(ApiResponse.success(studentPortalService.getMyUpcomingTasks(currentUserId)));
     }
 }

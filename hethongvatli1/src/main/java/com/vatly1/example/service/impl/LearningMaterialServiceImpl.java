@@ -241,4 +241,10 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
                 .updatedAt(material.getUpdatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public int migrateLegacyTypes() {
+        return materialRepository.migrateLegacyTypes();
+    }
 }
