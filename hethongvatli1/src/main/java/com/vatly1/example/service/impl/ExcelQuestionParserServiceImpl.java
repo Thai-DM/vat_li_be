@@ -151,7 +151,7 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
     private Map<String, Integer> buildColumnMapping(Row headerRow) {
         Map<String, Integer> map = new HashMap<>();
 
-        // Gán vị trí mặc định
+        // Gán vị trí mặc định theo chuẩn template
         map.put("stt", 0);
         map.put("content", 1);
         map.put("questionType", 2);
@@ -168,28 +168,33 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
         for (Cell cell : headerRow) {
             String val = getCellValueAsString(cell).trim().toLowerCase();
             String norm = deAccent(val);
+            // Loại bỏ dấu sao (*), dấu ngoặc và ký tự đặc biệt
+            String clean = norm.replaceAll("[^a-z0-9\\s]", " ").trim().replaceAll("\\s+", " ");
             int idx = cell.getColumnIndex();
 
-            if (norm.contains("noi dung") || norm.contains("cau hoi") || norm.contains("question") || norm.contains("content")) {
-                map.put("content", idx);
-            } else if (norm.contains("loai") || norm.contains("type")) {
+            if (clean.contains("loai cau hoi") || clean.contains("loai") || clean.contains("question type") || clean.equals("type")) {
                 map.put("questionType", idx);
-            } else if (norm.contains("nhan thuc") || norm.contains("bloom") || norm.contains("cognitive")) {
+            } else if ((clean.contains("noi dung") || clean.contains("content") || clean.contains("cau hoi") || clean.contains("question"))
+                    && !clean.contains("loai") && !clean.contains("type")) {
+                map.put("content", idx);
+            } else if (clean.contains("nhan thuc") || clean.contains("bloom") || clean.contains("cognitive")) {
                 map.put("cognitive", idx);
-            } else if (norm.contains("do kho") || norm.contains("muc do kho") || norm.contains("difficulty")) {
+            } else if (clean.contains("do kho") || clean.contains("muc do kho") || clean.contains("difficulty") || clean.equals("kho")) {
                 map.put("difficulty", idx);
-            } else if (norm.equals("dap an a") || norm.equals("phuong an a") || norm.equals("a") || norm.equals("option a")) {
-                map.put("optA", idx);
-            } else if (norm.equals("dap an b") || norm.equals("phuong an b") || norm.equals("b") || norm.equals("option b")) {
-                map.put("optB", idx);
-            } else if (norm.equals("dap an c") || norm.equals("phuong an c") || norm.equals("c") || norm.equals("option c")) {
-                map.put("optC", idx);
-            } else if (norm.equals("dap an d") || norm.equals("phuong an d") || norm.equals("d") || norm.equals("option d")) {
-                map.put("optD", idx);
-            } else if (norm.contains("dap an dung") || norm.contains("correct") || norm.equals("dap an")) {
+            } else if (clean.contains("dap an dung") || clean.contains("phuong an dung") || clean.contains("correct") || clean.equals("dap an")) {
                 map.put("correct", idx);
-            } else if (norm.contains("giai thich") || norm.contains("explanation")) {
+            } else if (clean.contains("giai thich") || clean.contains("explanation") || clean.contains("huong dan")) {
                 map.put("explanation", idx);
+            } else if (clean.equals("dap an a") || clean.equals("phuong an a") || clean.equals("a") || clean.equals("option a")) {
+                map.put("optA", idx);
+            } else if (clean.equals("dap an b") || clean.equals("phuong an b") || clean.equals("b") || clean.equals("option b")) {
+                map.put("optB", idx);
+            } else if (clean.equals("dap an c") || clean.equals("phuong an c") || clean.equals("c") || clean.equals("option c")) {
+                map.put("optC", idx);
+            } else if (clean.equals("dap an d") || clean.equals("phuong an d") || clean.equals("d") || clean.equals("option d")) {
+                map.put("optD", idx);
+            } else if (clean.equals("stt") || clean.contains("thu tu") || clean.equals("no") || clean.equals("index")) {
+                map.put("stt", idx);
             }
         }
 
@@ -230,11 +235,30 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
 
     private Set<Character> parseCorrectLetters(String raw) {
         Set<Character> set = new HashSet<>();
-        if (raw == null) return set;
-        String upper = raw.toUpperCase();
-        for (char ch : upper.toCharArray()) {
-            if (ch >= 'A' && ch <= 'D') {
-                set.add(ch);
+        if (raw == null || raw.isBlank()) return set;
+
+        String clean = deAccent(raw.trim().toUpperCase())
+                .replace("DAP AN", "")
+                .replace("PHUONG AN", "")
+                .replace("OPTION", "")
+                .replace("ANSWER", "")
+                .replaceAll("[^A-D1-4]", " ")
+                .trim();
+
+        for (String part : clean.split("\\s+")) {
+            if (part.length() == 1) {
+                char ch = part.charAt(0);
+                if (ch >= 'A' && ch <= 'D') {
+                    set.add(ch);
+                } else if (ch >= '1' && ch <= '4') {
+                    set.add((char) ('A' + (ch - '1')));
+                }
+            } else {
+                for (char ch : part.toCharArray()) {
+                    if (ch >= 'A' && ch <= 'D') {
+                        set.add(ch);
+                    }
+                }
             }
         }
         return set;
@@ -242,35 +266,41 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
 
     private DifficultyLevel parseDifficultyLevel(String raw) {
         if (raw == null || raw.isBlank()) return DifficultyLevel.MEDIUM;
-        String norm = deAccent(raw.trim().toLowerCase());
-        if (norm.contains("kho") || norm.contains("hard") || norm.contains("expert")) {
+        String clean = deAccent(raw.trim().toLowerCase()).replace('_', ' ').replace('-', ' ').replaceAll("\\s+", " ");
+        if (clean.contains("kho") || clean.contains("hard") || clean.contains("expert")) {
             return DifficultyLevel.HARD;
         }
-        if (norm.contains("de") || norm.contains("easy")) {
+        if (clean.contains("de") || clean.contains("easy")) {
             return DifficultyLevel.EASY;
+        }
+        if (clean.contains("trung binh") || clean.contains("medium") || clean.contains("normal")) {
+            return DifficultyLevel.MEDIUM;
         }
         return DifficultyLevel.MEDIUM;
     }
 
     private String parseCognitiveLevel(String raw) {
         if (raw == null || raw.isBlank()) return "THONG_HIEU";
-        String norm = deAccent(raw.trim().toLowerCase());
-        if (norm.contains("van dung cao")) {
+        String clean = deAccent(raw.trim().toLowerCase()).replace('_', ' ').replace('-', ' ').replaceAll("\\s+", " ");
+        if (clean.contains("van dung cao") || clean.contains("high application")) {
             return "VAN_DUNG_CAO";
         }
-        if (norm.contains("van dung")) {
+        if (clean.contains("van dung") || clean.contains("application")) {
             return "VAN_DUNG";
         }
-        if (norm.contains("nhan biet")) {
+        if (clean.contains("nhan biet") || clean.contains("knowledge") || clean.contains("remember")) {
             return "NHAN_BIET";
+        }
+        if (clean.contains("thong hieu") || clean.contains("comprehension") || clean.contains("understand")) {
+            return "THONG_HIEU";
         }
         return "THONG_HIEU";
     }
 
     private QuestionType parseQuestionType(String raw) {
         if (raw == null || raw.isBlank()) return QuestionType.MCQ_SINGLE;
-        String norm = raw.trim().toUpperCase();
-        if (norm.contains("MULTI") || norm.contains("NHIEU_DAP_AN")) {
+        String clean = raw.trim().toUpperCase().replace('-', '_').replaceAll("\\s+", "_");
+        if (clean.contains("MULTI") || clean.contains("NHIEU_DAP_AN") || clean.contains("NHIEU_LUA_CHON")) {
             return QuestionType.MCQ_MULTI;
         }
         return QuestionType.MCQ_SINGLE;

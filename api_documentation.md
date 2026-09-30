@@ -9,7 +9,7 @@
 > **Đặc tả OpenAPI 3.0 (JSON):** [`http://localhost:8080/v3/api-docs`](http://localhost:8080/v3/api-docs)  
 > **Giám sát sức khỏe Spring Actuator:** [`http://localhost:8080/actuator/health`](http://localhost:8080/actuator/health) (Public) | `/actuator/**` (Yêu cầu `ROLE_ADMIN`)  
 > **Chính sách tải lên tệp:** Thư mục `uploads`, giới hạn dung lượng tối đa 50MB (`app.file.max-size-mb: 50`)  
-> **Nguyên tắc biên soạn:** Phản ánh 100% hiện trạng source code thực tế (19 Controllers, 68 DTOs, 18 Enums, 43 Entities) — Cam kết không suy diễn, không bịa đặt API.
+> **Nguyên tắc biên soạn:** Phản ánh 100% hiện trạng source code thực tế (24 Controllers, 102 Data Models [DTOs/Requests/Responses], 20 Enums, 46 Entities, 151 REST Endpoints, 235 Ca Kiểm Thử Tự Động Đạt 100%) — Cam kết chuẩn xác tuyệt đối với mã nguồn.
 
 ---
 
@@ -17,8 +17,8 @@
 
 1. [Tổng Quan Kiến Trúc & Cấu Hình Môi Trường](#1-tổng-quan-kiến-trúc--cấu-hình-môi-trường)
 2. [Xác Thực, Phân Quyền & Các Lớp Bảo Mật](#2-xác-thực-phân-quyền--các-lớp-bảo-mật)
-3. [Chi Tiết Toàn Bộ 107 Endpoint (19 Phân Hệ)](#3-chi-tiết-toàn-bộ-106-endpoint-19-phân-hệ)
-4. [Bảng Tổng Hợp Tham Chiếu 107 Endpoint](#4-bảng-tổng-hợp-tham-chiếu-106-endpoint)
+3. [Chi Tiết Toàn Bộ 151 Endpoint (24 Phân Hệ)](#3-chi-tiết-toàn-bộ-106-endpoint-19-phân-hệ)
+4. [Bảng Tổng Hợp Tham Chiếu Toàn Diện 151 Endpoint](#4-bảng-tổng-hợp-tham-chiếu-106-endpoint)
 5. [Từ Điển Dữ Liệu Chi Tiết (Data Models: Enums, DTOs & Entities)](#5-từ-điển-dữ-liệu-chi-tiết-data-models-enums-dtos--entities)
 6. [Xử Lý Lỗi Tập Trung & Bảng Mã Phản Hồi HTTP](#6-xử-lý-lỗi-tập-trung--bảng-mã-phản-hồi-http)
 7. [Các Luồng Nghiệp Vụ Trọng Yếu (Core Business Workflows)](#7-các-luồng-nghiệp-vụ-trọng-yếu-core-business-workflows)
@@ -70,32 +70,37 @@ Hệ thống Quản lý Học tập & Thí nghiệm Ảo Vật lý 1 (Physics 1 
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2. Danh mục 20 Phân hệ (Controllers) & Base Paths
+### 1.2. Danh mục 24 Phân hệ (Controllers) & Base Paths
 
 | STT | Phân Hệ Controller | Base Path | Số lượng API | Mô tả phạm vi chức năng |
 |:---:|---|---|:---:|---|
-| 1 | `UserController` | `/api/v1/users` | 20 | Đăng nhập, đăng ký, refresh token, hồ sơ cá nhân, import Excel sinh viên, quản trị tài khoản |
-| 2 | `SubjectController` | `/api/v1/subjects` | 5 | Danh mục môn học (Vật lý 1 và các học phần Cơ bản 1) |
-| 3 | `SemesterController` | `/api/v1/semesters` | 5 | Quản lý học kỳ, năm học niên khóa |
-| 4 | `TopicController` | `/api/v1/subjects/{subjectId}/topics` | 5 | Chương mục kiến thức Vật lý (Cơ học, Nhiệt học, Dao động...) |
-| 5 | `ClassController` | `/api/v1/classes` | 14 | Lớp học phần, phân công giảng viên/trợ giảng, ghi danh sinh viên |
-| 6 | `StudentClassController` | `/api/v1/students/me` | 6 | Tra cứu danh sách lớp học phần sinh viên đang theo học |
-| 7 | `QuestionBankController` | `/api/v1/questions` | 8 | Ngân hàng câu hỏi trắc nghiệm, phê duyệt, nhập đề từ PDF qua AI OCR |
-| 8 | `ExamController` | `/api/v1/exams` | 25 | Cấu hình kỳ thi, gỡ câu hỏi, thi ghép ca khác, chấm điểm thủ công, lịch sử lượt thi |
-| 9 | `ExamMatrixController` | `/api/v1/exam-matrices` | 6 | Quản lý ma trận đề thi, phân bố Bloom/chương mục, đối soát ngân hàng câu hỏi |
-| 10 | `ExperimentController` | `/api/v1/experiments` | 7 | Thí nghiệm ảo 3D Vật lý 1, giao bài, nộp số liệu, chấm điểm Rubric |
-| 11 | `LearningMaterialController` & `MaterialManagementController` | `/api/v1` | 7 | Học liệu số (PDF, Video, Bài giảng), kiểm duyệt học liệu |
-| 12 | `EvidenceController` | `/api/v1` | 3 | Kho lưu trữ minh chứng kết quả đo thực nghiệm (có IDOR protection) |
-| 13 | `LearningProgressController` | `/api/v1/classes/{classId}/progress` | 1 | Báo cáo tiến độ học liệu của toàn lớp (Giảng viên) |
-| 14 | `StudentProgressController` | `/api/v1/students/me/progress` | 2 | Theo dõi và cập nhật tiến độ học tập cá nhân (Sinh viên) |
-| 15 | `DashboardController` | `/api/v1/dashboard` | 4 | Bảng điều khiển tổng hợp thống kê cho Giảng viên và Sinh viên |
-| 16 | `AnalyticsController` | `/api/v1/analytics` | 5 | Phân tích học thuật CTT: Độ khó (p-value), Độ phân biệt (DI), Lỗ hổng AI |
-| 17 | `AiTutorController` | `/api/v1/ai-tutor` | 6 | Trợ giảng AI Socratic tiếng Việt: gợi mở tư duy, không giải hộ |
-| 18 | `AdminLogController` | `/api/v1/admin` | 2 | Nhật ký kiểm toán bảo mật (Audit Logs) & Nhật ký hoạt động (Activity Logs) |
-| 19 | `SystemSettingController` | `/api/v1/admin/settings` | 4 | Quản trị tham số động hệ thống (Dynamic Configuration) |
-| 20 | `StudentActivityLogController` | `/api/v1/students` | 1 | Nhật ký tương tác học tập của sinh viên đang đăng nhập |
+| 1 | `UserController` | `/api/v1/users` | 20 | Đăng nhập, đăng ký, refresh token, đổi mật khẩu, hồ sơ cá nhân, import Excel sinh viên, quản trị tài khoản |
+| 2 | `SubjectController` | `/api/v1/subjects` | 5 | Danh mục môn học (Vật lý 1 và các học phần Cơ bản 1), cấu hình tín chỉ |
+| 3 | `SemesterController` | `/api/v1/semesters` | 5 | Quản lý học kỳ, năm học niên khóa, thiết lập học kỳ hiện tại |
+| 4 | `TopicController` | `/api/v1/subjects/{subjectId}/topics` | 5 | Chương mục kiến thức Vật lý (Cơ học, Nhiệt học, Điện từ, Dao động...) |
+| 5 | `ClassController` | `/api/v1/classes` | 14 | Lớp học phần, phân công giảng viên/trợ giảng, ghi danh sinh viên (đơn lẻ / hàng loạt) |
+| 6 | `ClassScheduleController` | `/api/v1/classes` | 4 | Quản lý thời khóa biểu, lịch học hàng tuần, phòng học, tiết học lớp học phần |
+| 7 | `StudentClassController` | `/api/v1/students/me` | 6 | Cổng thông tin học tập cá nhân: lớp học, thời khóa biểu, bài thí nghiệm, lịch trình Agenda, học liệu, task sắp đến hạn |
+| 8 | `QuestionBankController` | `/api/v1/questions` | 8 | Ngân hàng câu hỏi trắc nghiệm, phân loại Bloom, phê duyệt câu hỏi, nhập đề tự động từ Excel |
+| 9 | `ExamController` | `/api/v1/exams` | 25 | Cấu hình kỳ thi, sinh đề ngẫu nhiên theo ma trận, thi ghép, làm bài, batch autosave, tiến độ, nộp bài, chấm điểm |
+| 10 | `ExamMatrixController` | `/api/v1/exam-matrices` | 6 | Quản lý ma trận đề thi, phân bố tỉ lệ Bloom/chương mục, đối soát số lượng câu hỏi ngân hàng |
+| 11 | `ExperimentController` | `/api/v1/experiments` | 7 | Thí nghiệm ảo 3D Vật lý 1, giao bài, nộp số liệu thực nghiệm, chấm điểm Rubric, xác nhận kết quả |
+| 12 | `LearningMaterialController` | `/api/v1/topics/{topicId}/materials` | 6 | Học liệu số (PDF, Video, Slide, Simulation Guide), kiểm duyệt học liệu theo chủ đề |
+| 13 | `MaterialManagementController` | `/api/v1/materials` | 1 | Migration nội bộ chuẩn hóa kiểu dữ liệu enum học liệu cũ (`DOCUMENT` $
+ightarrow$ `PDF`) |
+| 14 | `FileController` | `/api/v1/files` | 4 | Lưu trữ tệp/hình ảnh MinIO/Disk, sinh Signed URL tạm thời HMAC-SHA256, stream tệp trực tiếp |
+| 15 | `EvidenceController` | `/api/v1` | 3 | Kho lưu trữ minh chứng kết quả đo thực nghiệm (có IDOR protection đa tầng) |
+| 16 | `LearningProgressController` | `/api/v1/classes/{classId}/progress` | 1 | Báo cáo tiến độ học liệu của toàn thể sinh viên trong lớp (dành cho Giảng viên) |
+| 17 | `StudentProgressController` | `/api/v1/students/me/progress` | 2 | Theo dõi và cập nhật tiến độ học tập cá nhân của sinh viên |
+| 18 | `DashboardController` | `/api/v1/dashboard` | 4 | Bảng điều khiển tổng hợp thống kê cho Giảng viên, Sinh viên và tái tạo snapshot |
+| 19 | `AnalyticsController` | `/api/v1/analytics` | 5 | Phân tích học thuật CTT: Độ khó (p-value), Độ phân biệt (DI), Lỗ hổng AI, hiệu quả học liệu |
+| 20 | `AiTutorController` | `/api/v1/ai-tutor` | 6 | Trợ giảng AI Socratic tiếng Việt: gợi mở tư duy, dẫn dắt theo phương pháp Socrate |
+| 21 | `AdminLogController` | `/api/v1/admin` | 2 | Nhật ký kiểm toán bảo mật (Audit Logs) & Nhật ký hoạt động toàn hệ thống (Activity Logs) |
+| 22 | `SystemSettingController` | `/api/v1/admin/settings` | 4 | Quản trị tham số động hệ thống (Dynamic Configuration key-value & bulk update) |
+| 23 | `StudentActivityLogController` | `/api/v1/students` | 1 | Nhật ký tương tác học tập của sinh viên đang đăng nhập |
+| 24 | `NotificationController` | `/api/v1/notifications` | 7 | Trung tâm thông báo: danh sách, số chưa đọc, đọc/xóa thông báo, gửi thông báo lớp, nhắc lịch học |
 
-**Tổng cộng:** **127+ REST Endpoints** hoạt động trên hệ thống (bao gồm toàn bộ 12 endpoints ma trận & đề thi mới).
+**Tổng cộng:** **151 REST Endpoints** hoạt động trên hệ thống (chuẩn xác 100% với toàn bộ 24 Controller trong mã nguồn).
 
 ---
 
@@ -533,6 +538,52 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
+#### GET `/api/v1/users/import-excel/template` — Tải file mẫu Excel nhập danh sách sinh viên
+
+**Xác thực:** role `ADMIN`  
+**Mô tả:** Tải xuống file Excel (.xlsx) chuẩn hóa chứa các cột thông tin sinh viên (MSSV, Họ tên, Email, Lớp, Số điện thoại) để Quản trị viên nhập dữ liệu hàng loạt.
+
+**Response 200:** File nhị phân `.xlsx` kèm header `Content-Disposition: attachment; filename=mau_import_sinh_vien.xlsx`.
+
+---
+
+#### POST `/api/v1/users/import-excel` — Tạo tài khoản sinh viên hàng loạt từ file Excel
+
+**Xác thực:** role `ADMIN`  
+**Content-Type:** `multipart/form-data`  
+**Form Params:**
+- `file` (MultipartFile, bắt buộc): Tệp Excel danh sách sinh viên (.xlsx, .xls)
+- `defaultPassword` (String, tùy chọn): Mật khẩu mặc định khởi tạo cho tài khoản mới (nếu bỏ trống, hệ thống sử dụng mặc định `Student@123`)
+- `classId` (UUID, tùy chọn): Tự động ghi danh toàn bộ sinh viên trong file vào lớp học phần chỉ định
+
+**Response 200:** `ApiResponse<StudentImportResultDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Imported students successfully",
+  "data": {
+    "totalRows": 50,
+    "totalCreated": 48,
+    "totalSkipped": 2,
+    "totalEnrolled": 48,
+    "students": [
+      {
+        "studentCode": "SV2026001",
+        "fullName": "Nguyễn Văn An",
+        "email": "an.nv@student.edu.vn",
+        "status": "CREATED",
+        "message": "Tạo tài khoản và ghi danh thành công"
+      }
+    ],
+    "warnings": ["Dòng 5: Email đã tồn tại trong hệ thống, bỏ qua việc tạo mới"],
+    "errors": []
+  }
+}
+```
+
+---
+
 ### 3.2. Subject Management
 
 **Base path:** `/api/v1/subjects`  
@@ -823,7 +874,84 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
-### 3.6. Student Classes (Sinh viên)
+
+### 3.5.b. Quản Lý Thời Khóa Biểu & Lịch Học (Class Schedule Management)
+
+**Base path:** `/api/v1/classes`  
+**Xác thực:** Bearer Token (Tất cả endpoints)
+
+---
+
+#### GET `/api/v1/classes/{classId}/schedules` — Lấy danh sách lịch học của một lớp
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`, `TA`, `STUDENT` (Sinh viên trong lớp, Giảng viên phụ trách, Trợ giảng hoặc Admin)  
+**Mô tả:** Lấy danh sách các buổi học trong tuần của lớp học phần (Thứ, tiết bắt đầu, tiết kết thúc, giờ học, phòng học, tòa nhà, loại buổi học).
+
+**Response 200:** `ApiResponse<List<ClassScheduleDTO>>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": [
+    {
+      "scheduleId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "classId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "classCode": "PHY101-01",
+      "subjectName": "Vật lý 1",
+      "dayOfWeek": 3,
+      "startPeriod": 1,
+      "endPeriod": 3,
+      "startTime": "07:00:00",
+      "endTime": "09:30:00",
+      "room": "A2-301",
+      "building": "Tòa nhà A2",
+      "lessonType": "THEORY",
+      "notes": "Học lý thuyết và thảo luận bài tập"
+    }
+  ]
+}
+```
+
+---
+
+#### POST `/api/v1/classes/{classId}/schedules` — Thêm lịch học mới cho lớp
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Request Body:** `CreateClassScheduleDTO`
+
+```json
+{
+  "dayOfWeek": 3,
+  "startPeriod": 1,
+  "endPeriod": 3,
+  "startTime": "07:00:00",
+  "endTime": "09:30:00",
+  "room": "A2-301",
+  "building": "Tòa nhà A2",
+  "lessonType": "THEORY",
+  "notes": "Học lý thuyết Cơ học"
+}
+```
+
+**Response 201:** `ApiResponse<ClassScheduleDTO>`
+
+---
+
+#### PUT `/api/v1/classes/schedules/{scheduleId}` — Cập nhật thông tin lịch học
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Request Body:** `UpdateClassScheduleDTO`  
+**Response 200:** `ApiResponse<ClassScheduleDTO>`
+
+---
+
+#### DELETE `/api/v1/classes/schedules/{scheduleId}` — Xóa lịch học
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Response 200:** `ApiResponse<Void>`
+
+### 3.6. Student Classes & Learning Portal (Cổng Thông Tin Sinh Viên)
 
 **Base path:** `/api/v1/students/me`
 
@@ -839,6 +967,16 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
+#### GET `/api/v1/students/me/schedule` — Lấy thời khóa biểu / lịch học của sinh viên
+
+**Xác thực:** role `STUDENT`, `ADMIN`  
+**Query Params:**
+- `semesterId` (UUID, tùy chọn): Lọc lịch học theo học kỳ
+- `studentId` (UUID, tùy chọn, chỉ `ADMIN`): Xem lịch của sinh viên bất kỳ
+
+**Response 200:** `ApiResponse<List<ClassScheduleDTO>>`
+
+---
 #### GET `/api/v1/students/me/experiment-assignments` — Danh sách bài thí nghiệm được giao
 
 **Xác thực:** role `STUDENT`  
@@ -1064,14 +1202,47 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
-#### POST `/api/v1/questions/import-pdf` — Nhập câu hỏi từ PDF (AI OCR)
+#### GET `/api/v1/questions/import-excel/template` — Tải file mẫu Excel nhập câu hỏi
 
-**Content-Type:** `multipart/form-data`
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Mô tả:** Tải file Excel mẫu (.xlsx) định dạng chuẩn chứa các cột: Nội dung câu hỏi, Đáp án A/B/C/D, Đáp án đúng, Mức độ Bloom (EASY, MEDIUM, HARD), Giải thích.
 
+**Response 200:** Tệp nhị phân `.xlsx` kèm header `Content-Disposition: attachment; filename=mau_import_cau_hoi.xlsx`.
+
+---
+
+#### POST `/api/v1/questions/import-excel` — Tạo câu hỏi tự động từ file Excel
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Content-Type:** `multipart/form-data`  
 **Form Params:**
+- `file` (MultipartFile, bắt buộc): Tệp bảng tính Excel (.xlsx, .xls)
+- `subjectId` (UUID, bắt buộc): ID môn học của câu hỏi
+- `topicId` (UUID, bắt buộc): ID chương mục kiến thức của câu hỏi
 
-| Param | Kiểu | Bắt buộc |
-|---|---|---|
+**Response 201:** `ApiResponse<QuestionImportResultDTO>`
+
+```json
+{
+  "code": 201,
+  "message": "Parsed and imported questions from Excel successfully",
+  "data": {
+    "totalParsed": 20,
+    "totalImported": 19,
+    "questions": [
+      {
+        "questionId": "8f14e45f-...",
+        "content": "Một chất điểm dao động điều hòa...",
+        "difficultyLevel": "MEDIUM",
+        "status": "APPROVED"
+      }
+    ],
+    "warnings": ["Dòng 12: Câu hỏi thiếu giải thích chi tiết, đã gán mặc định rỗng"]
+  }
+}
+```
+
+---|---|---|
 | `file` | MultipartFile | ✓ |
 | `subjectId` | UUID | ✓ |
 | `topicId` | UUID | ✓ |
@@ -1217,7 +1388,7 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 ---
 
-#### PUT `/api/v1/exams/attempts/{attemptId}/submit` — Nộp bài và chấm điểm
+#### POST / PUT `/api/v1/exams/attempts/{attemptId}/submit` — Nộp bài thi và chấm điểm tự động
 
 **Xác thực:** role `STUDENT`
 
@@ -2096,6 +2267,13 @@ Score_lab = Σ(điểm_tiêu_chí_i × trọng_số_i)
 
 ---
 
+#### GET `/api/v1/files/**` — Truy xuất và stream trực tiếp tệp tin hoặc hình ảnh
+
+**Xác thực:** Công khai (hoặc theo quyền tệp)  
+**Mô tả:** Stream tệp tin/hình ảnh từ MinIO Object Storage hoặc Local Disk Fallback với đúng MIME type (`image/png`, `image/jpeg`, `application/pdf`, `video/mp4`,...) để hiển thị trực tiếp trên trình duyệt hoặc tài liệu đề thi.  
+**Response 200:** Stream nhị phân với Header `Cache-Control: public, max-age=86400`.
+
+---
 ### 3.11. Evidence (Minh Chứng Thí Nghiệm)
 
 **Base path:** `/api/v1`  
@@ -2395,137 +2573,287 @@ Score_lab = Σ(điểm_tiêu_chí_i × trọng_số_i)
 
 ---
 
-## 4. Bảng Tổng Hợp Tham Chiếu 107 Endpoint
 
-Bảng tổng hợp tra cứu nhanh toàn bộ **107 endpoints** (106 API phân hệ nghiệp vụ + 1 endpoint giám sát Actuator) với phương thức HTTP, đường dẫn URL, yêu cầu phân quyền và tóm tắt chức năng:
+### 3.19. Hệ Thống Thông Báo & Nhắc Lịch Học (Notification Management)
 
-| STT | Phân Hệ / Nhóm | Method | Đường Dẫn API (Endpoint URI) | Phân Quyền (@PreAuthorize) | Tóm Tắt Chức Năng |
-|:---:|---|:---:|---|---|---|
-| 1 | Xác thực & Người dùng | `POST` | `/api/v1/users/signin` | Public (Permit All) | Đăng nhập hệ thống bằng username/password, cấp JWT & Refresh Token |
-| 2 | Xác thực & Người dùng | `POST` | `/api/v1/users/signup` | Public (Permit All) | Đăng ký tài khoản sinh viên mới |
-| 3 | Xác thực & Người dùng | `POST` | `/api/v1/users/refresh` | Public (Permit All) | Xoay vòng Refresh Token lấy Access Token mới |
-| 4 | Xác thực & Người dùng | `POST` | `/api/v1/users/logout` | Authenticated | Đăng xuất, thu hồi Refresh Token hiện hành |
-| 5 | Xác thực & Người dùng | `POST` | `/api/v1/users/forgot-password` | Public (Permit All) | Gửi email liên kết token đặt lại mật khẩu |
-| 6 | Xác thực & Người dùng | `POST` | `/api/v1/users/reset-password` | Public (Permit All) | Đặt lại mật khẩu mới bằng reset token |
-| 7 | Xác thực & Người dùng | `GET` | `/api/v1/users/me` | Authenticated | Xem thông tin tài khoản đang đăng nhập |
-| 8 | Xác thực & Người dùng | `PUT` | `/api/v1/users/me` | Authenticated | Cập nhật thông tin cơ bản tài khoản |
-| 9 | Xác thực & Người dùng | `GET` | `/api/v1/users/me/profile` | Authenticated | Xem hồ sơ chi tiết (Avatar, Bio, Ngày sinh, Giới tính) |
-| 10 | Xác thực & Người dùng | `PUT` | `/api/v1/users/me/profile` | Authenticated | Cập nhật hồ sơ chi tiết cá nhân |
-| 11 | Xác thực & Người dùng | `PUT` | `/api/v1/users/me/password` | Authenticated | Đổi mật khẩu tài khoản cá nhân |
-| 12 | Quản trị Người dùng | `POST` | `/api/v1/users/admin/create-user` | `ADMIN` | Quản trị viên tạo tài khoản mới với vai trò tùy chọn |
-| 13 | Quản trị Người dùng | `GET` | `/api/v1/users/admin/users` | `ADMIN` | Tra cứu danh sách người dùng có phân trang và lọc role |
-| 14 | Quản trị Người dùng | `GET` | `/api/v1/users/admin/users/{id}/profile` | `ADMIN` | Xem hồ sơ chi tiết của người dùng bất kỳ |
-| 15 | Quản trị Người dùng | `PUT` | `/api/v1/users/admin/users/{id}` | `ADMIN` | Cập nhật thông tin người dùng bởi Quản trị viên |
-| 16 | Quản trị Người dùng | `PUT` | `/api/v1/users/admin/users/{id}/status` | `ADMIN` | Khóa hoặc mở khóa trạng thái tài khoản (ACTIVE/LOCKED) |
-| 17 | Quản trị Người dùng | `GET` | `/api/v1/users/{username}` | `ADMIN` | Tra cứu tài khoản theo username |
-| 18 | Quản trị Người dùng | `DELETE` | `/api/v1/users/{username}` | `ADMIN` | Xóa vĩnh viễn tài khoản người dùng khỏi hệ thống |
-| 19 | Môn học (Subject) | `GET` | `/api/v1/subjects` | Authenticated | Lấy danh sách môn học có phân trang |
-| 20 | Môn học (Subject) | `POST` | `/api/v1/subjects` | `ADMIN` | Tạo môn học mới (Vật lý 1) |
-| 21 | Môn học (Subject) | `GET` | `/api/v1/subjects/{id}` | Authenticated | Lấy chi tiết thông tin môn học |
-| 22 | Môn học (Subject) | `PUT` | `/api/v1/subjects/{id}` | `ADMIN` | Cập nhật thông tin môn học |
-| 23 | Môn học (Subject) | `DELETE` | `/api/v1/subjects/{id}` | `ADMIN` | Xóa môn học |
-| 24 | Học kỳ (Semester) | `GET` | `/api/v1/semesters` | Authenticated | Lấy danh sách tất cả học kỳ |
-| 25 | Học kỳ (Semester) | `POST` | `/api/v1/semesters` | `ADMIN` | Tạo học kỳ niên khóa mới |
-| 26 | Học kỳ (Semester) | `GET` | `/api/v1/semesters/{id}` | Authenticated | Lấy chi tiết học kỳ |
-| 27 | Học kỳ (Semester) | `PUT` | `/api/v1/semesters/{id}` | `ADMIN` | Cập nhật thông tin học kỳ |
-| 28 | Học kỳ (Semester) | `DELETE` | `/api/v1/semesters/{id}` | `ADMIN` | Xóa học kỳ |
-| 29 | Chương mục (Topic) | `GET` | `/api/v1/subjects/{subjectId}/topics` | Authenticated | Lấy danh sách chương mục kiến thức môn học |
-| 30 | Chương mục (Topic) | `POST` | `/api/v1/subjects/{subjectId}/topics` | `ADMIN` | Tạo chương mục kiến thức mới |
-| 31 | Chương mục (Topic) | `GET` | `/api/v1/subjects/{subjectId}/topics/{id}` | Authenticated | Lấy chi tiết chương mục kiến thức |
-| 32 | Chương mục (Topic) | `PUT` | `/api/v1/subjects/{subjectId}/topics/{id}` | `ADMIN` | Cập nhật chương mục kiến thức |
-| 33 | Chương mục (Topic) | `DELETE` | `/api/v1/subjects/{subjectId}/topics/{id}` | `ADMIN` | Xóa chương mục kiến thức |
-| 34 | Lớp học phần (Class) | `GET` | `/api/v1/classes` | Authenticated | Lấy danh sách lớp học phần có phân trang |
-| 35 | Lớp học phần (Class) | `POST` | `/api/v1/classes` | `ADMIN` | Tạo lớp học phần mới |
-| 36 | Lớp học phần (Class) | `GET` | `/api/v1/classes/{id}` | Authenticated | Lấy chi tiết lớp học phần |
-| 37 | Lớp học phần (Class) | `PUT` | `/api/v1/classes/{id}` | `ADMIN`, `INSTRUCTOR` | Cập nhật thông tin lớp học phần |
-| 38 | Lớp học phần (Class) | `DELETE` | `/api/v1/classes/{id}` | `ADMIN` | Xóa lớp học phần |
-| 39 | Lớp học phần (Class) | `POST` | `/api/v1/classes/{id}/staff` | `ADMIN` | Phân công Giảng viên / Trợ giảng vào lớp |
-| 40 | Lớp học phần (Class) | `DELETE` | `/api/v1/classes/{id}/staff/{userId}` | `ADMIN` | Hủy phân công nhân sự khỏi lớp |
-| 41 | Lớp học phần (Class) | `POST` | `/api/v1/classes/{id}/enroll-single` | `ADMIN`, `INSTRUCTOR` | Ghi danh 1 sinh viên vào lớp học phần |
-| 42 | Lớp học phần (Class) | `POST` | `/api/v1/classes/{id}/enroll-bulk` | `ADMIN`, `INSTRUCTOR` | Ghi danh danh sách nhiều sinh viên vào lớp |
-| 43 | Lớp học phần (Class) | `DELETE` | `/api/v1/classes/{id}/students/{studentId}` | `ADMIN`, `INSTRUCTOR` | Xóa sinh viên khỏi danh sách lớp |
-| 44 | Lớp học phần (Class) | `GET` | `/api/v1/classes/{id}/students` | `ADMIN`, `INSTRUCTOR`, `TA` | Lấy danh sách sinh viên ghi danh trong lớp |
-| 45 | Lớp học phần (Class) | `GET` | `/api/v1/classes/{id}/activity-logs` | `ADMIN`, `INSTRUCTOR` | Nhật ký hoạt động học tập của toàn lớp |
-| 46 | Lớp học phần (Class) | `GET` | `/api/v1/classes/instructor/{instructorId}` | `ADMIN`, `INSTRUCTOR` | Lấy các lớp do giảng viên phụ trách |
-| 47 | Lớp học phần (Class) | `GET` | `/api/v1/classes/semester/{semesterId}` | Authenticated | Lấy danh sách lớp theo học kỳ |
-| 48 | Lớp học phần cá nhân | `GET` | `/api/v1/students/me/classes` | `STUDENT` | Tra cứu danh sách lớp sinh viên đang theo học |
-| 49 | Ngân hàng câu hỏi | `GET` | `/api/v1/questions` | `ADMIN`, `INSTRUCTOR` | Lấy danh sách câu hỏi trắc nghiệm có phân trang |
-| 50 | Ngân hàng câu hỏi | `POST` | `/api/v1/questions` | `ADMIN`, `INSTRUCTOR` | Tạo câu hỏi trắc nghiệm mới |
-| 51 | Ngân hàng câu hỏi | `GET` | `/api/v1/questions/{id}` | `ADMIN`, `INSTRUCTOR` | Lấy chi tiết câu hỏi và các phương án |
-| 52 | Ngân hàng câu hỏi | `PUT` | `/api/v1/questions/{id}` | `ADMIN`, `INSTRUCTOR` | Cập nhật nội dung câu hỏi và đáp án |
-| 53 | Ngân hàng câu hỏi | `DELETE` | `/api/v1/questions/{id}` | `ADMIN` | Xóa câu hỏi khỏi ngân hàng |
-| 54 | Ngân hàng câu hỏi | `PUT` | `/api/v1/questions/{id}/status` | `ADMIN` | Phê duyệt hoặc từ chối câu hỏi (ApprovalStatus) |
-| 55 | Ngân hàng câu hỏi | `POST` | `/api/v1/questions/import-pdf` | `ADMIN`, `INSTRUCTOR` | Tải lên đề thi PDF, AI tự trích xuất câu hỏi |
-| 56 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams` | `ADMIN`, `INSTRUCTOR` | Thiết lập kỳ thi mới (thời gian, loại thi, ma trận) |
-| 57 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams/{examId}/questions` | `ADMIN`, `INSTRUCTOR` | Thêm câu hỏi thủ công từ ngân hàng vào đề thi |
-| 58 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}/questions` | `ADMIN`, `INSTRUCTOR`, `TA` | Xem danh sách câu hỏi đã có trong đề thi kèm đáp án và điểm số |
-| 59 | Kỳ thi & Khảo sát | `DELETE` | `/api/v1/exams/{examId}/questions/{questionId}` | `ADMIN`, `INSTRUCTOR` | Gỡ câu hỏi khỏi đề thi khi chưa có sinh viên làm bài |
-| 60 | Kỳ thi & Khảo sát | `PUT` | `/api/v1/exams/{examId}` | `ADMIN`, `INSTRUCTOR` | Sửa cấu hình đề thi: tên đề, thời gian, loại đề, ma trận |
-| 61 | Kỳ thi & Khảo sát | `DELETE` | `/api/v1/exams/{examId}` | `ADMIN`, `INSTRUCTOR` | Xóa/hủy đề thi chưa mở (chưa phát sinh lượt thi) |
-| 62 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams/{examId}/generate-questions` | `ADMIN`, `INSTRUCTOR` | Tự động sinh ngẫu nhiên câu hỏi theo ma trận Bloom |
-| 63 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/class/{classId}` | Authenticated | Lấy danh sách đề thi của lớp học |
-| 64 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}` | Authenticated | Xem chi tiết cấu hình kỳ thi |
-| 65 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}/attempts` | `ADMIN`, `INSTRUCTOR`, `TA` | Giảng viên xem danh sách các lượt làm bài và kết quả điểm thi |
-| 66 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams/{examId}/attempts` | `STUDENT` | Bắt đầu làm bài thi (Tạo lượt thi mới) |
-| 67 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams/attempts/{attemptId}/answers` | `STUDENT` | Lưu câu trả lời trắc nghiệm tạm thời |
-| 68 | Kỳ thi & Khảo sát | `PUT` | `/api/v1/exams/attempts/{attemptId}/submit` | `STUDENT` | Nộp bài thi và chấm điểm tự động (Pessimistic Lock) |
-| 69 | Kỳ thi & Khảo sát | `PUT` | `/api/v1/exams/attempts/{attemptId}/grade` | `ADMIN`, `INSTRUCTOR` | Chấm thủ công câu tự luận hoặc điều chỉnh điểm tổng kết lượt thi |
-| 70 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}/my-attempt` | `STUDENT` | Lấy thông tin lượt làm bài gần nhất của sinh viên |
-| 71 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}/my-attempts` | `STUDENT` | Xem toàn bộ lịch sử các lượt thi của sinh viên (multi-attempt) |
-| 72 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/attempts/{attemptId}` | Authenticated | Xem chi tiết bài thi, bảng điểm và đáp án đã nộp |
-| 73 | Kỳ thi & Khảo sát | `POST` | `/api/v1/exams/{examId}/transfers` | `ADMIN`, `INSTRUCTOR` | Chuyển sinh viên từ lớp khác cùng môn thi ghép vào ca thi |
-| 74 | Kỳ thi & Khảo sát | `DELETE` | `/api/v1/exams/{examId}/transfers/{studentId}` | `ADMIN`, `INSTRUCTOR` | Hủy quyền thi ghép của sinh viên tại ca thi này |
-| 75 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/{examId}/roster` | `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách thí sinh đầy đủ của ca thi (chính thức & thi ghép) |
-| 76 | Kỳ thi & Khảo sát | `GET` | `/api/v1/exams/my-transferred-exams` | `STUDENT`, `ADMIN` | Sinh viên xem các ca thi mình được phân công thi ghép |
-| 77 | Ma trận đề thi | `GET` | `/api/v1/exam-matrices` | `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách ma trận đề thi cho dropdown (lọc classId, subjectId) |
-| 78 | Ma trận đề thi | `POST` | `/api/v1/exam-matrices` | `ADMIN`, `INSTRUCTOR` | Tạo mới ma trận cấu trúc đề thi chuẩn Bloom |
-| 79 | Ma trận đề thi | `GET` | `/api/v1/exam-matrices/{matrixId}` | `ADMIN`, `INSTRUCTOR`, `TA` | Xem chi tiết ma trận và phân bố chương mục & độ khó |
-| 80 | Ma trận đề thi | `PUT` | `/api/v1/exam-matrices/{matrixId}` | `ADMIN`, `INSTRUCTOR` | Sửa cấu hình và chi tiết ma trận đề thi |
-| 81 | Ma trận đề thi | `DELETE` | `/api/v1/exam-matrices/{matrixId}` | `ADMIN`, `INSTRUCTOR` | Xóa ma trận đề thi chưa được sử dụng |
-| 82 | Ma trận đề thi | `POST` | `/api/v1/exam-matrices/{matrixId}/validate` | `ADMIN`, `INSTRUCTOR` | Kiểm tra ngân hàng câu hỏi có đủ câu theo ma trận trước khi tạo đề |
-| 67 | Thí nghiệm ảo 3D | `GET` | `/api/v1/experiments` | Authenticated | Lấy danh sách các bài thí nghiệm ảo 3D |
-| 68 | Thí nghiệm ảo 3D | `POST` | `/api/v1/experiments` | `ADMIN` | Tạo cấu hình bài thí nghiệm ảo 3D mới |
-| 69 | Thí nghiệm ảo 3D | `GET` | `/api/v1/experiments/{id}` | Authenticated | Lấy chi tiết bài thí nghiệm và thông số mô phỏng |
-| 70 | Thí nghiệm ảo 3D | `POST` | `/api/v1/experiments/{id}/assign` | `ADMIN`, `INSTRUCTOR` | Giao bài thí nghiệm ảo cho lớp học phần |
-| 71 | Thí nghiệm ảo 3D | `POST` | `/api/v1/experiments/assignments/{assignmentId}/submit` | `STUDENT` | Sinh viên nộp số liệu đo đạc và báo cáo thí nghiệm |
-| 72 | Thí nghiệm ảo 3D | `POST` | `/api/v1/experiments/submissions/{submissionId}/scores` | `INSTRUCTOR`, `TA` | Chấm điểm bài nộp thí nghiệm theo Rubric (`GradeSubmissionDTO`) |
-| 73 | Thí nghiệm ảo 3D | `POST` | `/api/v1/experiments/submissions/{submissionId}/confirmation` | `ADMIN`, `INSTRUCTOR` | Phê duyệt và chốt điểm chính thức (`ConfirmSubmissionDTO`) |
-| 74 | Học liệu số | `GET` | `/api/v1/topics/{topicId}/materials` | Authenticated | Lấy danh sách tài liệu học tập theo chương mục |
-| 75 | Học liệu số | `GET` | `/api/v1/topics/{topicId}/materials/{materialId}` | Authenticated | Xem chi tiết học liệu số |
-| 76 | Học liệu số | `POST` | `/api/v1/topics/{topicId}/materials` | `ADMIN`, `INSTRUCTOR` | Tải lên học liệu số mới (PDF, Video, Bài giảng) |
-| 77 | Học liệu số | `PUT` | `/api/v1/topics/{topicId}/materials/{materialId}` | `ADMIN`, `INSTRUCTOR` | Cập nhật tài liệu học tập số |
-| 78 | Học liệu số | `DELETE` | `/api/v1/topics/{topicId}/materials/{materialId}` | `ADMIN` | Xóa học liệu số khỏi hệ thống |
-| 79 | Học liệu số | `PUT` | `/api/v1/topics/{topicId}/materials/{materialId}/status` | `ADMIN` | Phê duyệt kiểm duyệt học liệu (ApprovalStatus) |
-| 80 | Kho minh chứng | `GET` | `/api/v1/students/{id}/evidence` | Authenticated (IDOR protected) | Tra cứu kho minh chứng kết quả đo đạc của sinh viên |
-| 81 | Kho minh chứng | `POST` | `/api/v1/evidence` | `STUDENT` | Đăng ký bản ghi minh chứng học tập mới |
-| 82 | Kho minh chứng | `GET` | `/api/v1/evidence/{id}` | Authenticated | Lấy chi tiết bản ghi minh chứng |
-| 83 | Báo cáo tiến độ lớp | `GET` | `/api/v1/classes/{classId}/progress` | `ADMIN`, `INSTRUCTOR` | Báo cáo tỷ lệ hoàn thành học liệu của toàn lớp |
-| 84 | Tiến độ học tập cá nhân | `GET` | `/api/v1/students/me/progress` | `STUDENT` | Tra cứu tiến độ học tập các môn của bản thân |
-| 85 | Tiến độ học tập cá nhân | `PUT` | `/api/v1/students/me/progress/{materialId}` | `STUDENT` | Cập nhật tiến độ hoàn thành học liệu (0% - 100%) |
-| 86 | Dashboard | `GET` | `/api/v1/dashboard/instructor/{classId}` | `ADMIN`, `INSTRUCTOR` | Thống kê tổng hợp lớp cho Giảng viên |
-| 87 | Dashboard | `GET` | `/api/v1/dashboard/student` | `STUDENT` | Thống kê tổng quan học tập cho Sinh viên |
-| 88 | Dashboard | `GET` | `/api/v1/dashboard/student/{classId}` | `STUDENT` | Thống kê chi tiết kết quả sinh viên trong một lớp |
-| 89 | Dashboard | `GET` | `/api/v1/dashboard/instructor/{classId}/export` | `ADMIN`, `INSTRUCTOR` | Xuất bảng điểm và báo cáo tổng hợp ra file Excel/CSV |
-| 90 | Phân tích CTT | `GET` | `/api/v1/analytics/exams/{examId}` | `ADMIN`, `INSTRUCTOR` | Báo cáo tổng thể phân tích CTT kỳ thi |
-| 91 | Phân tích CTT | `GET` | `/api/v1/analytics/exams/{examId}/questions` | `ADMIN`, `INSTRUCTOR` | Phân tích độ khó (p-value) và độ phân biệt (DI) câu hỏi |
-| 92 | Phân tích CTT | `GET` | `/api/v1/analytics/classes/{classId}/weak-topics` | `ADMIN`, `INSTRUCTOR` | Xác định các chương mục kiến thức sinh viên còn yếu |
-| 93 | Phân tích CTT | `GET` | `/api/v1/analytics/classes/{classId}/at-risk-students` | `ADMIN`, `INSTRUCTOR` | Danh sách sinh viên có nguy cơ trượt môn cần can thiệp |
-| 94 | Phân tích CTT | `POST` | `/api/v1/analytics/trigger` | `ADMIN` | Kích hoạt tác vụ tính toán phân tích thống kê CTT |
-| 95 | Trợ giảng AI Socratic | `POST` | `/api/v1/ai-tutor/conversations` | `STUDENT` | Khởi tạo phiên trao đổi hỏi đáp mới với AI Tutor |
-| 96 | Trợ giảng AI Socratic | `POST` | `/api/v1/ai-tutor/conversations/{id}/messages` | `STUDENT` | Gửi câu hỏi, AI gợi mở tư duy (phương pháp Socratic tiếng Việt) |
-| 97 | Trợ giảng AI Socratic | `GET` | `/api/v1/ai-tutor/conversations/me` | `STUDENT` | Lấy danh sách các phiên trao đổi với AI của sinh viên |
-| 98 | Trợ giảng AI Socratic | `GET` | `/api/v1/ai-tutor/conversations/{id}` | `STUDENT` | Xem chi tiết lịch sử tin nhắn của một phiên trò chuyện |
-| 99 | Trợ giảng AI Socratic | `POST` | `/api/v1/ai-tutor/transcribe` | `STUDENT` | Nhận dạng giọng nói (Audio to Text) tiếng Việt |
-| 100 | Trợ giảng AI Socratic | `GET` | `/api/v1/ai-tutor/audio/{filename}` | Authenticated | Tải file âm thanh phản hồi từ AI Tutor |
-| 101 | Nhật ký bảo mật | `GET` | `/api/v1/admin/audit-logs` | `ADMIN` | Xem nhật ký kiểm toán hệ thống (Audit Logs) có phân trang |
-| 102 | Nhật ký bảo mật | `GET` | `/api/v1/admin/activity-logs` | `ADMIN` | Xem nhật ký hoạt động hệ thống (Activity Logs) có phân trang |
-| 103 | Cấu hình hệ thống | `GET` | `/api/v1/admin/settings` | `ADMIN` | Xem toàn bộ cấu hình tham số động hệ thống |
-| 104 | Cấu hình hệ thống | `GET` | `/api/v1/admin/settings/{key}` | `ADMIN` | Xem giá trị một tham số cấu hình |
-| 105 | Cấu hình hệ thống | `PUT` | `/api/v1/admin/settings/{key}` | `ADMIN` | Cập nhật giá trị một tham số cấu hình |
-| 106 | Cấu hình hệ thống | `POST` | `/api/v1/admin/settings/bulk` | `ADMIN` | Cập nhật hàng loạt nhiều tham số cấu hình cùng lúc |
-| 107 | Giám sát hệ thống | `GET` | `/actuator/health` | Public (Permit All) | Kiểm tra trạng thái hoạt động (Liveness/Readiness) của ứng dụng |
+**Base path:** `/api/v1/notifications`  
+**Xác thực:** Bearer Token (Tất cả endpoints)
 
 ---
+
+#### GET `/api/v1/notifications` — Lấy danh sách thông báo của tôi
+
+**Xác thực:** `isAuthenticated()`  
+**Query Params:**
+- `unreadOnly` (Boolean, tùy chọn): Chỉ lấy thông báo chưa đọc (`true`)
+- `page` (Integer, mặc định 0)
+- `size` (Integer, mặc định 20)
+
+**Response 200:** `ApiResponse<Page<NotificationDTO>>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    "content": [
+      {
+        "notificationId": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
+        "userId": "2b3bb9a8-9630-4801-930c-60cffde476a4",
+        "title": "Nhắc lịch học ngày mai",
+        "content": "Bạn có lịch học Vật lý 1 lớp PHY101-01 vào lúc 07:00 ngày mai tại phòng A2-301.",
+        "type": "SCHEDULE_REMINDER",
+        "typeDescription": "Nhắc lịch học",
+        "referenceId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+        "referenceType": "CLASS",
+        "isRead": false,
+        "readAt": null,
+        "createdAt": "2026-09-30T10:00:00"
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+#### GET `/api/v1/notifications/summary` — Lấy tóm tắt chuông thông báo
+
+**Xác thực:** `isAuthenticated()`  
+**Mô tả:** Trả về số lượng thông báo chưa đọc (`unreadCount`) và 5 thông báo mới nhất phục vụ icon quả chuông thông báo trên Header giao diện.
+
+**Response 200:** `ApiResponse<NotificationSummaryDTO>`
+
+```json
+{
+  "code": 200,
+  "message": "Success",
+  "data": {
+    "unreadCount": 3,
+    "latestNotifications": [
+      {
+        "notificationId": "f1e2d3c4-...",
+        "title": "Bài thi mới được mở",
+        "type": "EXAM_NEW",
+        "isRead": false
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### PUT `/api/v1/notifications/{id}/read` — Đánh dấu một thông báo là đã đọc
+
+**Xác thực:** `isAuthenticated()`  
+**Response 200:** `ApiResponse<NotificationDTO>`
+
+---
+
+#### PUT `/api/v1/notifications/read-all` — Đánh dấu tất cả thông báo là đã đọc
+
+**Xác thực:** `isAuthenticated()`  
+**Response 200:** `ApiResponse<Void>`
+
+---
+
+#### DELETE `/api/v1/notifications/{id}` — Xóa thông báo
+
+**Xác thực:** `isAuthenticated()`  
+**Response 200:** `ApiResponse<Void>`
+
+---
+
+#### POST `/api/v1/notifications/classes/{classId}` — Gửi thông báo tới toàn thể sinh viên trong lớp
+
+**Xác thực:** role `ADMIN`, `INSTRUCTOR`  
+**Request Body:** `CreateNotificationDTO`
+
+```json
+{
+  "title": "Thông báo dời lịch học thực hành",
+  "content": "Buổi thực hành Thứ Sáu ngày 03/10 được dời sang Thứ Bảy cùng khung giờ tại Phòng Thí nghiệm Ảo.",
+  "type": "ANNOUNCEMENT",
+  "referenceId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "referenceType": "CLASS"
+}
+```
+
+**Response 201:** `ApiResponse<Map<String, Object>>` (`sentCount`)
+
+---
+
+#### POST `/api/v1/notifications/reminders/generate` — Kích hoạt tạo thông báo nhắc lịch học sắp tới
+
+**Xác thực:** `isAuthenticated()`  
+**Mô tả:** Tự động rà soát thời khóa biểu các lớp sinh viên đang theo học và sinh thông báo nhắc nhở nếu có buổi học diễn ra hôm nay hoặc ngày mai.
+
+**Response 200:** `ApiResponse<Map<String, Object>>` (`generatedCount`)
+
+---
+
+## 4. Bảng Tổng Hợp Tham Chiếu Toàn Diện 151 Endpoint
+
+Bảng tổng hợp tra cứu nhanh toàn bộ **151 endpoints** nghiệp vụ của 24 phân hệ trong hệ thống, bao gồm đầy đủ phương thức HTTP, đường dẫn URL, yêu cầu phân quyền và tóm tắt chức năng:
+
+| STT | Phân Hệ / Nhóm Nghiệp Vụ | Method | Đường Dẫn API (Endpoint URI) | Phân Quyền (@PreAuthorize) | Tóm Tắt Chức Năng |
+|:---:|---|:---:|---|---|---|
+| 1 | Users & Authentication | `POST` | `/api/v1/users/signin` | Không cần | Đăng nhập |
+| 2 | Users & Authentication | `POST` | `/api/v1/users/signup` | Không cần | Đăng ký sinh viên |
+| 3 | Users & Authentication | `POST` | `/api/v1/users/forgot-password` | Không cần | Quên mật khẩu |
+| 4 | Users & Authentication | `POST` | `/api/v1/users/reset-password` | Không cần | Đặt lại mật khẩu |
+| 5 | Users & Authentication | `POST` | `/api/v1/users/refresh` | Không cần | Làm mới Access Token |
+| 6 | Users & Authentication | `POST` | `/api/v1/users/logout` | Bearer Token (bất kỳ role nào đã đăng nhập) | Đăng xuất |
+| 7 | Users & Authentication | `GET` | `/api/v1/users/me` | Bearer Token (bất kỳ role) | Thông tin tài khoản hiện tại |
+| 8 | Users & Authentication | `PUT` | `/api/v1/users/me` | Bearer Token (bất kỳ role) | Cập nhật username/email |
+| 9 | Users & Authentication | `PUT` | `/api/v1/users/me/password` | Bearer Token (bất kỳ role) | Đổi mật khẩu |
+| 10 | Users & Authentication | `GET` | `/api/v1/users/me/profile` | Bearer Token (bất kỳ role) | Lấy hồ sơ cá nhân |
+| 11 | Users & Authentication | `PUT` | `/api/v1/users/me/profile` | Bearer Token (bất kỳ role) | Cập nhật hồ sơ cá nhân |
+| 12 | Users & Authentication | `POST` | `/api/v1/users/admin/create-user` | Bearer Token, role `ADMIN` | Tạo người dùng (Admin) |
+| 13 | Users & Authentication | `GET` | `/api/v1/users/admin/users` | Bearer Token, role `ADMIN` | Danh sách người dùng (Admin) |
+| 14 | Users & Authentication | `GET` | `/api/v1/users/admin/users/{id}/profile` | Bearer Token, role `ADMIN` | Hồ sơ người dùng (Admin) |
+| 15 | Users & Authentication | `PUT` | `/api/v1/users/admin/users/{id}` | Bearer Token, role `ADMIN` | Cập nhật vai trò/email (Admin) |
+| 16 | Users & Authentication | `PUT` | `/api/v1/users/admin/users/{id}/status` | Bearer Token, role `ADMIN` | Khóa/Mở khóa tài khoản (Admin) |
+| 17 | Users & Authentication | `GET` | `/api/v1/users/{username}` | Bearer Token, role `ADMIN` | Tra cứu người dùng (Admin) |
+| 18 | Users & Authentication | `DELETE` | `/api/v1/users/{username}` | Bearer Token, role `ADMIN` | Xóa người dùng (Admin) |
+| 19 | Users & Authentication | `GET` | `/api/v1/users/import-excel/template` | role `ADMIN` | Tải file mẫu Excel nhập danh sách sinh viên |
+| 20 | Users & Authentication | `POST` | `/api/v1/users/import-excel` | role `ADMIN` | Tạo tài khoản sinh viên hàng loạt từ file Excel |
+| 21 | Subject Management | `GET` | `/api/v1/subjects` | Authenticated | Danh sách môn học |
+| 22 | Subject Management | `GET` | `/api/v1/subjects/{id}` | Authenticated | Chi tiết môn học |
+| 23 | Subject Management | `POST` | `/api/v1/subjects` | role `ADMIN` | Tạo môn học mới |
+| 24 | Subject Management | `PUT` | `/api/v1/subjects/{id}` | role `ADMIN` | Cập nhật môn học |
+| 25 | Subject Management | `PUT` | `/api/v1/subjects/{id}/toggle-status` | role `ADMIN` | Bật/Tắt môn học |
+| 26 | Semester Management | `GET` | `/api/v1/semesters` | Không có `@PreAuthorize` (yêu cầu Bearer nhưng không lọc role) | Danh sách học kỳ |
+| 27 | Semester Management | `GET` | `/api/v1/semesters/{id}` | Authenticated | Chi tiết học kỳ |
+| 28 | Semester Management | `POST` | `/api/v1/semesters` | role `ADMIN` | Tạo học kỳ mới |
+| 29 | Semester Management | `PUT` | `/api/v1/semesters/{id}` | role `ADMIN` | Cập nhật học kỳ |
+| 30 | Semester Management | `PUT` | `/api/v1/semesters/{id}/set-current` | role `ADMIN` | Đánh dấu học kỳ hiện tại |
+| 31 | Topic Management | `GET` | `/api/v1/subjects/{subjectId}/topics` | Không có `@PreAuthorize` rõ ràng (mọi người dùng đã đăng nhập) | Danh sách chương mục |
+| 32 | Topic Management | `GET` | `/api/v1/subjects/{subjectId}/topics/{topicId}` | Authenticated | Chi tiết chương mục |
+| 33 | Topic Management | `POST` | `/api/v1/subjects/{subjectId}/topics` | role `ADMIN` hoặc `INSTRUCTOR` | Tạo chương mục mới |
+| 34 | Topic Management | `PUT` | `/api/v1/subjects/{subjectId}/topics/{topicId}` | role `ADMIN` hoặc `INSTRUCTOR` | Cập nhật chương mục |
+| 35 | Topic Management | `DELETE` | `/api/v1/subjects/{subjectId}/topics/{topicId}` | role `ADMIN` | Xóa chương mục |
+| 36 | Class Management | `GET` | `/api/v1/classes` | role `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách lớp học |
+| 37 | Class Management | `GET` | `/api/v1/classes/{id}` | role `ADMIN`, `INSTRUCTOR`, `TA` (có kiểm tra quyền sở hữu) | Chi tiết lớp học |
+| 38 | Class Management | `POST` | `/api/v1/classes` | role `ADMIN` hoặc `INSTRUCTOR` | Tạo lớp học mới |
+| 39 | Class Management | `PUT` | `/api/v1/classes/{id}` | role `ADMIN` hoặc `INSTRUCTOR` (chỉ Admin hoặc chủ lớp) | Cập nhật lớp học |
+| 40 | Class Management | `PUT` | `/api/v1/classes/{id}/status` | role `ADMIN` hoặc `INSTRUCTOR` | Đổi trạng thái lớp |
+| 41 | Class Management | `GET` | `/api/v1/classes/{id}/staff` | role `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách nhân sự lớp |
+| 42 | Class Management | `POST` | `/api/v1/classes/{id}/staff` | role `ADMIN` hoặc `INSTRUCTOR` (chỉ Admin hoặc chủ lớp) | Phân công nhân sự |
+| 43 | Class Management | `DELETE` | `/api/v1/classes/{id}/staff/{userId}` | role `ADMIN` hoặc `INSTRUCTOR` | Xóa nhân sự |
+| 44 | Class Management | `GET` | `/api/v1/classes/{id}/students` | role `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách sinh viên lớp |
+| 45 | Class Management | `POST` | `/api/v1/classes/{id}/enroll-single` | role `ADMIN` hoặc `INSTRUCTOR` | Ghi danh 1 sinh viên |
+| 46 | Class Management | `POST` | `/api/v1/classes/{id}/enroll-bulk` | role `ADMIN` hoặc `INSTRUCTOR` | Ghi danh hàng loạt |
+| 47 | Class Management | `PUT` | `/api/v1/classes/{id}/students/{studentId}/status` | role `ADMIN` hoặc `INSTRUCTOR` | Đổi trạng thái ghi danh |
+| 48 | Class Management | `DELETE` | `/api/v1/classes/{id}/students/{studentId}` | role `ADMIN` hoặc `INSTRUCTOR` | Xóa sinh viên khỏi lớp |
+| 49 | Class Management | `GET` | `/api/v1/classes/{id}/activity-logs` | role `ADMIN` hoặc `INSTRUCTOR` | Nhật ký hoạt động lớp |
+| 50 | b. Quản Lý Thời Khóa Biểu & Lịch Học | `GET` | `/api/v1/classes/{classId}/schedules` | role `ADMIN`, `INSTRUCTOR`, `TA`, `STUDENT` (Sinh viên trong lớp, Giảng viên phụ trách, Trợ giảng hoặc Admin) | Lấy danh sách lịch học của một lớp |
+| 51 | b. Quản Lý Thời Khóa Biểu & Lịch Học | `POST` | `/api/v1/classes/{classId}/schedules` | role `ADMIN`, `INSTRUCTOR` | Thêm lịch học mới cho lớp |
+| 52 | b. Quản Lý Thời Khóa Biểu & Lịch Học | `PUT` | `/api/v1/classes/schedules/{scheduleId}` | role `ADMIN`, `INSTRUCTOR` | Cập nhật thông tin lịch học |
+| 53 | b. Quản Lý Thời Khóa Biểu & Lịch Học | `DELETE` | `/api/v1/classes/schedules/{scheduleId}` | role `ADMIN`, `INSTRUCTOR` | Xóa lịch học |
+| 54 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/classes` | role `STUDENT` | Lớp học của tôi |
+| 55 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/schedule` | role `STUDENT`, `ADMIN` | Lấy thời khóa biểu / lịch học của sinh viên |
+| 56 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/experiment-assignments` | role `STUDENT` | Danh sách bài thí nghiệm được giao |
+| 57 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/agenda` | role `STUDENT` | Lịch học, lịch thi và hạn nộp thí nghiệm hợp nhất |
+| 58 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/materials` | role `STUDENT` | Danh sách học liệu theo lớp sinh viên đã ghi danh |
+| 59 | Student Classes & Learning Portal | `GET` | `/api/v1/students/me/upcoming-tasks` | role `STUDENT` | Nhiệm vụ và sự kiện sắp đến hạn |
+| 60 | Question Bank | `GET` | `/api/v1/questions` | Authenticated | Danh sách câu hỏi |
+| 61 | Question Bank | `GET` | `/api/v1/questions/{questionId}` | Authenticated | Chi tiết câu hỏi |
+| 62 | Question Bank | `POST` | `/api/v1/questions` | Authenticated | Tạo câu hỏi mới |
+| 63 | Question Bank | `PUT` | `/api/v1/questions/{questionId}` | Authenticated | Cập nhật câu hỏi |
+| 64 | Question Bank | `PUT` | `/api/v1/questions/{questionId}/approve` | role `ADMIN` | Phê duyệt câu hỏi |
+| 65 | Question Bank | `DELETE` | `/api/v1/questions/{questionId}` | role `ADMIN` hoặc `INSTRUCTOR` | Xóa câu hỏi |
+| 66 | Question Bank | `GET` | `/api/v1/questions/import-excel/template` | role `ADMIN`, `INSTRUCTOR` | Tải file mẫu Excel nhập câu hỏi |
+| 67 | Question Bank | `POST` | `/api/v1/questions/import-excel` | role `ADMIN`, `INSTRUCTOR` | Tạo câu hỏi tự động từ file Excel |
+| 68 | Exam Management | `POST` | `/api/v1/exams` | role `ADMIN` hoặc `INSTRUCTOR` | Tạo kỳ thi mới |
+| 69 | Exam Management | `GET` | `/api/v1/exams/class/{classId}` | role `ADMIN`, `INSTRUCTOR`, `TA`, `STUDENT` | Danh sách kỳ thi của lớp |
+| 70 | Exam Management | `GET` | `/api/v1/exams/{examId}` | Chỉ yêu cầu Bearer Token (không có `@PreAuthorize` rõ ràng — kiểm tra trong service) | Chi tiết kỳ thi |
+| 71 | Exam Management | `POST` | `/api/v1/exams/{examId}/questions` | role `ADMIN` hoặc `INSTRUCTOR` | Thêm câu hỏi thủ công |
+| 72 | Exam Management | `POST` | `/api/v1/exams/{examId}/generate-questions` | role `ADMIN` hoặc `INSTRUCTOR` | Tự động sinh đề |
+| 73 | Exam Management | `POST` | `/api/v1/exams/{examId}/attempts` | role `STUDENT` | Sinh viên bắt đầu làm bài |
+| 74 | Exam Management | `POST` | `/api/v1/exams/attempts/{attemptId}/answers` | Bắt buộc (Role `STUDENT`) | Lưu câu trả lời tạm thời |
+| 75 | Exam Management | `POST / PUT` | `/api/v1/exams/attempts/{attemptId}/submit` | role `STUDENT` | Nộp bài thi và chấm điểm tự động |
+| 76 | Exam Management | `GET` | `/api/v1/exams/{examId}/my-attempt` | role `STUDENT` | Lượt thi gần nhất của tôi |
+| 77 | Exam Management | `GET` | `/api/v1/exams/{examId}/my-attempts` | role `STUDENT` | Toàn bộ lịch sử các lượt thi của sinh viên |
+| 78 | Exam Management | `GET` | `/api/v1/exams/attempts/{attemptId}` | role `ADMIN`, `INSTRUCTOR`, `TA`, `STUDENT` | Chi tiết lượt thi |
+| 79 | Exam Management | `GET` | `/api/v1/exams/{examId}/questions` | role `ADMIN`, `INSTRUCTOR`, `TA` | Xem câu hỏi đã có trong đề thi |
+| 80 | Exam Management | `DELETE` | `/api/v1/exams/{examId}/questions/{questionId}` | role `ADMIN`, `INSTRUCTOR` | Gỡ câu hỏi khỏi đề thi |
+| 81 | Exam Management | `PUT` | `/api/v1/exams/{examId}` | role `ADMIN`, `INSTRUCTOR` | Sửa cấu hình đề thi |
+| 82 | Exam Management | `DELETE` | `/api/v1/exams/{examId}` | role `ADMIN`, `INSTRUCTOR` | Xóa / hủy đề thi chưa mở |
+| 83 | Exam Management | `GET` | `/api/v1/exams/{examId}/attempts` | role `ADMIN`, `INSTRUCTOR`, `TA` | Giảng viên xem danh sách lượt làm bài và kết quả |
+| 84 | Exam Management | `PUT` | `/api/v1/exams/attempts/{attemptId}/grade` | role `ADMIN`, `INSTRUCTOR` | Chấm thủ công hoặc điều chỉnh điểm lượt thi |
+| 85 | Exam Management | `POST` | `/api/v1/exams/{examId}/transfers` | role `ADMIN`, `INSTRUCTOR` | Chuyển sinh viên thi ghép vào ca thi |
+| 86 | Exam Management | `DELETE` | `/api/v1/exams/{examId}/transfers/{studentId}` | role `ADMIN`, `INSTRUCTOR` | Hủy quyền thi ghép |
+| 87 | Exam Management | `GET` | `/api/v1/exams/{examId}/roster` | role `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách thí sinh đầy đủ của ca thi |
+| 88 | Exam Management | `GET` | `/api/v1/exams/my-transferred-exams` | role `STUDENT`, `ADMIN` | Danh sách ca thi thi ghép của sinh viên |
+| 89 | Exam Management | `GET` | `/api/v1/exams/attempts/{attemptId}/questions` | role `STUDENT`, `ADMIN` (Sinh viên chỉ được lấy đề của đúng lượt thi do mình tạo) | Lấy danh sách câu hỏi & lựa chọn cho lượt thi (Bảo mật sinh viên) |
+| 90 | Exam Management | `GET` | `/api/v1/exams/attempts/{attemptId}/progress` | role `STUDENT`, `ADMIN` | Kiểm tra tiến độ và thời gian còn lại của lượt thi |
+| 91 | Exam Management | `POST` | `/api/v1/exams/attempts/{attemptId}/autosave` | role `STUDENT`, `ADMIN` | Tự động lưu nháp câu trả lời theo lô (Batch Autosave) |
+| 92 | Exam Management | `GET` | `/api/v1/exams/{examId}/attempt-policy` | role `STUDENT`, `ADMIN` | Chính sách dự thi và kiểm tra quyền vào thi của sinh viên |
+| 93 | b. Quản Lý Ma Trận Đề Thi | `GET` | `/api/v1/exam-matrices` | role `ADMIN`, `INSTRUCTOR`, `TA` | Danh sách ma trận cho Dropdown tạo đề |
+| 94 | b. Quản Lý Ma Trận Đề Thi | `POST` | `/api/v1/exam-matrices` | role `ADMIN`, `INSTRUCTOR` | Tạo ma trận đề thi mới |
+| 95 | b. Quản Lý Ma Trận Đề Thi | `GET` | `/api/v1/exam-matrices/{matrixId}` | role `ADMIN`, `INSTRUCTOR`, `TA` | Xem chi tiết ma trận & phân bố chương/Bloom |
+| 96 | b. Quản Lý Ma Trận Đề Thi | `PUT` | `/api/v1/exam-matrices/{matrixId}` | role `ADMIN`, `INSTRUCTOR` | Sửa ma trận đề thi |
+| 97 | b. Quản Lý Ma Trận Đề Thi | `DELETE` | `/api/v1/exam-matrices/{matrixId}` | role `ADMIN`, `INSTRUCTOR` | Xóa ma trận chưa được sử dụng |
+| 98 | b. Quản Lý Ma Trận Đề Thi | `POST` | `/api/v1/exam-matrices/{matrixId}/validate` | role `ADMIN`, `INSTRUCTOR` | Kiểm tra ngân hàng câu hỏi có đủ câu theo ma trận trước khi tạo đề |
+| 99 | Virtual Physics Lab | `GET` | `/api/v1/experiments` | Authenticated | Danh sách thí nghiệm theo môn học |
+| 100 | Virtual Physics Lab | `GET` | `/api/v1/experiments/{experimentId}` | Authenticated | Chi tiết thí nghiệm |
+| 101 | Virtual Physics Lab | `POST` | `/api/v1/experiments` | role `ADMIN` hoặc `INSTRUCTOR` | Tạo thí nghiệm mới |
+| 102 | Virtual Physics Lab | `POST` | `/api/v1/experiments/{experimentId}/assign` | role `ADMIN` hoặc `INSTRUCTOR` | Giao thí nghiệm cho lớp |
+| 103 | Virtual Physics Lab | `POST` | `/api/v1/experiments/assignments/{assignmentId}/submit` | role `STUDENT` | Sinh viên nộp kết quả |
+| 104 | Virtual Physics Lab | `POST` | `/api/v1/experiments/submissions/{submissionId}/scores` | role `INSTRUCTOR` hoặc `TA` | Chấm điểm Rubric bài nộp thí nghiệm ảo |
+| 105 | Virtual Physics Lab | `POST` | `/api/v1/experiments/submissions/{submissionId}/confirmation` | role `ADMIN` hoặc `INSTRUCTOR` | Xác nhận và phê duyệt kết quả thí nghiệm |
+| 106 | Learning Material | `GET` | `/api/v1/topics/{topicId}/materials` | Mọi người dùng đã đăng nhập (không có `@PreAuthorize` rõ ràng — logic phân quyền trong service theo role) | Danh sách học liệu |
+| 107 | Learning Material | `GET` | `/api/v1/topics/{topicId}/materials/{materialId}` | Authenticated | Chi tiết học liệu |
+| 108 | Learning Material | `POST` | `/api/v1/topics/{topicId}/materials` | role `ADMIN` hoặc `INSTRUCTOR` | Tạo học liệu mới |
+| 109 | Learning Material | `PUT` | `/api/v1/topics/{topicId}/materials/{materialId}` | role `ADMIN` hoặc `INSTRUCTOR` | Cập nhật học liệu |
+| 110 | Learning Material | `PUT` | `/api/v1/topics/{topicId}/materials/{materialId}/approve` | role `ADMIN` hoặc `INSTRUCTOR` | Phê duyệt học liệu |
+| 111 | Learning Material | `DELETE` | `/api/v1/topics/{topicId}/materials/{materialId}` | role `ADMIN` hoặc `INSTRUCTOR` | Xóa học liệu |
+| 112 | Learning Material | `POST` | `/api/v1/materials/migrate-legacy-types` | role `ADMIN` | Chuẩn hóa kiểu dữ liệu học liệu cũ (Admin Migration) |
+| 113 | b. Secure File Storage & Temporary Download URL | `POST` | `/api/v1/files/upload` | Mọi người dùng đã đăng nhập | Tải lên tệp đính kèm |
+| 114 | b. Secure File Storage & Temporary Download URL | `POST` | `/api/v1/files/{fileId}/download-url` | Người dùng có quyền truy cập tệp (Admin, Giảng viên phụ trách, hoặc Sinh viên sở hữu tệp) | Sinh URL tải tệp tạm thời có chữ ký bảo mật |
+| 115 | b. Secure File Storage & Temporary Download URL | `GET` | `/api/v1/files/{fileId}/download` | Công khai thông qua xác thực chữ ký số HMAC của `token` và `expires`. | Tải xuống luồng tệp tin với Signed Token |
+| 116 | b. Secure File Storage & Temporary Download URL | `GET` | `/api/v1/files/**` | Công khai (hoặc theo quyền tệp) | Truy xuất và stream trực tiếp tệp tin hoặc hình ảnh |
+| 117 | Evidence | `GET` | `/api/v1/students/me/evidence` | role `STUDENT` | Kho minh chứng của tôi |
+| 118 | Evidence | `GET` | `/api/v1/students/{id}/evidence` | role `INSTRUCTOR`, `ADMIN`, `STUDENT` | Minh chứng của sinh viên |
+| 119 | Evidence | `GET` | `/api/v1/classes/{id}/evidence` | role `INSTRUCTOR`, `ADMIN` | Minh chứng toàn bộ lớp |
+| 120 | Learning Progress | `GET` | `/api/v1/classes/{classId}/progress` | role `ADMIN`, `INSTRUCTOR` | Tiến độ học liệu của lớp |
+| 121 | Learning Progress | `GET` | `/api/v1/students/me/progress` | role `STUDENT` | Tiến độ học tập của tôi |
+| 122 | Learning Progress | `PUT` | `/api/v1/students/me/progress` | role `STUDENT` | Cập nhật tiến độ học tập |
+| 123 | Dashboard | `GET` | `/api/v1/dashboard/class/{id}` | role `INSTRUCTOR`, `ADMIN` | Bảng điều khiển lớp học |
+| 124 | Dashboard | `GET` | `/api/v1/dashboard/class/{id}/student/{studentId}` | role `INSTRUCTOR`, `ADMIN` | Bảng điều khiển sinh viên |
+| 125 | Dashboard | `GET` | `/api/v1/dashboard/me` | role `STUDENT` | Bảng điều khiển học tập cá nhân |
+| 126 | Dashboard | `POST` | `/api/v1/dashboard/class/{id}/regenerate` | role `ADMIN` | Tạo lại dữ liệu snapshot |
+| 127 | Analytics & CTT | `GET` | `/api/v1/analytics/topic-difficulty` | Authenticated | Độ khó chương mục |
+| 128 | Analytics & CTT | `GET` | `/api/v1/analytics/question-quality` | Authenticated | Chất lượng câu hỏi (DI) |
+| 129 | Analytics & CTT | `GET` | `/api/v1/analytics/ai-gaps` | Authenticated | Lỗ hổng kiến thức AI |
+| 130 | Analytics & CTT | `GET` | `/api/v1/analytics/material-effectiveness` | Authenticated | Hiệu quả học liệu |
+| 131 | Analytics & CTT | `POST` | `/api/v1/analytics/trigger` | role `ADMIN` | Kích hoạt tổng hợp CTT thủ công |
+| 132 | AI Socratic Tutor | `POST` | `/api/v1/ai-tutor/conversations` | Authenticated | Khởi tạo phiên hội thoại |
+| 133 | AI Socratic Tutor | `POST` | `/api/v1/ai-tutor/conversations/{conversationId}/messages` | Authenticated | Gửi câu hỏi cho AI |
+| 134 | AI Socratic Tutor | `GET` | `/api/v1/ai-tutor/conversations/{conversationId}/messages` | Authenticated | Lịch sử hội thoại |
+| 135 | AI Socratic Tutor | `GET` | `/api/v1/ai-tutor/conversations/my` | Authenticated | Danh sách phiên hội thoại của tôi |
+| 136 | AI Socratic Tutor | `PUT` | `/api/v1/ai-tutor/conversations/{conversationId}/end` | Authenticated | Kết thúc phiên hội thoại |
+| 137 | AI Socratic Tutor | `POST` | `/api/v1/ai-tutor/messages/{messageId}/feedback` | Authenticated | Đánh giá câu trả lời AI |
+| 138 | Admin Logs | `GET` | `/api/v1/admin/activity-logs` | Authenticated | Nhật ký hoạt động hệ thống |
+| 139 | Admin Logs | `GET` | `/api/v1/admin/audit-logs` | Authenticated | Nhật ký kiểm toán bảo mật |
+| 140 | System Settings | `GET` | `/api/v1/admin/settings` | Authenticated | Toàn bộ cấu hình hệ thống |
+| 141 | System Settings | `GET` | `/api/v1/admin/settings/{key}` | Authenticated | Lấy một cấu hình |
+| 142 | System Settings | `PUT` | `/api/v1/admin/settings/{key}` | Authenticated | Cập nhật một cấu hình |
+| 143 | System Settings | `POST` | `/api/v1/admin/settings/bulk` | Authenticated | Cập nhật nhiều cấu hình |
+| 144 | Student Activity Logs | `GET` | `/api/v1/students/me/activity-logs` | role `STUDENT` | Nhật ký hoạt động cá nhân |
+| 145 | Hệ Thống Thông Báo & Nhắc Lịch Học | `GET` | `/api/v1/notifications` | `isAuthenticated()` | Lấy danh sách thông báo của tôi |
+| 146 | Hệ Thống Thông Báo & Nhắc Lịch Học | `GET` | `/api/v1/notifications/summary` | `isAuthenticated()` | Lấy tóm tắt chuông thông báo |
+| 147 | Hệ Thống Thông Báo & Nhắc Lịch Học | `PUT` | `/api/v1/notifications/{id}/read` | `isAuthenticated()` | Đánh dấu một thông báo là đã đọc |
+| 148 | Hệ Thống Thông Báo & Nhắc Lịch Học | `PUT` | `/api/v1/notifications/read-all` | `isAuthenticated()` | Đánh dấu tất cả thông báo là đã đọc |
+| 149 | Hệ Thống Thông Báo & Nhắc Lịch Học | `DELETE` | `/api/v1/notifications/{id}` | `isAuthenticated()` | Xóa thông báo |
+| 150 | Hệ Thống Thông Báo & Nhắc Lịch Học | `POST` | `/api/v1/notifications/classes/{classId}` | role `ADMIN`, `INSTRUCTOR` | Gửi thông báo tới toàn thể sinh viên trong lớp |
+| 151 | Hệ Thống Thông Báo & Nhắc Lịch Học | `POST` | `/api/v1/notifications/reminders/generate` | `isAuthenticated()` | Kích hoạt tạo thông báo nhắc lịch học sắp tới |
 
 ## 5. Từ Điển Dữ Liệu Chi Tiết (Data Models: Enums, DTOs & Entities)
 
