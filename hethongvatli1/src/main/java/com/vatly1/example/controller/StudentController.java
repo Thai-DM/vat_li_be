@@ -1,5 +1,6 @@
 package com.vatly1.example.controller;
 
+import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.response.StudentImportResultDTO;
 import com.vatly1.example.model.response.StudentResponseDTO;
@@ -29,6 +30,27 @@ public class StudentController {
 
     private final IUserService userService;
     private final IStudentExcelService studentExcelService;
+
+    @Operation(summary = "Tìm kiếm sinh viên theo tên đăng nhập (username), mã sinh viên hoặc từ khóa",
+            description = "Cho phép Giảng viên (INSTRUCTOR, TA) và Quản trị viên (ADMIN) tìm kiếm sinh viên bằng query param (username, keyword, hoặc studentCode).")
+    @GetMapping({"/search", ""})
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<StudentResponseDTO>> searchStudent(
+            @Parameter(description = "Tên đăng nhập (username)") @RequestParam(value = "username", required = false) String username,
+            @Parameter(description = "Từ khóa tìm kiếm (username, studentCode, email)") @RequestParam(value = "keyword", required = false) String keyword,
+            @Parameter(description = "Mã sinh viên (studentCode)") @RequestParam(value = "studentCode", required = false) String studentCode) {
+        String query = username;
+        if (query == null || query.isBlank()) {
+            query = keyword;
+        }
+        if (query == null || query.isBlank()) {
+            query = studentCode;
+        }
+        if (query == null || query.isBlank()) {
+            throw new CustomException("Vui lòng cung cấp username, keyword hoặc studentCode để tìm kiếm sinh viên", HttpStatus.BAD_REQUEST);
+        }
+        return ResponseEntity.ok(ApiResponse.success(userService.getStudentByUsername(query)));
+    }
 
     @Operation(summary = "Lấy thông tin chi tiết sinh viên theo tên đăng nhập hoặc mã sinh viên",
             description = "Tra cứu sinh viên bằng tên đăng nhập (username) hoặc mã sinh viên (studentCode) hoặc email. Trả về thông tin tài khoản, hồ sơ cá nhân và danh sách các lớp học phần đã tham gia.")

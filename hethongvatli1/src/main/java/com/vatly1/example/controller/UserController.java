@@ -37,6 +37,7 @@ import com.vatly1.example.model.request.ResetPasswordRequestDTO;
 import com.vatly1.example.model.request.UpdateUserStatusDTO;
 import com.vatly1.example.model.response.StudentImportResultDTO;
 import com.vatly1.example.service.IStudentExcelService;
+import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.service.IUserService;
 
 import java.util.UUID;
@@ -129,16 +130,33 @@ public class UserController {
     return ResponseEntity.ok(ApiResponse.success(username, "User deleted successfully"));
   }
 
+  @GetMapping(value = "/search")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+  @Operation(summary = "Tìm kiếm người dùng qua query param (Admin & Giảng viên)", description = "Dành cho Quản trị viên và Giảng viên (INSTRUCTOR, TA) tìm kiếm người dùng theo tham số username, keyword hoặc studentCode.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ResponseEntity<ApiResponse<UserResponseDTO>> searchUser(
+      @Parameter(description = "Tên đăng nhập (username)") @RequestParam(value = "username", required = false) String username,
+      @Parameter(description = "Từ khóa tìm kiếm (username/studentCode/email)") @RequestParam(value = "keyword", required = false) String keyword,
+      @Parameter(description = "Mã sinh viên (studentCode)") @RequestParam(value = "studentCode", required = false) String studentCode) {
+    String q = username;
+    if (q == null || q.isBlank()) q = keyword;
+    if (q == null || q.isBlank()) q = studentCode;
+    if (q == null || q.isBlank()) {
+      throw new CustomException("Vui lòng cung cấp username, keyword hoặc studentCode để tìm kiếm", HttpStatus.BAD_REQUEST);
+    }
+    return ResponseEntity.ok(ApiResponse.success(userService.search(q)));
+  }
+
   @GetMapping(value = "/{username}")
-  @PreAuthorize("hasRole('ADMIN')")
-  @Operation(summary = "Tra cứu người dùng theo tên đăng nhập (Chỉ Admin)")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+  @Operation(summary = "Tra cứu người dùng theo tên đăng nhập (Admin & Giảng viên)")
   @SecurityRequirement(name = "bearerAuth")
   @ApiResponses(value = {
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Something went wrong"),
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied"),
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "The user doesn't exist")})
-  public ResponseEntity<ApiResponse<UserResponseDTO>> search(@Parameter(description = "Username") @PathVariable String username) {
+  public ResponseEntity<ApiResponse<UserResponseDTO>> search(@Parameter(description = "Username hoặc mã định danh") @PathVariable String username) {
     return ResponseEntity.ok(ApiResponse.success(userService.search(username)));
   }
 
@@ -221,9 +239,9 @@ public class UserController {
   }
 
   @GetMapping("/admin/users/{id}/profile")
-  @PreAuthorize("hasRole('ADMIN')")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Lấy hồ sơ người dùng theo ID (Chỉ Admin)")
+  @Operation(summary = "Lấy hồ sơ người dùng theo ID (Admin & Giảng viên)")
   public ResponseEntity<ApiResponse<UserProfileDTO>> getUserProfile(@PathVariable UUID id) {
     return ResponseEntity.ok(ApiResponse.success(userService.getUserProfile(id)));
   }
@@ -267,6 +285,23 @@ public class UserController {
     StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success(result, "Xử lý nhập danh sách sinh viên từ Excel hoàn tất"));
+  }
+
+  @GetMapping("/students/search")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+  @Operation(summary = "Tìm kiếm sinh viên theo username/query param cho giảng viên", description = "Tra cứu sinh viên theo query param username, keyword hoặc studentCode.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ResponseEntity<ApiResponse<com.vatly1.example.model.response.StudentResponseDTO>> searchStudentParam(
+      @Parameter(description = "Tên đăng nhập (username)") @RequestParam(value = "username", required = false) String username,
+      @Parameter(description = "Từ khóa tìm kiếm (username/studentCode/email)") @RequestParam(value = "keyword", required = false) String keyword,
+      @Parameter(description = "Mã sinh viên (studentCode)") @RequestParam(value = "studentCode", required = false) String studentCode) {
+    String q = username;
+    if (q == null || q.isBlank()) q = keyword;
+    if (q == null || q.isBlank()) q = studentCode;
+    if (q == null || q.isBlank()) {
+      throw new CustomException("Vui lòng nhập username, keyword hoặc studentCode để tìm kiếm", HttpStatus.BAD_REQUEST);
+    }
+    return ResponseEntity.ok(ApiResponse.success(userService.getStudentByUsername(q)));
   }
 
   @GetMapping("/students/{username}")

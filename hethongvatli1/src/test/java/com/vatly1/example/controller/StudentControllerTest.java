@@ -133,4 +133,92 @@ public class StudentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }
+
+    @Test
+    void searchStudent_asInstructor_byUsernameQueryParam_success() throws Exception {
+        mockMvc.perform(get("/api/v1/students/search?username=sv_an")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"))
+                .andExpect(jsonPath("$.data.studentCode").value("SV001"))
+                .andExpect(jsonPath("$.data.fullName").value("Lê Văn An"));
+    }
+
+    @Test
+    void searchStudent_asInstructor_byRootWithParam_success() throws Exception {
+        mockMvc.perform(get("/api/v1/students?username=sv_an")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"));
+    }
+
+    @Test
+    void searchStudent_asInstructor_caseInsensitiveUsername_success() throws Exception {
+        mockMvc.perform(get("/api/v1/students/search?username=SV_AN")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"));
+    }
+
+    @Test
+    void searchStudent_asInstructor_byStudentCodeQueryParam_success() throws Exception {
+        mockMvc.perform(get("/api/v1/students/search?studentCode=SV001")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"))
+                .andExpect(jsonPath("$.data.studentCode").value("SV001"));
+    }
+
+    @Test
+    void searchStudent_noParams_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/students/search")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void searchUser_asInstructor_underUsersPath_success() throws Exception {
+        // Giảng viên tìm kiếm user theo username tại /api/v1/users/{username}
+        mockMvc.perform(get("/api/v1/users/sv_an")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"))
+                .andExpect(jsonPath("$.data.role").value("STUDENT"));
+    }
+
+    @Test
+    void searchUserParam_asInstructor_underUsersSearch_success() throws Exception {
+        // Giảng viên tìm kiếm user theo query param tại /api/v1/users/search?username=sv_an
+        mockMvc.perform(get("/api/v1/users/search?username=sv_an")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"));
+    }
+
+    @Test
+    void searchStudentParam_asInstructor_underUsersStudentsSearch_success() throws Exception {
+        // Giảng viên tìm kiếm chi tiết sinh viên tại /api/v1/users/students/search?username=sv_an
+        mockMvc.perform(get("/api/v1/users/students/search?username=sv_an")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.username").value("sv_an"))
+                .andExpect(jsonPath("$.data.studentCode").value("SV001"));
+    }
+
+    @Test
+    void searchUser_asStudent_returns403() throws Exception {
+        // Sinh viên không có quyền tra cứu user qua /api/v1/users/{username}
+        mockMvc.perform(get("/api/v1/users/sv_binh")
+                        .header("Authorization", "Bearer " + studentAnToken))
+                .andExpect(status().isForbidden());
+    }
 }
+

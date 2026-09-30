@@ -158,7 +158,39 @@ public class UserServiceImpl implements IUserService {
 
   @Override
   public UserResponseDTO search(String username) {
-    User user = userRepository.findByUsername(username);
+    if (username == null || username.trim().isEmpty()) {
+      throw new CustomException("Tên đăng nhập không được để trống", HttpStatus.BAD_REQUEST);
+    }
+    String cleanTerm = username.trim();
+
+    // 1. Tìm theo username (nguyên bản hoặc chữ thường)
+    User user = userRepository.findByUsername(cleanTerm);
+    if (user == null) {
+      user = userRepository.findByUsername(cleanTerm.toLowerCase());
+    }
+
+    // 2. Thử tìm theo mã sinh viên (studentCode) trong hồ sơ UserProfile
+    if (user == null) {
+      UserProfile profile = userProfileRepository.findByStudentCode(cleanTerm).orElse(null);
+      if (profile == null) {
+        profile = userProfileRepository.findByStudentCode(cleanTerm.toUpperCase()).orElse(null);
+      }
+      if (profile == null) {
+        profile = userProfileRepository.findByStudentCode(cleanTerm.toLowerCase()).orElse(null);
+      }
+      if (profile != null) {
+        user = userRepository.findById(profile.getUserId()).orElse(null);
+      }
+    }
+
+    // 3. Thử tìm theo email
+    if (user == null) {
+      user = userRepository.findByEmail(cleanTerm).orElse(null);
+    }
+    if (user == null) {
+      user = userRepository.findByEmail(cleanTerm.toLowerCase()).orElse(null);
+    }
+
     if (user == null) {
       throw new CustomException("The user doesn't exist", HttpStatus.NOT_FOUND);
     }
@@ -379,10 +411,19 @@ public class UserServiceImpl implements IUserService {
 
     // 1. Tìm theo username
     User user = userRepository.findByUsername(cleanTerm);
+    if (user == null) {
+      user = userRepository.findByUsername(cleanTerm.toLowerCase());
+    }
 
     // 2. Nếu không tìm thấy, thử tìm theo mã sinh viên (studentCode) trong hồ sơ UserProfile
     if (user == null) {
       UserProfile profile = userProfileRepository.findByStudentCode(cleanTerm).orElse(null);
+      if (profile == null) {
+        profile = userProfileRepository.findByStudentCode(cleanTerm.toUpperCase()).orElse(null);
+      }
+      if (profile == null) {
+        profile = userProfileRepository.findByStudentCode(cleanTerm.toLowerCase()).orElse(null);
+      }
       if (profile != null) {
         user = userRepository.findById(profile.getUserId()).orElse(null);
       }
@@ -391,6 +432,9 @@ public class UserServiceImpl implements IUserService {
     // 3. Nếu vẫn không thấy, thử tìm theo email
     if (user == null) {
       user = userRepository.findByEmail(cleanTerm).orElse(null);
+    }
+    if (user == null) {
+      user = userRepository.findByEmail(cleanTerm.toLowerCase()).orElse(null);
     }
 
     if (user == null) {
