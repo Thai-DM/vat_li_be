@@ -38,6 +38,13 @@ import com.vatly1.example.converter.UserConverter;
 import com.vatly1.example.entity.PasswordResetToken;
 import com.vatly1.example.repository.IPasswordResetTokenRepository;
 import com.vatly1.example.service.IEmailService;
+import com.vatly1.example.model.response.StudentResponseDTO;
+import com.vatly1.example.entity.ClassEnrollment;
+import com.vatly1.example.entity.Class;
+import com.vatly1.example.repository.IClassEnrollmentRepository;
+import com.vatly1.example.repository.IClassRepository;
+import java.util.ArrayList;
+import java.util.List;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -61,6 +68,9 @@ public class UserServiceImpl implements IUserService {
   private final IUserProfileRepository userProfileRepository;
   private final IPasswordResetTokenRepository passwordResetTokenRepository;
   private final IEmailService emailService;
+  private final IClassEnrollmentRepository classEnrollmentRepository;
+  private final IClassRepository classRepository;
+
   @Override
   public AuthResponseDTO signin(String username, String password) {
     try {
@@ -358,5 +368,72 @@ public class UserServiceImpl implements IUserService {
     String accessToken = jwtTokenUtils.createToken(user.getUsername(), user.getRole(), user.getUserId());
     String refreshToken = refreshTokenService.issue(user.getUsername());
     return new AuthResponseDTO(accessToken, refreshToken, TOKEN_TYPE, jwtTokenUtils.getValidityInSeconds(), jwtTokenUtils.getRefreshValidityInSeconds());
+  }
+
+  @Override
+  public StudentResponseDTO getStudentByUsername(String username) {
+    if (username == null || username.isBlank()) {
+      throw new CustomException("Tên đăng nhập hoặc mã sinh viên không được để trống", HttpStatus.BAD_REQUEST);
+    }
+    String cleanTerm = username.trim();
+
+    // 1. Tìm theo username
+    User user = userRepository.findByUsername(cleanTerm);
+
+    // 2. Nếu không tìm thấy, thử tìm theo mã sinh viên (studentCode) trong hồ sơ UserProfile
+    if (user == null) {
+      UserProfile profile = userProfileRepository.findByStudentCode(cleanTerm).orElse(null);
+      if (profile != null) {
+        user = userRepository.findById(profile.getUserId()).orElse(null);
+      }
+    }
+
+    // 3. Nếu vẫn không thấy, thử tìm theo email
+    if (user == null) {
+      user = userRepository.findByEmail(cleanTerm).orElse(null);
+    }
+
+    if (user == null) {
+      throw new CustomException("Không tìm thấy sinh viên với tên đăng nhập hoặc mã: " + cleanTerm, HttpStatus.NOT_FOUND);
+    }
+
+    // Kiểm tra vai trò tài khoản phải là sinh viên
+    if (user.getRole() != UserRole.STUDENT) {
+      throw new CustomException("Tài khoản '" + user.getUsername() + "' không phải là sinh viên (vai trò hiện tại: " + user.getRole() + ")", HttpStatus.BAD_REQUEST);
+    }
+
+    // Lấy thông tin chi tiết hồ sơ UserProfile
+    UserProfile profile = userProfileRepository.findById(user.getUserId()).orElse(null);
+
+    // Lấy danh sách lớp học phần sinh viên đã ghi danh
+    List<StudentResponseDTO.StudentClassItemDTO> classItems = new ArrayList<>();
+    List<ClassEnrollment> enrollments = classEnrollmentRepository.findByStudentId(user.getUserId());
+    if (enrollments != null && !enrollments.isEmpty()) {
+      for (ClassEnrollment e : enrollments) {
+        Class c = classRepository.findById(e.getClassId()).orElse(null);
+        classItems.add(StudentResponseDTO.StudentClassItemDTO.builder()
+            .classId(e.getClassId())
+            .classCode(c != null ? c.getClassCode() : null)
+            .status(e.getStatus() != null ? e.getStatus().name() : null)
+            .enrolledAt(e.getEnrolledAt())
+            .build());
+      }
+    }
+
+    return StudentResponseDTO.builder()
+        .userId(user.getUserId())
+        .username(user.getUsername())
+        .email(user.getEmail())
+        .role(user.getRole())
+        .status(user.getStatus())
+        .studentCode(profile != null ? profile.getStudentCode() : null)
+        .fullName(profile != null ? profile.getFullName() : null)
+        .dateOfBirth(profile != null ? profile.getDateOfBirth() : null)
+        .gender(profile != null ? profile.getGender() : null)
+        .phone(profile != null ? profile.getPhone() : null)
+        .avatarUrl(profile != null ? profile.getAvatarUrl() : null)
+        .bio(profile != null ? profile.getBio() : null)
+        .enrolledClasses(classItems)
+        .build();
   }
 }

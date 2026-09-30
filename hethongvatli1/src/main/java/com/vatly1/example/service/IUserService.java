@@ -37,4 +37,5 @@ public interface IUserService {
     UserResponseDTO adminUpdateUserStatus(UUID id, UpdateUserStatusDTO updateDTO);
     void processForgotPassword(String email);
     void processResetPassword(String token, String newPassword);
+    com.vatly1.example.model.response.StudentResponseDTO getStudentByUsername(String username);
 }

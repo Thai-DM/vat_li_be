@@ -50,7 +50,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
-@RequestMapping({"/api/v1/users", "/api/v1/students"})
+@RequestMapping("/api/v1/users")
 @Tag(name = "Users & Authentication", description = "APIs Đăng nhập, Đăng ký, Quên mật khẩu, Refresh Token, Quản lý tài khoản & Hồ sơ")
 @RequiredArgsConstructor
 public class UserController {
@@ -267,5 +267,15 @@ public class UserController {
     StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success(result, "Xử lý nhập danh sách sinh viên từ Excel hoàn tất"));
+  }
+
+  @GetMapping("/students/{username}")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA') or #username == authentication.name")
+  @Operation(summary = "Lấy thông tin chi tiết sinh viên theo username", description = "Tra cứu sinh viên bằng tên đăng nhập (username) hoặc mã sinh viên (studentCode) hoặc email. Trả về thông tin tài khoản, hồ sơ cá nhân và danh sách các lớp học phần đã tham gia.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ResponseEntity<ApiResponse<com.vatly1.example.model.response.StudentResponseDTO>> getStudentByUsername(
+      @Parameter(description = "Tên đăng nhập (username) hoặc mã sinh viên (studentCode)")
+      @PathVariable String username) {
+    return ResponseEntity.ok(ApiResponse.success(userService.getStudentByUsername(username)));
   }
 }
