@@ -50,7 +50,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping({"/api/v1/users", "/api/v1/students"})
 @Tag(name = "Users & Authentication", description = "APIs Đăng nhập, Đăng ký, Quên mật khẩu, Refresh Token, Quản lý tài khoản & Hồ sơ")
 @RequiredArgsConstructor
 public class UserController {
@@ -245,8 +245,8 @@ public class UserController {
   }
 
   @GetMapping("/import-excel/template")
-  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
-  @Operation(summary = "Tải file mẫu Excel nhập danh sách sinh viên", description = "Tải xuống file Excel (.xlsx) chuẩn hóa để quản trị viên / giảng viên điền danh sách sinh viên cần tạo tài khoản hàng loạt.")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+  @Operation(summary = "Tải file mẫu Excel nhập danh sách sinh viên", description = "Tải xuống file Excel (.xlsx) chuẩn hóa để quản trị viên / giảng viên điền danh sách sinh viên cần tạo tài khoản hàng loạt. Mật khẩu mặc định tự động sinh theo Ngày sinh (ddMMyyyy).")
   @SecurityRequirement(name = "bearerAuth")
   public ResponseEntity<byte[]> downloadStudentTemplate() {
     byte[] excelBytes = studentExcelService.downloadStudentExcelTemplate();
@@ -257,12 +257,12 @@ public class UserController {
   }
 
   @PostMapping(value = "/import-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
-  @Operation(summary = "Tạo tài khoản sinh viên hàng loạt từ file Excel", description = "Tải lên tệp Excel (.xlsx, .xls) chứa danh sách sinh viên để tạo hàng loạt tài khoản người dùng và hồ sơ sinh viên. Có thể tự động ghi danh vào lớp học phần.")
+  @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+  @Operation(summary = "Tạo tài khoản sinh viên hàng loạt từ file Excel", description = "Tải lên tệp Excel (.xlsx, .xls) chứa danh sách sinh viên để tạo/cập nhật hàng loạt tài khoản người dùng và hồ sơ sinh viên. Mật khẩu mặc định tự động sinh từ Ngày sinh (ddMMyyyy, ví dụ sinh ngày 20/08/2004 sẽ có mật khẩu là 20082004). Có thể tự động ghi danh vào lớp học phần.")
   @SecurityRequirement(name = "bearerAuth")
   public ResponseEntity<ApiResponse<StudentImportResultDTO>> importStudentsFromExcel(
       @RequestParam("file") MultipartFile file,
-      @RequestParam(value = "defaultPassword", required = false, defaultValue = "Vatly1@123") String defaultPassword,
+      @RequestParam(value = "defaultPassword", required = false) String defaultPassword,
       @RequestParam(value = "classId", required = false) UUID classId) {
     StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId);
     return ResponseEntity.status(HttpStatus.CREATED)

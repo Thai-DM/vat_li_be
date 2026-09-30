@@ -36,6 +36,7 @@ public class ClassController {
     private final IClassStaffService classStaffService;
     private final IClassEnrollmentService enrollmentService;
     private final ILogService logService;
+    private final com.vatly1.example.service.IStudentExcelService studentExcelService;
 
     // --- CLASS MANAGEMENT ---
 
@@ -186,5 +187,28 @@ public class ClassController {
         String role = (String) request.getAttribute("role");
         List<ActivityLog> logs = logService.getClassActivityLogs(id, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.success(logs));
+    }
+
+    @Operation(summary = "Tải file mẫu Excel nhập danh sách sinh viên cho lớp", description = "Tải xuống file mẫu Excel nhập danh sách sinh viên để ghi danh vào lớp.")
+    @GetMapping("/{id}/students/import-excel/template")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<byte[]> downloadClassStudentTemplate(@PathVariable UUID id) {
+        byte[] excelBytes = studentExcelService.downloadStudentExcelTemplate();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=mau_import_sinh_vien.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
+    @Operation(summary = "Nhập danh sách sinh viên vào lớp từ file Excel", description = "Tải lên file Excel để tạo/cập nhật tài khoản sinh viên và tự động ghi danh vào lớp học phần này. Mật khẩu mặc định tự động lấy theo ngày sinh ddMMyyyy.")
+    @PostMapping(value = "/{id}/students/import-excel", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<StudentImportResultDTO>> importStudentsToClass(
+            @PathVariable UUID id,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "defaultPassword", required = false) String defaultPassword) {
+        StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, id);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result, "Nhập danh sách sinh viên vào lớp thành công"));
     }
 }

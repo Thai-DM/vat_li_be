@@ -49,8 +49,13 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
             DateTimeFormatter.ofPattern("dd/MM/yyyy"),
             DateTimeFormatter.ofPattern("d/M/yyyy"),
+            DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+            DateTimeFormatter.ofPattern("d-M-yyyy"),
+            DateTimeFormatter.ofPattern("dd.MM.yyyy"),
+            DateTimeFormatter.ofPattern("d.M.yyyy"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-            DateTimeFormatter.ofPattern("dd-MM-yyyy")
+            DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+            DateTimeFormatter.ofPattern("ddMMyyyy")
     );
 
     @Override
@@ -110,7 +115,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
 
             // Dữ liệu mẫu (3 sinh viên)
             Object[][] sampleData = {
-                    {1, "SV202601", "Nguyễn Văn An", "an.nguyen@student.edu.vn", "sv_an01", "Vatly1@123", "20/08/2004", "Nam", "0987654321", "PHY101-01"},
+                    {1, "SV202601", "Nguyễn Văn An", "an.nguyen@student.edu.vn", "sv_an01", "20082004", "20/08/2004", "Nam", "0987654321", "PHY101-01"},
                     {2, "SV202602", "Trần Thị Bình", "binh.tran@student.edu.vn", "", "", "15/11/2004", "Nữ", "0912345678", "PHY101-01"},
                     {3, "SV202603", "Lê Hùng Cường", "cuong.le@student.edu.vn", "", "", "05/03/2004", "Nam", "0909123456", "PHY101-02"}
             };
@@ -140,7 +145,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
             Row noteRow3 = sheet.createRow(noteStartRow + 2);
             noteRow3.createCell(0).setCellValue("2. Cột 'Tên đăng nhập' nếu để trống sẽ tự động lấy theo Mã sinh viên (chữ thường).");
             Row noteRow4 = sheet.createRow(noteStartRow + 3);
-            noteRow4.createCell(0).setCellValue("3. Cột 'Mật khẩu' nếu để trống sẽ tự động dùng mật khẩu mặc định (mặc định: Vatly1@123).");
+            noteRow4.createCell(0).setCellValue("3. Cột 'Mật khẩu' nếu để trống sẽ tự động lấy theo ngày sinh dạng ddmmyyyy (ví dụ: sinh ngày 20/08/2004 thì mật khẩu là 20082004).");
             Row noteRow5 = sheet.createRow(noteStartRow + 4);
             noteRow5.createCell(0).setCellValue("4. Cột 'Mã lớp' nếu điền mã lớp hợp lệ thì sinh viên sẽ được tự động ghi danh vào lớp đó.");
 
@@ -282,21 +287,34 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 }
                 itemBuilder.username(username);
 
-                // Xử lý Mật khẩu
-                String effectivePassword = (password != null && !password.isBlank()) ? password.trim() : effectiveDefaultPassword;
-                itemBuilder.password(effectivePassword);
-
-                // Xử lý Ngày sinh
+                // Xử lý Ngày sinh (cần parse trước để dùng làm mật khẩu nếu mật khẩu để trống hoặc là mẫu mặc định)
                 LocalDate dob = parseDate(row, colMap.get("dateOfBirth"), dobStr);
                 itemBuilder.dateOfBirth(dob);
+
+                // Xử lý Mật khẩu:
+                // Yêu cầu: Mật khẩu mặc định sẽ là ngày sinh của sinh viên (định dạng ddmmyyyy, ví dụ: 20082004)
+                String effectivePassword;
+                if (password != null && !password.isBlank() && !password.trim().equalsIgnoreCase("Vatly1@123")) {
+                    effectivePassword = password.trim();
+                } else if (dob != null) {
+                    effectivePassword = dob.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+                } else if (dobStr != null && !dobStr.replaceAll("[^0-9]", "").isBlank()) {
+                    effectivePassword = dobStr.replaceAll("[^0-9]", "");
+                } else {
+                    effectivePassword = effectiveDefaultPassword;
+                }
+                itemBuilder.password(effectivePassword);
 
                 // Xử lý Giới tính
                 GenderType gender = parseGender(genderStr);
                 itemBuilder.gender(gender);
 
-                // Xử lý Số điện thoại
+                // Xử lý Số điện thoại (tự động thêm '0' nếu là số 9 chữ số bị Excel làm mất số 0 đầu)
                 if (phone != null && !phone.isBlank()) {
                     phone = phone.replaceAll("[^0-9+]", "");
+                    if (phone.length() == 9 && (phone.startsWith("3") || phone.startsWith("5") || phone.startsWith("7") || phone.startsWith("8") || phone.startsWith("9"))) {
+                        phone = "0" + phone;
+                    }
                     itemBuilder.phone(phone);
                 }
 
@@ -309,35 +327,66 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 }
                 itemBuilder.classCode(effectiveClassCode);
 
-                // Kiểm tra trùng lặp trong CSDL
-                if (userRepository.existsByUsername(username)) {
-                    String msg = String.format("Dòng %d: Tên đăng nhập '%s' đã tồn tại trong hệ thống.", displayRow, username);
-                    warnings.add(msg);
-                    User existingUser = userRepository.findByUsername(username);
-                    itemBuilder.userId(existingUser != null ? existingUser.getUserId() : null);
-                    itemBuilder.status("SKIPPED").message(msg);
-                    items.add(itemBuilder.build());
-                    totalSkipped++;
+                // Kiểm tra xem sinh viên / người dùng này đã tồn tại trong hệ thống chưa (hỗ trợ cập nhật khi re-import)
+                User existingUser = userRepository.findByUsername(username);
+                if (existingUser == null && email != null) {
+                    existingUser = userRepository.findByEmail(email).orElse(null);
+                }
+                if (existingUser == null) {
+                    UserProfile existingProfile = userProfileRepository.findByStudentCode(studentCode).orElse(null);
+                    if (existingProfile != null) {
+                        existingUser = userRepository.findById(existingProfile.getUserId()).orElse(null);
+                    }
+                }
 
-                    // Vẫn hỗ trợ ghi danh vào lớp nếu chưa có trong lớp
-                    if (existingUser != null && enrollStudentToClass(existingUser.getUserId(), effectiveClassCode, defaultClass)) {
+                if (existingUser != null) {
+                    // Cập nhật thông tin tài khoản và mật khẩu theo ngày sinh mới nhất
+                    existingUser.setPasswordHash(passwordEncoder.encode(effectivePassword));
+                    if (email != null && !email.equalsIgnoreCase(existingUser.getEmail())) {
+                        if (!userRepository.existsByEmail(email)) {
+                            existingUser.setEmail(email);
+                        }
+                    }
+                    userRepository.save(existingUser);
+
+                    // Cập nhật hoặc tạo mới hồ sơ UserProfile
+                    UserProfile profile = userProfileRepository.findById(existingUser.getUserId()).orElse(null);
+                    if (profile == null) {
+                        profile = UserProfile.builder().userId(existingUser.getUserId()).build();
+                    }
+                    profile.setFullName(fullName);
+                    profile.setStudentCode(studentCode);
+                    if (dob != null) profile.setDateOfBirth(dob);
+                    if (gender != null) profile.setGender(gender);
+                    if (phone != null && !phone.isBlank()) profile.setPhone(phone);
+                    userProfileRepository.save(profile);
+
+                    // Ghi danh vào lớp học nếu có
+                    if (enrollStudentToClass(existingUser.getUserId(), effectiveClassCode, defaultClass)) {
                         totalEnrolled++;
                     }
+
+                    totalSkipped++;
+                    itemBuilder.userId(existingUser.getUserId())
+                            .status("SKIPPED")
+                            .message(String.format("Tài khoản sinh viên '%s' đã tồn tại trong hệ thống (đã cập nhật hồ sơ & mật khẩu theo ngày sinh: %s)", username, effectivePassword));
+                    items.add(itemBuilder.build());
+                    continue;
+                }
+
+                // Kiểm tra xung đột trước khi tạo mới
+                if (userRepository.existsByUsername(username)) {
+                    String msg = String.format("Dòng %d: Tên đăng nhập '%s' đã tồn tại cho một người dùng khác.", displayRow, username);
+                    errors.add(msg);
+                    items.add(itemBuilder.status("ERROR").message(msg).build());
+                    totalSkipped++;
                     continue;
                 }
 
                 if (userRepository.existsByEmail(email)) {
                     String msg = String.format("Dòng %d: Email '%s' đã được sử dụng bởi tài khoản khác.", displayRow, email);
-                    warnings.add(msg);
-                    items.add(itemBuilder.status("SKIPPED").message(msg).build());
-                    totalSkipped++;
-                    continue;
-                }
-
-                if (userProfileRepository.existsByStudentCode(studentCode)) {
-                    String msg = String.format("Dòng %d: Mã sinh viên '%s' đã tồn tại trong hồ sơ sinh viên.", displayRow, studentCode);
-                    warnings.add(msg);
-                    items.add(itemBuilder.status("SKIPPED").message(msg).build());
+                    errors.add(msg);
+                    items.add(itemBuilder.status("ERROR").message(msg).build());
                     totalSkipped++;
                     continue;
                 }
@@ -371,7 +420,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 totalCreated++;
                 itemBuilder.userId(savedUser.getUserId())
                         .status("SUCCESS")
-                        .message("Tạo tài khoản thành công");
+                        .message(String.format("Tạo tài khoản thành công (mật khẩu: %s)", effectivePassword));
                 items.add(itemBuilder.build());
             }
 
@@ -419,9 +468,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     private Map<String, Integer> buildColumnMapping(Row headerRow) {
         Map<String, Integer> colMap = new HashMap<>();
         for (int c = 0; c < headerRow.getLastCellNum(); c++) {
-            Cell cell = headerRow.getCell(c);
-            if (cell == null) continue;
-            String headerText = cell.getStringCellValue();
+            String headerText = getCellValue(headerRow, c);
             if (headerText == null || headerText.isBlank()) continue;
 
             String norm = normalizeText(headerText);
@@ -480,8 +527,15 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     private LocalDate parseDate(Row row, Integer colIndex, String dobStr) {
         if (colIndex != null) {
             Cell cell = row.getCell(colIndex);
-            if (cell != null && cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
-                return cell.getLocalDateTimeCellValue().toLocalDate();
+            if (cell != null && cell.getCellType() == CellType.NUMERIC) {
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate();
+                } else if (DateUtil.isValidExcelDate(cell.getNumericCellValue())) {
+                    try {
+                        return DateUtil.getLocalDateTime(cell.getNumericCellValue()).toLocalDate();
+                    } catch (Exception ignored) {
+                    }
+                }
             }
         }
 
