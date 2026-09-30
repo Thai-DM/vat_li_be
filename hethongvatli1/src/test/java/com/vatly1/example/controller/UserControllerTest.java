@@ -521,7 +521,7 @@ class UserControllerTest {
       r1.createCell(2).setCellValue("Đỗ Hoàng Long");
       r1.createCell(3).setCellValue("long.do@student.edu.vn");
       r1.createCell(4).setCellValue("sv_long01");
-      r1.createCell(5).setCellValue("LongPass123");
+      r1.createCell(5).setCellValue("");
       r1.createCell(6).setCellValue("10/10/2004");
       r1.createCell(7).setCellValue("Nam");
       r1.createCell(8).setCellValue("0911223344");
@@ -558,12 +558,12 @@ class UserControllerTest {
         .andExpect(jsonPath("$.data.totalSkipped").value(0))
         .andExpect(jsonPath("$.data.totalEnrolled").value(1));
 
-    // Kiểm tra đăng nhập với tài khoản vừa tạo
-    String studentToken = signinAs("sv_long01", "LongPass123");
+    // Kiểm tra đăng nhập với tài khoản vừa tạo (mật khẩu tự động suy ra 8 số theo ngày sinh: 10/10/2004 -> 10102004)
+    String studentToken = signinAs("sv_long01", "10102004");
     assertTrue(studentToken != null && !studentToken.isBlank());
 
-    // Tài khoản thứ 2 dùng username mặc định là svtest002 và mật khẩu mặc định Vatly1@123
-    String student2Token = signinAs("svtest002", "Vatly1@123");
+    // Tài khoản thứ 2 ngày sinh 25/12/2004 -> mật khẩu 8 số là 25122004
+    String student2Token = signinAs("svtest002", "25122004");
     assertTrue(student2Token != null && !student2Token.isBlank());
 
     // Nạp lại lần 2 -> Kiểm tra tự động phát hiện trùng lặp

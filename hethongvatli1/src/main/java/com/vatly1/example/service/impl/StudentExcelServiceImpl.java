@@ -49,13 +49,20 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
             DateTimeFormatter.ofPattern("dd/MM/yyyy"),
             DateTimeFormatter.ofPattern("d/M/yyyy"),
+            DateTimeFormatter.ofPattern("d/MM/yyyy"),
+            DateTimeFormatter.ofPattern("dd/M/yyyy"),
             DateTimeFormatter.ofPattern("dd-MM-yyyy"),
             DateTimeFormatter.ofPattern("d-M-yyyy"),
+            DateTimeFormatter.ofPattern("d-MM-yyyy"),
+            DateTimeFormatter.ofPattern("dd-M-yyyy"),
             DateTimeFormatter.ofPattern("dd.MM.yyyy"),
             DateTimeFormatter.ofPattern("d.M.yyyy"),
+            DateTimeFormatter.ofPattern("d.MM.yyyy"),
+            DateTimeFormatter.ofPattern("dd.M.yyyy"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd"),
             DateTimeFormatter.ofPattern("yyyy/MM/dd"),
-            DateTimeFormatter.ofPattern("ddMMyyyy")
+            DateTimeFormatter.ofPattern("ddMMyyyy"),
+            DateTimeFormatter.ofPattern("yyyyMMdd")
     );
 
     @Override
@@ -113,9 +120,9 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Dữ liệu mẫu (3 sinh viên)
+            // Dữ liệu mẫu (3 sinh viên) - Cột mật khẩu để trống để hệ thống tự động suy ra 8 số theo ngày sinh
             Object[][] sampleData = {
-                    {1, "SV202601", "Nguyễn Văn An", "an.nguyen@student.edu.vn", "sv_an01", "20082004", "20/08/2004", "Nam", "0987654321", "PHY101-01"},
+                    {1, "SV202601", "Nguyễn Văn An", "an.nguyen@student.edu.vn", "sv_an01", "", "20/08/2004", "Nam", "0987654321", "PHY101-01"},
                     {2, "SV202602", "Trần Thị Bình", "binh.tran@student.edu.vn", "", "", "15/11/2004", "Nữ", "0912345678", "PHY101-01"},
                     {3, "SV202603", "Lê Hùng Cường", "cuong.le@student.edu.vn", "", "", "05/03/2004", "Nam", "0909123456", "PHY101-02"}
             };
@@ -145,7 +152,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
             Row noteRow3 = sheet.createRow(noteStartRow + 2);
             noteRow3.createCell(0).setCellValue("2. Cột 'Tên đăng nhập' nếu để trống sẽ tự động lấy theo Mã sinh viên (chữ thường).");
             Row noteRow4 = sheet.createRow(noteStartRow + 3);
-            noteRow4.createCell(0).setCellValue("3. Cột 'Mật khẩu' nếu để trống sẽ tự động lấy theo ngày sinh dạng ddmmyyyy (ví dụ: sinh ngày 20/08/2004 thì mật khẩu là 20082004).");
+            noteRow4.createCell(0).setCellValue("3. Mật khẩu tài khoản sinh viên được hệ thống tự động suy ra gồm 8 số theo Ngày sinh dạng ddmmyyyy (ví dụ: ngày sinh 20/08/2004 -> mật khẩu là 20082004, ngày sinh 05/03/2004 -> mật khẩu là 05032004). Cột 'Mật khẩu' nên để trống.");
             Row noteRow5 = sheet.createRow(noteStartRow + 4);
             noteRow5.createCell(0).setCellValue("4. Cột 'Mã lớp' nếu điền mã lớp hợp lệ thì sinh viên sẽ được tự động ghi danh vào lớp đó.");
 
@@ -292,14 +299,24 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 itemBuilder.dateOfBirth(dob);
 
                 // Xử lý Mật khẩu:
-                // Yêu cầu: Mật khẩu mặc định sẽ là ngày sinh của sinh viên (định dạng ddmmyyyy, ví dụ: 20082004)
+                // Yêu cầu người dùng: Nhận file Excel có ngày sinh -> Tự động suy ra mật khẩu là 8 số theo ngày sinh (ddMMyyyy)
                 String effectivePassword;
-                if (password != null && !password.isBlank() && !password.trim().equalsIgnoreCase("Vatly1@123")) {
-                    effectivePassword = password.trim();
-                } else if (dob != null) {
+                if (dob != null) {
+                    // Ưu tiên cao nhất: Tự động suy ra 8 chữ số ngày sinh ddMMyyyy (ví dụ: 20/08/2004 -> 20082004, 05/03/2004 -> 05032004)
                     effectivePassword = dob.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
                 } else if (dobStr != null && !dobStr.replaceAll("[^0-9]", "").isBlank()) {
-                    effectivePassword = dobStr.replaceAll("[^0-9]", "");
+                    String cleanDigits = dobStr.replaceAll("[^0-9]", "");
+                    if (cleanDigits.length() == 8) {
+                        effectivePassword = cleanDigits;
+                    } else if (cleanDigits.length() == 7) {
+                        effectivePassword = "0" + cleanDigits;
+                    } else if (cleanDigits.length() >= 8) {
+                        effectivePassword = cleanDigits.substring(0, 8);
+                    } else {
+                        effectivePassword = String.format("%08d", Long.parseLong(cleanDigits));
+                    }
+                } else if (password != null && !password.isBlank() && !password.trim().equalsIgnoreCase("Vatly1@123")) {
+                    effectivePassword = password.trim();
                 } else {
                     effectivePassword = effectiveDefaultPassword;
                 }
