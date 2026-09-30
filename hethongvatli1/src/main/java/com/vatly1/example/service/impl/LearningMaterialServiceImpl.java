@@ -51,6 +51,20 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
     }
 
     @Override
+    public List<LearningMaterialDTO> getAllMaterials(UUID topicId, String role) {
+        if (topicId != null) {
+            return getMaterialsByTopic(topicId, role);
+        }
+        List<LearningMaterial> materials = materialRepository.findAllByOrderByCreatedAtDesc();
+        if ("STUDENT".equals(role)) {
+            materials = materials.stream()
+                    .filter(m -> ApprovalStatus.APPROVED.equals(m.getApprovalStatus()))
+                    .collect(Collectors.toList());
+        }
+        return materials.stream().map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
     public LearningMaterialDTO getMaterialById(UUID materialId, String role) {
         LearningMaterial material = materialRepository.findById(materialId)
                 .orElseThrow(() -> new CustomException("Material not found", HttpStatus.NOT_FOUND));

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -26,11 +27,17 @@ public interface IClassRepository extends JpaRepository<Class, UUID> {
     @Query("SELECT c FROM Class c WHERE c.instructorId = :userId OR c.classId IN (SELECT cs.classId FROM ClassStaff cs WHERE cs.userId = :userId)")
     Page<Class> findByInstructorIdOrStaffUserId(@Param("userId") UUID userId, Pageable pageable);
 
+    @Query("SELECT c.classId FROM Class c WHERE c.instructorId = :userId OR c.classId IN (SELECT cs.classId FROM ClassStaff cs WHERE cs.userId = :userId)")
+    List<UUID> findClassIdsByInstructorIdOrStaffUserId(@Param("userId") UUID userId);
+
     @Query("SELECT c FROM Class c WHERE c.classId IN (SELECT cs.classId FROM ClassStaff cs WHERE cs.userId = :userId)")
     Page<Class> findByStaffUserId(@Param("userId") UUID userId, Pageable pageable);
     
     @Query("SELECT c FROM Class c WHERE c.classId IN (SELECT ce.classId FROM ClassEnrollment ce WHERE ce.studentId = :studentId)")
     Page<Class> findByStudentId(@Param("studentId") UUID studentId, Pageable pageable);
+
+    @Query("SELECT ce.classId FROM ClassEnrollment ce WHERE ce.studentId = :studentId")
+    List<UUID> findEnrolledClassIdsByStudentId(@Param("studentId") UUID studentId);
 
     java.util.Optional<Class> findByClassCode(String classCode);
     boolean existsByClassCode(String classCode);

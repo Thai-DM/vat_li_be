@@ -60,6 +60,11 @@ public class LearningProgressServiceImpl implements ILearningProgressService {
 
     @Override
     public List<LearningProgressDTO> getMyProgress(UUID studentId, UUID classId) {
+        if (classId == null) {
+            return progressRepository.findByStudentId(studentId).stream()
+                    .map(this::mapToDTO)
+                    .collect(Collectors.toList());
+        }
         if (!classRepository.existsById(classId)) {
             throw new CustomException("Class not found", HttpStatus.NOT_FOUND);
         }

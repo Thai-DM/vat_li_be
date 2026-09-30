@@ -12,5 +12,6 @@ import java.util.UUID;
 public interface LearningProgressRepository extends JpaRepository<LearningProgress, UUID> {
     List<LearningProgress> findByClassIdAndStudentId(UUID classId, UUID studentId);
     List<LearningProgress> findByClassId(UUID classId);
+    List<LearningProgress> findByStudentId(UUID studentId);
     Optional<LearningProgress> findByStudentIdAndClassIdAndTopicId(UUID studentId, UUID classId, UUID topicId);
 }

@@ -33,6 +33,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
+
 @Service
 @RequiredArgsConstructor
 public class QuestionBankServiceImpl implements IQuestionBankService {
@@ -45,18 +48,21 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
 
     @Override
     public Page<QuestionBankDTO> getQuestions(UUID subjectId, UUID topicId, DifficultyLevel difficultyLevel, Pageable pageable) {
-        Page<QuestionBank> questions;
+        Specification<QuestionBank> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (subjectId != null) {
+                predicates.add(cb.equal(root.get("subjectId"), subjectId));
+            }
+            if (topicId != null) {
+                predicates.add(cb.equal(root.get("topicId"), topicId));
+            }
+            if (difficultyLevel != null) {
+                predicates.add(cb.equal(root.get("difficultyLevel"), difficultyLevel));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
 
-        if (topicId != null && difficultyLevel != null) {
-            questions = questionBankRepository.findBySubjectIdAndTopicIdAndDifficultyLevel(subjectId, topicId, difficultyLevel, pageable);
-        } else if (topicId != null) {
-            questions = questionBankRepository.findBySubjectIdAndTopicId(subjectId, topicId, pageable);
-        } else if (difficultyLevel != null) {
-            questions = questionBankRepository.findBySubjectIdAndDifficultyLevel(subjectId, difficultyLevel, pageable);
-        } else {
-            questions = questionBankRepository.findBySubjectId(subjectId, pageable);
-        }
-
+        Page<QuestionBank> questions = questionBankRepository.findAll(spec, pageable);
         return questions.map(this::mapToDTO);
     }
 

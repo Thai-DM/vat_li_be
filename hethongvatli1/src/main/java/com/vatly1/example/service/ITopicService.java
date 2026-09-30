@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public interface ITopicService {
     List<TopicDTO> getTopicsBySubject(UUID subjectId);
+    List<TopicDTO> getAllTopics();
     TopicDTO getTopicById(UUID topicId);
     TopicDTO createTopic(CreateTopicDTO dto);
     TopicDTO updateTopic(UUID topicId, CreateTopicDTO dto);

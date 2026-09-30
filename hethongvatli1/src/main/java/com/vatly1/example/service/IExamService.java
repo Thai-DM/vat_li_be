@@ -18,6 +18,7 @@ public interface IExamService {
     int autoGenerateQuestions(UUID examId, UUID instructorId);
     void addQuestionToExam(UUID examId, AddExamQuestionDTO dto, UUID instructorId);
     List<ExamDTO> getExamsByClass(UUID classId, UUID currentUserId, String role);
+    List<ExamDTO> getAllExams(UUID currentUserId, String role);
     ExamDTO getExamById(UUID examId);
     ExamAttemptDTO startAttempt(UUID examId, UUID studentId);
     void submitAnswer(UUID attemptId, SubmitAnswerDTO dto, UUID studentId);

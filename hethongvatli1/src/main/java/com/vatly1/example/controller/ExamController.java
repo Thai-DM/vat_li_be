@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -95,6 +96,27 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Questions generated successfully")
                 .data(Map.of("questionsAdded", added))
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách tất cả kỳ thi", description = "Lấy danh sách kỳ thi, có thể lọc theo lớp (classId) hoặc lấy tất cả kỳ thi mà người dùng có quyền xem.")
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<List<ExamDTO>>> getExams(
+            @RequestParam(required = false) UUID classId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<ExamDTO> exams;
+        if (classId != null) {
+            exams = examService.getExamsByClass(classId, currentUserId, role);
+        } else {
+            exams = examService.getAllExams(currentUserId, role);
+        }
+        return ResponseEntity.ok(ApiResponse.<List<ExamDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(exams)
                 .build());
     }
 

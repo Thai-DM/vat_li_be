@@ -34,11 +34,11 @@ public class QuestionBankController {
 
     private final IQuestionBankService questionBankService;
 
-    @Operation(summary = "Lấy danh sách câu hỏi theo bộ lọc", description = "Tìm kiếm câu hỏi theo môn học, chương mục và độ khó Bloom.")
+    @Operation(summary = "Lấy danh sách câu hỏi theo bộ lọc", description = "Tìm kiếm câu hỏi theo môn học (tùy chọn), chương mục và độ khó Bloom. Không bắt buộc truyền môn học; nếu bỏ trống sẽ lấy tất cả câu hỏi.")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<Page<QuestionBankDTO>>> getQuestions(
-            @RequestParam UUID subjectId,
+            @RequestParam(required = false) UUID subjectId,
             @RequestParam(required = false) UUID topicId,
             @RequestParam(required = false) DifficultyLevel difficultyLevel,
             @RequestParam(defaultValue = "0") int page,

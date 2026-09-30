@@ -27,11 +27,11 @@ public class StudentProgressController {
 
     private final ILearningProgressService progressService;
 
-    @Operation(summary = "Lấy tiến độ học tập của tôi theo lớp", description = "Sinh viên xem danh sách học liệu đã hoàn thành và tiến độ phần trăm theo lớp học.")
+    @Operation(summary = "Lấy tiến độ học tập của tôi", description = "Sinh viên xem danh sách học liệu đã hoàn thành và tiến độ phần trăm. Có thể truyền classId để lọc theo lớp, hoặc bỏ trống để lấy toàn bộ tiến độ của các lớp đã tham gia.")
     @GetMapping
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<LearningProgressDTO>>> getMyProgress(
-            @RequestParam UUID classId,
+            @RequestParam(required = false) UUID classId,
             HttpServletRequest request) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         

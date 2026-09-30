@@ -10,5 +10,6 @@ import java.util.UUID;
 @Repository
 public interface TopicRepository extends JpaRepository<Topic, UUID> {
     List<Topic> findBySubjectIdOrderByOrderIndexAsc(UUID subjectId);
+    List<Topic> findAllByOrderByOrderIndexAsc();
     boolean existsBySubjectIdAndTopicName(UUID subjectId, String topicName);
 }

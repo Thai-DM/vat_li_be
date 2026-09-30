@@ -33,9 +33,9 @@ public class ExperimentController {
 
     private final IExperimentService experimentService;
 
-    @Operation(summary = "Lấy danh sách bài thí nghiệm theo môn học", description = "Trả về danh sách các bài thí nghiệm ảo 3D thuộc môn học.")
+    @Operation(summary = "Lấy danh sách bài thí nghiệm", description = "Trả về danh sách các bài thí nghiệm ảo 3D. Có thể truyền subjectId để lọc theo môn học, hoặc bỏ trống để lấy toàn bộ.")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ExperimentDTO>>> getExperimentsBySubject(@RequestParam UUID subjectId) {
+    public ResponseEntity<ApiResponse<List<ExperimentDTO>>> getExperimentsBySubject(@RequestParam(required = false) UUID subjectId) {
         List<ExperimentDTO> experiments = experimentService.getExperimentsBySubject(subjectId);
         return ResponseEntity.ok(ApiResponse.<List<ExperimentDTO>>builder()
                 .status(HttpStatus.OK.value())

@@ -13,6 +13,7 @@ import java.util.UUID;
 
 public interface IExperimentService {
     List<ExperimentDTO> getExperimentsBySubject(UUID subjectId);
+    List<ExperimentDTO> getAllExperiments();
     ExperimentDTO getExperimentById(UUID experimentId);
     ExperimentDTO createExperiment(CreateExperimentDTO dto);
     

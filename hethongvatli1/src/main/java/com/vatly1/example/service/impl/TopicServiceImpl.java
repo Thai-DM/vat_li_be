@@ -34,6 +34,13 @@ public class TopicServiceImpl implements ITopicService {
     }
 
     @Override
+    public List<TopicDTO> getAllTopics() {
+        return topicRepository.findAllByOrderByOrderIndexAsc().stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public TopicDTO getTopicById(UUID topicId) {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new CustomException("Topic not found", HttpStatus.NOT_FOUND));

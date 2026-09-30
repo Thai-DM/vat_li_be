@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/subjects/{subjectId}/topics")
 @RequiredArgsConstructor
 @Tag(name = "Topic Management", description = "APIs Quản lý chương mục kiến thức Vật lý 1 (Cơ học, Động học, Năng lượng, Va chạm...)")
 @SecurityRequirement(name = "bearerAuth")
@@ -26,8 +25,24 @@ public class TopicController {
 
     private final ITopicService topicService;
 
+    @Operation(summary = "Lấy danh sách tất cả chương mục", description = "Trả về tất cả chương mục kiến thức, có thể lọc theo môn học (subjectId) hoặc bỏ trống để lấy toàn bộ.")
+    @GetMapping("/api/v1/topics")
+    public ResponseEntity<ApiResponse<List<TopicDTO>>> getAllTopics(@RequestParam(required = false) UUID subjectId) {
+        List<TopicDTO> topics;
+        if (subjectId != null) {
+            topics = topicService.getTopicsBySubject(subjectId);
+        } else {
+            topics = topicService.getAllTopics();
+        }
+        return ResponseEntity.ok(ApiResponse.<List<TopicDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(topics)
+                .build());
+    }
+
     @Operation(summary = "Lấy danh sách chương mục theo môn học", description = "Trả về toàn bộ các chương/chủ đề kiến thức thuộc môn học.")
-    @GetMapping
+    @GetMapping("/api/v1/subjects/{subjectId}/topics")
     public ResponseEntity<ApiResponse<List<TopicDTO>>> getTopicsBySubject(@PathVariable UUID subjectId) {
         List<TopicDTO> topics = topicService.getTopicsBySubject(subjectId);
         return ResponseEntity.ok(ApiResponse.<List<TopicDTO>>builder()
@@ -38,9 +53,9 @@ public class TopicController {
     }
 
     @Operation(summary = "Lấy chi tiết chương mục theo ID", description = "Xem thông tin tên, mô tả và thứ tự chương mục.")
-    @GetMapping("/{topicId}")
+    @GetMapping({"/api/v1/subjects/{subjectId}/topics/{topicId}", "/api/v1/topics/{topicId}"})
     public ResponseEntity<ApiResponse<TopicDTO>> getTopicById(
-            @PathVariable UUID subjectId,
+            @PathVariable(required = false) UUID subjectId,
             @PathVariable UUID topicId) {
         TopicDTO topic = topicService.getTopicById(topicId);
         return ResponseEntity.ok(ApiResponse.<TopicDTO>builder()
@@ -51,12 +66,14 @@ public class TopicController {
     }
 
     @Operation(summary = "Tạo chương mục kiến thức mới (Chỉ Admin/Giảng viên)", description = "Thêm chương mục mới vào môn học.")
-    @PostMapping
+    @PostMapping({"/api/v1/subjects/{subjectId}/topics", "/api/v1/topics"})
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<TopicDTO>> createTopic(
-            @PathVariable UUID subjectId,
+            @PathVariable(required = false) UUID subjectId,
             @Valid @RequestBody CreateTopicDTO createTopicDTO) {
-        createTopicDTO.setSubjectId(subjectId);
+        if (subjectId != null) {
+            createTopicDTO.setSubjectId(subjectId);
+        }
         TopicDTO createdTopic = topicService.createTopic(createTopicDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<TopicDTO>builder()
                 .status(HttpStatus.CREATED.value())
@@ -66,13 +83,15 @@ public class TopicController {
     }
 
     @Operation(summary = "Cập nhật thông tin chương mục", description = "Chỉnh sửa tên, mô tả và thứ tự hiển thị của chương mục.")
-    @PutMapping("/{topicId}")
+    @PutMapping({"/api/v1/subjects/{subjectId}/topics/{topicId}", "/api/v1/topics/{topicId}"})
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<TopicDTO>> updateTopic(
-            @PathVariable UUID subjectId,
+            @PathVariable(required = false) UUID subjectId,
             @PathVariable UUID topicId,
             @Valid @RequestBody CreateTopicDTO updateTopicDTO) {
-        updateTopicDTO.setSubjectId(subjectId);
+        if (subjectId != null) {
+            updateTopicDTO.setSubjectId(subjectId);
+        }
         TopicDTO updatedTopic = topicService.updateTopic(topicId, updateTopicDTO);
         return ResponseEntity.ok(ApiResponse.<TopicDTO>builder()
                 .status(HttpStatus.OK.value())
@@ -82,10 +101,10 @@ public class TopicController {
     }
 
     @Operation(summary = "Xóa chương mục kiến thức (Chỉ Admin)", description = "Xóa một chương mục kiến thức khỏi hệ thống.")
-    @DeleteMapping("/{topicId}")
+    @DeleteMapping({"/api/v1/subjects/{subjectId}/topics/{topicId}", "/api/v1/topics/{topicId}"})
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteTopic(
-            @PathVariable UUID subjectId,
+            @PathVariable(required = false) UUID subjectId,
             @PathVariable UUID topicId) {
         topicService.deleteTopic(topicId);
         return ResponseEntity.ok(ApiResponse.<Void>builder()

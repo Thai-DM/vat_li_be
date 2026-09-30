@@ -52,10 +52,20 @@ public class ExperimentServiceImpl implements IExperimentService {
 
     @Override
     public List<ExperimentDTO> getExperimentsBySubject(UUID subjectId) {
+        if (subjectId == null) {
+            return getAllExperiments();
+        }
         if (!subjectRepository.existsById(subjectId)) {
             throw new CustomException("Subject not found", HttpStatus.NOT_FOUND);
         }
         return experimentRepository.findBySubjectIdOrderByOrderIndexAsc(subjectId).stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ExperimentDTO> getAllExperiments() {
+        return experimentRepository.findAllByOrderByOrderIndexAsc().stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }

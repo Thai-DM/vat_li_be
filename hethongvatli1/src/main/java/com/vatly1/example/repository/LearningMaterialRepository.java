@@ -10,6 +10,7 @@ import java.util.UUID;
 @Repository
 public interface LearningMaterialRepository extends JpaRepository<LearningMaterial, UUID> {
     List<LearningMaterial> findByTopicIdOrderByCreatedAtDesc(UUID topicId);
+    List<LearningMaterial> findAllByOrderByCreatedAtDesc();
     List<LearningMaterial> findByTopicIdIn(List<UUID> topicIds);
 
     @org.springframework.data.jpa.repository.Modifying

@@ -228,6 +228,32 @@ public class ExamServiceImpl implements IExamService {
     }
 
     @Override
+    public List<ExamDTO> getAllExams(UUID currentUserId, String role) {
+        if ("ADMIN".equalsIgnoreCase(role)) {
+            return examRepository.findAll().stream()
+                    .map(this::toExamDTO)
+                    .collect(Collectors.toList());
+        } else if ("INSTRUCTOR".equalsIgnoreCase(role) || "TA".equalsIgnoreCase(role)) {
+            List<UUID> classIds = classRepository.findClassIdsByInstructorIdOrStaffUserId(currentUserId);
+            if (classIds.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            return examRepository.findByClassIdIn(classIds).stream()
+                    .map(this::toExamDTO)
+                    .collect(Collectors.toList());
+        } else {
+            // STUDENT
+            List<UUID> classIds = classRepository.findEnrolledClassIdsByStudentId(currentUserId);
+            if (classIds.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            return examRepository.findByClassIdIn(classIds).stream()
+                    .map(this::toExamDTO)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    @Override
     public ExamDTO getExamById(UUID examId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));

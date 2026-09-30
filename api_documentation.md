@@ -9,7 +9,7 @@
 > **Đặc tả OpenAPI 3.0 (JSON):** [`http://localhost:8080/v3/api-docs`](http://localhost:8080/v3/api-docs)  
 > **Giám sát sức khỏe Spring Actuator:** [`http://localhost:8080/actuator/health`](http://localhost:8080/actuator/health) (Public) | `/actuator/**` (Yêu cầu `ROLE_ADMIN`)  
 > **Chính sách tải lên tệp:** Thư mục `uploads`, giới hạn dung lượng tối đa 50MB (`app.file.max-size-mb: 50`)  
-> **Nguyên tắc biên soạn:** Phản ánh 100% hiện trạng source code thực tế (24 Controllers, 102 Data Models [DTOs/Requests/Responses], 20 Enums, 46 Entities, 151 REST Endpoints, 235 Ca Kiểm Thử Tự Động Đạt 100%) — Cam kết chuẩn xác tuyệt đối với mã nguồn.
+> **Nguyên tắc biên soạn:** Phản ánh 100% hiện trạng source code thực tế (24 Controllers, 102 Data Models [DTOs/Requests/Responses], 20 Enums, 46 Entities, 151+ REST Endpoints, 244 Ca Kiểm Thử Tự Động Đạt 100%) — Cam kết chuẩn xác tuyệt đối với mã nguồn.
 
 ---
 
@@ -1122,7 +1122,7 @@ Hệ thống quản lý truy cập theo 4 vai trò chính xác:
 
 | Param | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `subjectId` | UUID | ✓ | Bộ lọc theo môn học |
+| `subjectId` | UUID | | Bộ lọc theo môn học (tùy chọn; nếu bỏ trống sẽ lấy tất cả câu hỏi) |
 | `topicId` | UUID | | Bộ lọc theo chương mục |
 | `difficultyLevel` | DifficultyLevel | | `EASY`, `MEDIUM`, `HARD` |
 | `page` | int | | Mặc định 0 |
@@ -2014,7 +2014,7 @@ Score_10 = (Số câu đúng / Tổng số câu) × 10
 
 | Param | Kiểu | Bắt buộc |
 |---|---|---|
-| `subjectId` | UUID | ✓ |
+| `subjectId` | UUID | | Tùy chọn; nếu bỏ trống sẽ lấy tất cả bài thí nghiệm |
 
 **Response 200:** `List<ExperimentDTO>` (04 bài thí nghiệm ảo 3D Vật lý 1)
 
@@ -2321,7 +2321,7 @@ Score_lab = Σ(điểm_tiêu_chí_i × trọng_số_i)
 
 **Xác thực:** role `STUDENT`
 
-**Query Params:** `classId` (UUID, bắt buộc)
+**Query Params:** `classId` (UUID, tùy chọn; nếu bỏ trống sẽ lấy tiến độ tất cả các lớp)
 
 **Response 200:** `List<LearningProgressDTO>`
 

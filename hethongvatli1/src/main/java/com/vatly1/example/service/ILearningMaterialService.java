@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public interface ILearningMaterialService {
     List<LearningMaterialDTO> getMaterialsByTopic(UUID topicId, String role);
+    List<LearningMaterialDTO> getAllMaterials(UUID topicId, String role);
     LearningMaterialDTO getMaterialById(UUID materialId, String role);
     LearningMaterialDTO createMaterial(CreateLearningMaterialDTO dto, UUID currentUserId);
     LearningMaterialDTO updateMaterial(UUID materialId, CreateLearningMaterialDTO dto, UUID currentUserId, String role);
