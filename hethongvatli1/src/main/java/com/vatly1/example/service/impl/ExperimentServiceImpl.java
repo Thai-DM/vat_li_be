@@ -422,6 +422,7 @@ public class ExperimentServiceImpl implements IExperimentService {
     @Override
     public List<ExperimentSubmissionDTO> getSubmissions(
             UUID assignmentId, UUID experimentId, UUID classId, UUID studentId,
+            UUID instructorId, Boolean myClassesOnly,
             SubmissionStatus status,
             UUID currentUserId, String currentUserRole) {
 
@@ -433,12 +434,35 @@ public class ExperimentServiceImpl implements IExperimentService {
             studentId = currentUserId;
         }
 
+        // Lọc theo giảng viên:
+        // Nếu instructorId được truyền, hoặc myClassesOnly=true, hoặc người gọi là INSTRUCTOR và không chọn lớp/bài giao cụ thể
+        UUID targetInstructorId = instructorId;
+        if (targetInstructorId == null && Boolean.TRUE.equals(myClassesOnly)) {
+            targetInstructorId = currentUserId;
+        }
+        if (targetInstructorId == null && currentUserRole != null && currentUserRole.equalsIgnoreCase("INSTRUCTOR")
+                && assignmentId == null && classId == null && experimentId == null && studentId == null
+                && !Boolean.FALSE.equals(myClassesOnly)) {
+            targetInstructorId = currentUserId;
+        }
+
         List<ExperimentSubmission> list;
 
         if (assignmentId != null) {
             list = experimentSubmissionRepository.findByAssignmentId(assignmentId);
         } else if (classId != null) {
             List<ExperimentAssignment> assignments = experimentAssignmentRepository.findByClassId(classId);
+            if (assignments.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<UUID> assignIds = assignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toList());
+            list = experimentSubmissionRepository.findByAssignmentIdIn(assignIds);
+        } else if (targetInstructorId != null) {
+            List<UUID> classIds = classRepository.findClassIdsByInstructorIdOrStaffUserId(targetInstructorId);
+            if (classIds.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<ExperimentAssignment> assignments = experimentAssignmentRepository.findByClassIdIn(classIds);
             if (assignments.isEmpty()) {
                 return java.util.Collections.emptyList();
             }
@@ -460,6 +484,11 @@ public class ExperimentServiceImpl implements IExperimentService {
         }
 
         // Áp dụng các bộ lọc kết hợp bổ sung nếu truyền nhiều param cùng lúc
+        if (experimentId != null && (classId != null || targetInstructorId != null)) {
+            List<ExperimentAssignment> expAssignments = experimentAssignmentRepository.findByExperimentId(experimentId);
+            java.util.Set<UUID> expAssignIds = expAssignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toSet());
+            list = list.stream().filter(s -> expAssignIds.contains(s.getAssignmentId())).collect(Collectors.toList());
+        }
         if (studentId != null) {
             UUID finalStudentId = studentId;
             list = list.stream().filter(s -> finalStudentId.equals(s.getStudentId())).collect(Collectors.toList());

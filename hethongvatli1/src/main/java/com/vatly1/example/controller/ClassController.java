@@ -37,6 +37,7 @@ public class ClassController {
     private final IClassEnrollmentService enrollmentService;
     private final ILogService logService;
     private final com.vatly1.example.service.IStudentExcelService studentExcelService;
+    private final com.vatly1.example.service.IExperimentService experimentService;
 
     // --- CLASS MANAGEMENT ---
 
@@ -210,5 +211,21 @@ public class ClassController {
         StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, id);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(result, "Nhập danh sách sinh viên vào lớp thành công"));
+    }
+
+    @Operation(summary = "Lấy danh sách bài nộp thí nghiệm của lớp học", description = "Dành cho Giảng viên phụ trách, Trợ giảng và Admin xem danh sách bài nộp thí nghiệm ảo của sinh viên trong lớp học phần.")
+    @GetMapping({"/{id}/experiment-submissions", "/{id}/submissions"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
+    public ResponseEntity<ApiResponse<List<ExperimentSubmissionDTO>>> getClassExperimentSubmissions(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @RequestParam(required = false) UUID experimentId,
+            @RequestParam(required = false) UUID assignmentId,
+            @RequestParam(required = false) UUID studentId,
+            @RequestParam(required = false) com.vatly1.example.entity.enums.SubmissionStatus status) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(assignmentId, experimentId, id, studentId, null, null, status, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.success(list));
     }
 }

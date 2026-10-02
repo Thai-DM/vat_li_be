@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.*;
 
 import com.vatly1.example.app.JwtAuthServiceApp;
+import com.vatly1.example.entity.ExperimentAssignment;
 import com.vatly1.example.entity.ExperimentSubmission;
 import com.vatly1.example.entity.enums.SubmissionStatus;
 import com.vatly1.example.repository.ExperimentConfirmationRepository;
@@ -717,5 +718,50 @@ public class ExperimentControllerTest {
         mockMvc.perform(get("/api/v1/experiments/submissions/" + UUID.randomUUID())
                         .header("Authorization", "Bearer " + taToken))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("EXP-19: Giảng viên (INSTRUCTOR) lấy danh sách bài nộp GET /submissions và GET /{experimentId}/submissions")
+    void getSubmissions_asInstructor_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+        ExperimentSubmission sub = experimentSubmissionRepository.findById(UUID.fromString(subId)).orElseThrow();
+        ExperimentAssignment assign = experimentAssignmentRepository.findById(sub.getAssignmentId()).orElseThrow();
+        UUID expId = assign.getExperimentId();
+
+        // 1. Giảng viên gọi GET /api/v1/experiments/submissions -> 200 OK
+        mockMvc.perform(get("/api/v1/experiments/submissions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data").isArray());
+
+        // 2. Giảng viên gọi GET /api/v1/experiments/{experimentId}/submissions -> 200 OK
+        mockMvc.perform(get("/api/v1/experiments/" + expId + "/submissions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].submissionId").value(subId));
+    }
+
+    @Test
+    @DisplayName("EXP-20: Giảng viên (INSTRUCTOR) lấy danh sách bài nộp theo lớp học GET /api/v1/classes/{id}/experiment-submissions")
+    void getClassExperimentSubmissions_asInstructor_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+        ExperimentSubmission sub = experimentSubmissionRepository.findById(UUID.fromString(subId)).orElseThrow();
+        ExperimentAssignment assign = experimentAssignmentRepository.findById(sub.getAssignmentId()).orElseThrow();
+        UUID classUuid = assign.getClassId();
+
+        // Giảng viên gọi GET /api/v1/classes/{classId}/experiment-submissions
+        mockMvc.perform(get("/api/v1/classes/" + classUuid + "/experiment-submissions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].submissionId").value(subId));
+
+        // Alias: GET /api/v1/classes/{classId}/submissions
+        mockMvc.perform(get("/api/v1/classes/" + classUuid + "/submissions")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
     }
 }

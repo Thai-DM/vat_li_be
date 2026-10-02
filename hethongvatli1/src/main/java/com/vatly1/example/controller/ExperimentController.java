@@ -107,7 +107,7 @@ public class ExperimentController {
     }
 
     @Operation(summary = "Lấy danh sách bài nộp thí nghiệm",
-            description = "Dành cho Trợ giảng (TA), Giảng viên và Quản trị viên tra cứu danh sách bài nộp thí nghiệm. Hỗ trợ lọc theo assignmentId, experimentId, classId, studentId, status.")
+            description = "Dành cho Giảng viên (INSTRUCTOR), Trợ giảng (TA) và Quản trị viên tra cứu danh sách bài nộp thí nghiệm. Hỗ trợ lọc theo assignmentId, experimentId, classId, studentId, instructorId, myClassesOnly, status. Giảng viên gọi mặc định sẽ nhận danh sách bài nộp thuộc các lớp mình phụ trách.")
     @GetMapping("/submissions")
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
     public ResponseEntity<ApiResponse<List<ExperimentSubmissionDTO>>> getSubmissions(
@@ -115,12 +115,14 @@ public class ExperimentController {
             @Parameter(description = "ID bài thí nghiệm (tùy chọn)") @RequestParam(required = false) UUID experimentId,
             @Parameter(description = "ID lớp học (tùy chọn)") @RequestParam(required = false) UUID classId,
             @Parameter(description = "ID sinh viên (tùy chọn)") @RequestParam(required = false) UUID studentId,
+            @Parameter(description = "ID giảng viên phụ trách (tùy chọn)") @RequestParam(required = false) UUID instructorId,
+            @Parameter(description = "Chỉ lấy các lớp do tôi phụ trách (mặc định true đối với Giảng viên)") @RequestParam(required = false) Boolean myClassesOnly,
             @Parameter(description = "Trạng thái bài nộp (PENDING, GRADED, CONFIRMED,...) (tùy chọn)") @RequestParam(required = false) SubmissionStatus status,
             HttpServletRequest request) {
         String attrId = (String) request.getAttribute("userId");
         String role = (String) request.getAttribute("role");
         UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
-        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(assignmentId, experimentId, classId, studentId, status, currentUserId, role);
+        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(assignmentId, experimentId, classId, studentId, instructorId, myClassesOnly, status, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.<List<ExperimentSubmissionDTO>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")
@@ -129,7 +131,7 @@ public class ExperimentController {
     }
 
     @Operation(summary = "Lấy danh sách bài nộp theo đợt giao bài thí nghiệm",
-            description = "Dành cho Trợ giảng (TA), Giảng viên lấy toàn bộ bài nộp của một đợt giao bài thí nghiệm.")
+            description = "Dành cho Giảng viên, Trợ giảng (TA) lấy toàn bộ bài nộp của một đợt giao bài thí nghiệm.")
     @GetMapping("/assignments/{assignmentId}/submissions")
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
     public ResponseEntity<ApiResponse<List<ExperimentSubmissionDTO>>> getSubmissionsByAssignment(
@@ -139,7 +141,27 @@ public class ExperimentController {
         String attrId = (String) request.getAttribute("userId");
         String role = (String) request.getAttribute("role");
         UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
-        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(assignmentId, null, null, null, status, currentUserId, role);
+        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(assignmentId, null, null, null, null, null, status, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<ExperimentSubmissionDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(list)
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách bài nộp của một bài thí nghiệm cụ thể",
+            description = "Dành cho Giảng viên (INSTRUCTOR), Trợ giảng (TA) tra cứu bài nộp theo bài thí nghiệm cụ thể.")
+    @GetMapping("/{experimentId}/submissions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<List<ExperimentSubmissionDTO>>> getSubmissionsByExperiment(
+            @Parameter(description = "ID bài thí nghiệm") @PathVariable UUID experimentId,
+            @Parameter(description = "ID lớp học (tùy chọn)") @RequestParam(required = false) UUID classId,
+            @Parameter(description = "Trạng thái bài nộp (tùy chọn)") @RequestParam(required = false) SubmissionStatus status,
+            HttpServletRequest request) {
+        String attrId = (String) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
+        List<ExperimentSubmissionDTO> list = experimentService.getSubmissions(null, experimentId, classId, null, null, null, status, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.<List<ExperimentSubmissionDTO>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")

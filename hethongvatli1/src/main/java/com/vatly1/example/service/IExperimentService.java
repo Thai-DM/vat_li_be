@@ -29,6 +29,7 @@ public interface IExperimentService {
 
     List<com.vatly1.example.model.dto.ExperimentSubmissionDTO> getSubmissions(
             UUID assignmentId, UUID experimentId, UUID classId, UUID studentId,
+            UUID instructorId, Boolean myClassesOnly,
             com.vatly1.example.entity.enums.SubmissionStatus status,
             UUID currentUserId, String currentUserRole);
     com.vatly1.example.model.dto.ExperimentSubmissionDTO getSubmissionById(UUID submissionId, UUID currentUserId, String currentUserRole);
