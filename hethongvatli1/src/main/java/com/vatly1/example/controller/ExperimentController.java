@@ -8,8 +8,12 @@ import com.vatly1.example.model.dto.ExperimentAssignmentDTO;
 import com.vatly1.example.model.dto.ExperimentDTO;
 import com.vatly1.example.model.request.GradeSubmissionDTO;
 import com.vatly1.example.model.request.SubmitExperimentDTO;
+import com.vatly1.example.model.dto.SubmissionRubricDTO;
+import com.vatly1.example.model.dto.SubmissionRubricSummaryDTO;
+import com.vatly1.example.entity.ExperimentRubric;
 import com.vatly1.example.service.IExperimentService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -114,6 +118,75 @@ public class ExperimentController {
                 .status(HttpStatus.OK.value())
                 .message("Score saved successfully")
                 .data(null)
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách tiêu chí Rubric và điểm số của bài nộp thí nghiệm",
+            description = "Dành cho Giảng viên / Trợ giảng (TA) tra cứu tiêu chí Rubric và điểm số đã chấm của bài nộp. Hỗ trợ query param rubricId tùy chọn để lọc tiêu chí cụ thể.")
+    @GetMapping({"/submissions/{submissionId}/rubrics", "/submissions/{submissionId}/scores"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<List<SubmissionRubricDTO>>> getSubmissionRubrics(
+            @Parameter(description = "ID bài nộp thí nghiệm") @PathVariable UUID submissionId,
+            @Parameter(description = "ID tiêu chí Rubric (tùy chọn)") @RequestParam(required = false) UUID rubricId,
+            HttpServletRequest request) {
+        String attrId = (String) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
+        List<SubmissionRubricDTO> result = experimentService.getSubmissionRubrics(submissionId, rubricId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<SubmissionRubricDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Lấy chi tiết một tiêu chí Rubric cụ thể của bài nộp",
+            description = "Dành cho Giảng viên / Trợ giảng (TA) tra cứu chi tiết một tiêu chí Rubric và điểm số tương ứng theo rubricId.")
+    @GetMapping({"/submissions/{submissionId}/rubrics/{rubricId}", "/submissions/{submissionId}/scores/{rubricId}"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<SubmissionRubricDTO>> getSubmissionRubricById(
+            @Parameter(description = "ID bài nộp thí nghiệm") @PathVariable UUID submissionId,
+            @Parameter(description = "ID tiêu chí Rubric") @PathVariable UUID rubricId,
+            HttpServletRequest request) {
+        String attrId = (String) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
+        SubmissionRubricDTO result = experimentService.getSubmissionRubricById(submissionId, rubricId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<SubmissionRubricDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Lấy tổng hợp điểm Rubric của bài nộp thí nghiệm",
+            description = "Dành cho Giảng viên / Trợ giảng (TA) xem tổng điểm đã chấm, tổng điểm tối đa và toàn bộ danh sách tiêu chí Rubric.")
+    @GetMapping("/submissions/{submissionId}/rubric-summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<SubmissionRubricSummaryDTO>> getSubmissionRubricSummary(
+            @Parameter(description = "ID bài nộp thí nghiệm") @PathVariable UUID submissionId,
+            HttpServletRequest request) {
+        String attrId = (String) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        UUID currentUserId = attrId != null ? UUID.fromString(attrId) : null;
+        SubmissionRubricSummaryDTO result = experimentService.getSubmissionRubricSummary(submissionId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<SubmissionRubricSummaryDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách tiêu chí Rubric theo ID bài thí nghiệm",
+            description = "Xem danh sách các tiêu chí Rubric đánh giá của một bài thí nghiệm ảo.")
+    @GetMapping("/{experimentId}/rubrics")
+    public ResponseEntity<ApiResponse<List<ExperimentRubric>>> getRubricsByExperimentId(
+            @Parameter(description = "ID bài thí nghiệm") @PathVariable UUID experimentId) {
+        List<ExperimentRubric> result = experimentService.getRubricsByExperimentId(experimentId);
+        return ResponseEntity.ok(ApiResponse.<List<ExperimentRubric>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(result)
                 .build());
     }
 

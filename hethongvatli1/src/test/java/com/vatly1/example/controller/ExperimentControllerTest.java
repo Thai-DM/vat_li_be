@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.*;
 
 import com.vatly1.example.app.JwtAuthServiceApp;
 import com.vatly1.example.entity.ExperimentSubmission;
@@ -44,9 +45,23 @@ public class ExperimentControllerTest {
     @Autowired
     private ExperimentConfirmationRepository experimentConfirmationRepository;
 
+    @Autowired
+    private com.vatly1.example.repository.ExperimentRepository experimentRepository;
+
+    @Autowired
+    private com.vatly1.example.repository.ExperimentRubricRepository experimentRubricRepository;
+
+    @Autowired
+    private com.vatly1.example.repository.ExperimentAssignmentRepository experimentAssignmentRepository;
+
+    @Autowired
+    private com.vatly1.example.repository.IUserRepository userRepository;
+
     private String adminToken;
     private String instructorToken;
+    private String taToken;
     private String studentToken;
+    private String studentBinhToken;
     private String subjectId;
     private String classId;
     private String experimentId;
@@ -55,7 +70,9 @@ public class ExperimentControllerTest {
     void setUp() throws Exception {
         adminToken = signin("admin", "admin123456");
         instructorToken = signin("gv_nguyen", "gv_nguyen123456");
+        taToken = signin("ta_hung", "ta_hung123456");
         studentToken = signin("sv_an", "sv_an123456");
+        studentBinhToken = signin("sv_binh", "sv_binh123456");
 
         String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=1")
                 .header("Authorization", "Bearer " + adminToken))
@@ -401,4 +418,214 @@ public class ExperimentControllerTest {
         Assertions.assertTrue(simUrls.stream().anyMatch(u -> u.contains("rotational-inertia-3d")));
         Assertions.assertTrue(simUrls.stream().anyMatch(u -> u.contains("air-track-collision-3d")));
     }
-}
+
+    private String createSubmissionForSeededExperiment() throws Exception {
+        com.vatly1.example.entity.Experiment exp = experimentRepository.save(com.vatly1.example.entity.Experiment.builder()
+                .subjectId(UUID.fromString(subjectId))
+                .title("Thí nghiệm test rubric " + UUID.randomUUID())
+                .description("Mô tả test rubric")
+                .orderIndex(99)
+                .build());
+
+        experimentRubricRepository.save(com.vatly1.example.entity.ExperimentRubric.builder()
+                .experimentId(exp.getExperimentId())
+                .criteriaName("Thao tác cài đặt & thu thập số liệu")
+                .maxScore(new java.math.BigDecimal("3.00"))
+                .description("Lắp ráp đúng mô hình")
+                .build());
+
+        experimentRubricRepository.save(com.vatly1.example.entity.ExperimentRubric.builder()
+                .experimentId(exp.getExperimentId())
+                .criteriaName("Xử lý số liệu, vẽ đồ thị")
+                .maxScore(new java.math.BigDecimal("3.00"))
+                .description("Tính sai số và vẽ đồ thị")
+                .build());
+
+        experimentRubricRepository.save(com.vatly1.example.entity.ExperimentRubric.builder()
+                .experimentId(exp.getExperimentId())
+                .criteriaName("Phân tích kết quả")
+                .maxScore(new java.math.BigDecimal("4.00"))
+                .description("Phân tích nguyên nhân sai số")
+                .build());
+
+        com.vatly1.example.entity.ExperimentAssignment assignment = experimentAssignmentRepository.save(com.vatly1.example.entity.ExperimentAssignment.builder()
+                .experimentId(exp.getExperimentId())
+                .classId(UUID.fromString(classId))
+                .assignedBy(userRepository.findByUsername("admin").getUserId())
+                .dueDate(Instant.now().plusSeconds(86400 * 7))
+                .createdAt(Instant.now())
+                .build());
+
+        ExperimentSubmission submission = experimentSubmissionRepository.save(ExperimentSubmission.builder()
+                .assignmentId(assignment.getAssignmentId())
+                .studentId(userRepository.findByUsername("sv_an").getUserId())
+                .evidenceUrl("https://storage.example.com/test.png")
+                .status(SubmissionStatus.PENDING)
+                .submittedAt(Instant.now())
+                .build());
+
+        return submission.getSubmissionId().toString();
+    }
+
+    @Test
+    @DisplayName("EXP-11: TA lấy danh sách Rubric theo submissionId thành công (GET /rubrics và GET /scores)")
+    void getSubmissionRubrics_asTA_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // TA gọi GET /api/v1/experiments/submissions/{submissionId}/rubrics
+        String rubricsRes = mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(3))))
+                .andExpect(jsonPath("$.data[0].rubricId").exists())
+                .andExpect(jsonPath("$.data[0].criteriaName").exists())
+                .andExpect(jsonPath("$.data[0].maxScore").exists())
+                .andExpect(jsonPath("$.data[0].isGraded").value(false))
+                .andReturn().getResponse().getContentAsString();
+
+        // TA gọi alias GET /api/v1/experiments/submissions/{submissionId}/scores
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/scores")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("EXP-12: TA lấy Rubric cụ thể theo query param (?rubricId=) và path variable (/{rubricId})")
+    void getSubmissionRubric_withRubricId_asTA_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // Lấy danh sách rubric trước
+        String rubricsRes = mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        com.fasterxml.jackson.databind.JsonNode list = objectMapper.readTree(rubricsRes).get("data");
+        String targetRubricId = list.get(0).get("rubricId").asText();
+
+        // 1. Thử lọc bằng query param ?rubricId=...
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics?rubricId=" + targetRubricId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].rubricId").value(targetRubricId));
+
+        // 2. Thử gọi trực tiếp bằng path variable /{rubricId}
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics/" + targetRubricId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rubricId").value(targetRubricId))
+                .andExpect(jsonPath("$.data.criteriaName").exists());
+
+        // 3. Thử path variable alias /scores/{rubricId}
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/scores/" + targetRubricId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rubricId").value(targetRubricId));
+    }
+
+    @Test
+    @DisplayName("EXP-13: TA chấm điểm tiêu chí Rubric (POST /scores) và đọc lại điểm số (GET /rubrics/{rubricId})")
+    void gradeSubmission_asTA_andVerifyRetrieval_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // Lấy rubricId
+        String rubricsRes = mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.JsonNode list = objectMapper.readTree(rubricsRes).get("data");
+        String targetRubricId = list.get(0).get("rubricId").asText();
+
+        // TA chấm điểm cho tiêu chí này: 2.5 điểm, feedback "Thao tác đo rất chuẩn"
+        String gradeBody = """
+            {
+                "rubricId": "%s",
+                "score": 2.5,
+                "feedback": "Thao tác đo rất chuẩn",
+                "comment": "Thao tác đo rất chuẩn"
+            }
+            """.formatted(targetRubricId);
+
+        mockMvc.perform(post("/api/v1/experiments/submissions/" + subId + "/scores")
+                        .header("Authorization", "Bearer " + taToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(gradeBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Score saved successfully"));
+
+        // TA đọc lại rubric vừa chấm
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics/" + targetRubricId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rubricId").value(targetRubricId))
+                .andExpect(jsonPath("$.data.score").value(2.5))
+                .andExpect(jsonPath("$.data.feedback").value("Thao tác đo rất chuẩn"))
+                .andExpect(jsonPath("$.data.isGraded").value(true));
+
+        // Kiểm tra tổng hợp rubric summary
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubric-summary")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalScore").value(2.5))
+                .andExpect(jsonPath("$.data.status").value("GRADED"));
+    }
+
+    @Test
+    @DisplayName("EXP-14: Sinh viên chính chủ xem được rubric bài nộp, sinh viên khác bị từ chối 403 Forbidden")
+    void getSubmissionRubrics_studentPermissions_verified() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // Sinh viên chính chủ (sv_an) xem bài nộp của mình -> 200 OK
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        // Sinh viên khác (sv_binh) cố xem bài nộp của sv_an -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + studentBinhToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("EXP-15: Chấm điểm vượt quá max_score bị từ chối 400, tra cứu submission không tồn tại trả về 404")
+    void rubricValidation_errorsHandled() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // Lấy rubricId
+        String rubricsRes = mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.JsonNode list = objectMapper.readTree(rubricsRes).get("data");
+        String targetRubricId = list.get(0).get("rubricId").asText();
+
+        // Chấm điểm vượt quá max_score (ví dụ 999.0)
+        String invalidScoreBody = """
+            {
+                "rubricId": "%s",
+                "score": 999.0
+            }
+            """.formatted(targetRubricId);
+
+        mockMvc.perform(post("/api/v1/experiments/submissions/" + subId + "/scores")
+                        .header("Authorization", "Bearer " + taToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidScoreBody))
+                .andExpect(status().isBadRequest());
+
+        // Tra cứu submissionId không tồn tại -> 404
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + UUID.randomUUID() + "/rubrics")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isNotFound());
+
+        // Tra cứu rubricId không tồn tại -> 404
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isNotFound());
+    }
+}

@@ -50,6 +50,7 @@ public class JwtAuthServiceApp implements CommandLineRunner {
   private final IClassStaffRepository classStaffRepository;
   private final IClassEnrollmentRepository classEnrollmentRepository;
   private final com.vatly1.example.repository.ExperimentRepository experimentRepository;
+  private final com.vatly1.example.repository.ExperimentRubricRepository experimentRubricRepository;
   private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   public static void main(String[] args) {
@@ -296,5 +297,31 @@ public class JwtAuthServiceApp implements CommandLineRunner {
         System.err.println("SEED EXPERIMENTS NOTE: " + e.getMessage());
       }
     }
+
+    // Ensure all PHY101 experiments have their rubrics seeded in experiment_rubrics
+    try {
+      java.util.List<Experiment> allExps = experimentRepository.findBySubjectIdOrderByOrderIndexAsc(phy101.getSubjectId());
+      for (Experiment exp : allExps) {
+        if (experimentRubricRepository.findByExperimentId(exp.getExperimentId()).isEmpty()
+            && exp.getSceneAssetsJson() != null && exp.getSceneAssetsJson().has("rubric")) {
+          com.fasterxml.jackson.databind.JsonNode rubricArray = exp.getSceneAssetsJson().get("rubric");
+          if (rubricArray != null && rubricArray.isArray()) {
+            for (com.fasterxml.jackson.databind.JsonNode node : rubricArray) {
+              String criteria = node.has("criteria") ? node.get("criteria").asText() : "";
+              java.math.BigDecimal maxScore = node.has("max_score") ? java.math.BigDecimal.valueOf(node.get("max_score").asDouble()) : java.math.BigDecimal.TEN;
+              String desc = node.has("description") ? node.get("description").asText() : criteria;
+              experimentRubricRepository.save(com.vatly1.example.entity.ExperimentRubric.builder()
+                  .experimentId(exp.getExperimentId())
+                  .criteriaName(criteria)
+                  .maxScore(maxScore)
+                  .description(desc)
+                  .build());
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      System.err.println("SEED RUBRICS SYNC NOTE: " + e.getMessage());
+    }
   }
-}
+}

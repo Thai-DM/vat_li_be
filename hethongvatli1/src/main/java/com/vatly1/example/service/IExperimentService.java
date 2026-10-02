@@ -21,4 +21,9 @@ public interface IExperimentService {
     void submitExperiment(UUID assignmentId, SubmitExperimentDTO dto, UUID studentId);
     void gradeSubmission(UUID submissionId, GradeSubmissionDTO scoreDTO, UUID graderId);
     void confirmSubmission(UUID submissionId, String note, UUID instructorId);
+
+    List<com.vatly1.example.model.dto.SubmissionRubricDTO> getSubmissionRubrics(UUID submissionId, UUID rubricId, UUID currentUserId, String currentUserRole);
+    com.vatly1.example.model.dto.SubmissionRubricDTO getSubmissionRubricById(UUID submissionId, UUID rubricId, UUID currentUserId, String currentUserRole);
+    com.vatly1.example.model.dto.SubmissionRubricSummaryDTO getSubmissionRubricSummary(UUID submissionId, UUID currentUserId, String currentUserRole);
+    List<com.vatly1.example.entity.ExperimentRubric> getRubricsByExperimentId(UUID experimentId);
 }

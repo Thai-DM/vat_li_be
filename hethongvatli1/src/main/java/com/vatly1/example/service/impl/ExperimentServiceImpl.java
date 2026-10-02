@@ -19,7 +19,13 @@ import com.vatly1.example.repository.ExperimentSubmissionRepository;
 import com.vatly1.example.repository.FileUploadRepository;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
 import com.vatly1.example.entity.ExperimentConfirmation;
+import com.vatly1.example.entity.ExperimentRubric;
+import com.vatly1.example.entity.ExperimentScore;
+import com.vatly1.example.model.dto.SubmissionRubricDTO;
+import com.vatly1.example.model.dto.SubmissionRubricSummaryDTO;
 import com.vatly1.example.repository.ExperimentConfirmationRepository;
+import com.vatly1.example.repository.ExperimentRubricRepository;
+import com.vatly1.example.repository.ExperimentScoreRepository;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.ISubjectRepository;
 import com.vatly1.example.service.IExperimentService;
@@ -49,6 +55,8 @@ public class ExperimentServiceImpl implements IExperimentService {
     private final IFileStorageService fileStorageService;
     private final IClassEnrollmentRepository enrollmentRepository;
     private final com.vatly1.example.service.INotificationService notificationService;
+    private final ExperimentRubricRepository experimentRubricRepository;
+    private final ExperimentScoreRepository experimentScoreRepository;
 
     @Override
     public List<ExperimentDTO> getExperimentsBySubject(UUID subjectId) {
@@ -182,8 +190,193 @@ public class ExperimentServiceImpl implements IExperimentService {
             throw new CustomException("Bài nộp đã được xác nhận kết quả trước đó, không thể sửa đổi", HttpStatus.BAD_REQUEST);
         }
 
+        if (scoreDTO != null && scoreDTO.getRubricId() != null) {
+            if (submission.getAssignmentId() != null) {
+                ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId()).orElse(null);
+                if (assignment != null) {
+                    Experiment experiment = experimentRepository.findById(assignment.getExperimentId()).orElse(null);
+                    if (experiment != null) {
+                        syncRubricsFromSceneAssets(experiment);
+                    }
+                }
+            }
+
+            ExperimentRubric rubric = experimentRubricRepository.findById(scoreDTO.getRubricId()).orElse(null);
+
+            if (scoreDTO.getScore() != null) {
+                if (scoreDTO.getScore().compareTo(java.math.BigDecimal.ZERO) < 0) {
+                    throw new CustomException("Điểm số không được nhỏ hơn 0", HttpStatus.BAD_REQUEST);
+                }
+                if (rubric != null && rubric.getMaxScore() != null && scoreDTO.getScore().compareTo(rubric.getMaxScore()) > 0) {
+                    throw new CustomException("Điểm chấm (" + scoreDTO.getScore() + ") vượt quá điểm tối đa của tiêu chí (" + rubric.getMaxScore() + ")", HttpStatus.BAD_REQUEST);
+                }
+            }
+
+            String finalComment = scoreDTO.getComment() != null ? scoreDTO.getComment() : scoreDTO.getFeedback();
+
+            ExperimentScore score = experimentScoreRepository
+                    .findBySubmissionIdAndRubricId(submissionId, scoreDTO.getRubricId())
+                    .orElse(null);
+
+            if (score == null) {
+                score = ExperimentScore.builder()
+                        .submissionId(submissionId)
+                        .rubricId(scoreDTO.getRubricId())
+                        .score(scoreDTO.getScore() != null ? scoreDTO.getScore() : java.math.BigDecimal.ZERO)
+                        .graderId(graderId)
+                        .gradedAt(Instant.now())
+                        .comment(finalComment)
+                        .build();
+            } else {
+                if (scoreDTO.getScore() != null) {
+                    score.setScore(scoreDTO.getScore());
+                }
+                score.setGraderId(graderId);
+                score.setGradedAt(Instant.now());
+                if (finalComment != null) {
+                    score.setComment(finalComment);
+                }
+            }
+            experimentScoreRepository.save(score);
+        }
+
         submission.setStatus(SubmissionStatus.GRADED);
         experimentSubmissionRepository.save(submission);
+    }
+
+    @Override
+    public List<SubmissionRubricDTO> getSubmissionRubrics(UUID submissionId, UUID rubricId, UUID currentUserId, String currentUserRole) {
+        ExperimentSubmission submission = experimentSubmissionRepository.findById(submissionId)
+                .orElseThrow(() -> new CustomException("Bài nộp không tồn tại", HttpStatus.NOT_FOUND));
+
+        if (currentUserRole != null && currentUserRole.equalsIgnoreCase("STUDENT")) {
+            if (currentUserId == null || !currentUserId.equals(submission.getStudentId())) {
+                throw new CustomException("Bạn không có quyền xem tiêu chí của bài nộp này", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy đợt giao bài thí nghiệm", HttpStatus.NOT_FOUND));
+
+        Experiment experiment = experimentRepository.findById(assignment.getExperimentId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy bài thí nghiệm", HttpStatus.NOT_FOUND));
+
+        syncRubricsFromSceneAssets(experiment);
+
+        List<ExperimentRubric> rubrics = experimentRubricRepository.findByExperimentId(experiment.getExperimentId());
+
+        List<ExperimentScore> scores = experimentScoreRepository.findBySubmissionId(submissionId);
+        java.util.Map<UUID, ExperimentScore> scoreMap = scores.stream()
+                .collect(Collectors.toMap(ExperimentScore::getRubricId, java.util.function.Function.identity(), (a, b) -> a));
+
+        List<SubmissionRubricDTO> list = rubrics.stream().map(r -> {
+            ExperimentScore s = scoreMap.get(r.getRubricId());
+            boolean isGraded = (s != null && s.getScore() != null);
+            return SubmissionRubricDTO.builder()
+                    .rubricId(r.getRubricId())
+                    .experimentId(r.getExperimentId())
+                    .criteriaName(r.getCriteriaName())
+                    .maxScore(r.getMaxScore())
+                    .description(r.getDescription())
+                    .submissionId(submissionId)
+                    .scoreId(s != null ? s.getScoreId() : null)
+                    .score(s != null ? s.getScore() : null)
+                    .comment(s != null ? s.getComment() : null)
+                    .feedback(s != null ? s.getComment() : null)
+                    .graderId(s != null ? s.getGraderId() : null)
+                    .gradedAt(s != null ? s.getGradedAt() : null)
+                    .isGraded(isGraded)
+                    .build();
+        }).collect(Collectors.toList());
+
+        if (rubricId != null) {
+            List<SubmissionRubricDTO> filtered = list.stream()
+                    .filter(dto -> dto.getRubricId().equals(rubricId))
+                    .collect(Collectors.toList());
+            if (filtered.isEmpty()) {
+                throw new CustomException("Không tìm thấy tiêu chí Rubric với ID: " + rubricId, HttpStatus.NOT_FOUND);
+            }
+            return filtered;
+        }
+
+        return list;
+    }
+
+    @Override
+    public SubmissionRubricDTO getSubmissionRubricById(UUID submissionId, UUID rubricId, UUID currentUserId, String currentUserRole) {
+        if (rubricId == null) {
+            throw new CustomException("rubricId không được để trống", HttpStatus.BAD_REQUEST);
+        }
+        List<SubmissionRubricDTO> list = getSubmissionRubrics(submissionId, rubricId, currentUserId, currentUserRole);
+        if (list.isEmpty()) {
+            throw new CustomException("Không tìm thấy tiêu chí Rubric với ID: " + rubricId, HttpStatus.NOT_FOUND);
+        }
+        return list.get(0);
+    }
+
+    @Override
+    public SubmissionRubricSummaryDTO getSubmissionRubricSummary(UUID submissionId, UUID currentUserId, String currentUserRole) {
+        ExperimentSubmission submission = experimentSubmissionRepository.findById(submissionId)
+                .orElseThrow(() -> new CustomException("Bài nộp không tồn tại", HttpStatus.NOT_FOUND));
+
+        ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy đợt giao bài thí nghiệm", HttpStatus.NOT_FOUND));
+
+        Experiment experiment = experimentRepository.findById(assignment.getExperimentId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy bài thí nghiệm", HttpStatus.NOT_FOUND));
+
+        List<SubmissionRubricDTO> rubrics = getSubmissionRubrics(submissionId, null, currentUserId, currentUserRole);
+
+        java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal totalMaxScore = java.math.BigDecimal.ZERO;
+        for (SubmissionRubricDTO r : rubrics) {
+            if (r.getMaxScore() != null) {
+                totalMaxScore = totalMaxScore.add(r.getMaxScore());
+            }
+            if (r.getScore() != null) {
+                totalScore = totalScore.add(r.getScore());
+            }
+        }
+
+        return SubmissionRubricSummaryDTO.builder()
+                .submissionId(submissionId)
+                .experimentId(experiment.getExperimentId())
+                .experimentTitle(experiment.getTitle())
+                .studentId(submission.getStudentId())
+                .status(submission.getStatus() != null ? submission.getStatus().name() : null)
+                .totalScore(totalScore)
+                .totalMaxScore(totalMaxScore)
+                .rubrics(rubrics)
+                .build();
+    }
+
+    @Override
+    public List<ExperimentRubric> getRubricsByExperimentId(UUID experimentId) {
+        Experiment experiment = experimentRepository.findById(experimentId)
+                .orElseThrow(() -> new CustomException("Không tìm thấy bài thí nghiệm", HttpStatus.NOT_FOUND));
+        syncRubricsFromSceneAssets(experiment);
+        return experimentRubricRepository.findByExperimentId(experimentId);
+    }
+
+    private void syncRubricsFromSceneAssets(Experiment experiment) {
+        if (experiment == null || experiment.getExperimentId() == null) return;
+        if (!experimentRubricRepository.findByExperimentId(experiment.getExperimentId()).isEmpty()) return;
+        if (experiment.getSceneAssetsJson() != null && experiment.getSceneAssetsJson().has("rubric")) {
+            com.fasterxml.jackson.databind.JsonNode rubricArray = experiment.getSceneAssetsJson().get("rubric");
+            if (rubricArray != null && rubricArray.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : rubricArray) {
+                    String criteria = node.has("criteria") ? node.get("criteria").asText() : "";
+                    java.math.BigDecimal maxScore = node.has("max_score") ? java.math.BigDecimal.valueOf(node.get("max_score").asDouble()) : java.math.BigDecimal.TEN;
+                    String desc = node.has("description") ? node.get("description").asText() : criteria;
+                    experimentRubricRepository.save(ExperimentRubric.builder()
+                            .experimentId(experiment.getExperimentId())
+                            .criteriaName(criteria)
+                            .maxScore(maxScore)
+                            .description(desc)
+                            .build());
+                }
+            }
+        }
     }
 
     @Override
