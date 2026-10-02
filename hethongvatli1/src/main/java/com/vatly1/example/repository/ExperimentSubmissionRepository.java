@@ -12,4 +12,6 @@ public interface ExperimentSubmissionRepository extends JpaRepository<Experiment
     List<ExperimentSubmission> findByAssignmentIdAndStudentId(UUID assignmentId, UUID studentId);
     List<ExperimentSubmission> findByAssignmentId(UUID assignmentId);
     List<ExperimentSubmission> findByStudentId(UUID studentId);
+    List<ExperimentSubmission> findByAssignmentIdIn(java.util.Collection<UUID> assignmentIds);
+    List<ExperimentSubmission> findByStatus(com.vatly1.example.entity.enums.SubmissionStatus status);
 }

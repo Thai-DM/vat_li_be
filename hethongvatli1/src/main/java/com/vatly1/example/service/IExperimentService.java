@@ -26,4 +26,10 @@ public interface IExperimentService {
     com.vatly1.example.model.dto.SubmissionRubricDTO getSubmissionRubricById(UUID submissionId, UUID rubricId, UUID currentUserId, String currentUserRole);
     com.vatly1.example.model.dto.SubmissionRubricSummaryDTO getSubmissionRubricSummary(UUID submissionId, UUID currentUserId, String currentUserRole);
     List<com.vatly1.example.entity.ExperimentRubric> getRubricsByExperimentId(UUID experimentId);
+
+    List<com.vatly1.example.model.dto.ExperimentSubmissionDTO> getSubmissions(
+            UUID assignmentId, UUID experimentId, UUID classId, UUID studentId,
+            com.vatly1.example.entity.enums.SubmissionStatus status,
+            UUID currentUserId, String currentUserRole);
+    com.vatly1.example.model.dto.ExperimentSubmissionDTO getSubmissionById(UUID submissionId, UUID currentUserId, String currentUserRole);
 }

@@ -28,6 +28,9 @@ import com.vatly1.example.repository.ExperimentRubricRepository;
 import com.vatly1.example.repository.ExperimentScoreRepository;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.ISubjectRepository;
+import com.vatly1.example.repository.IUserRepository;
+import com.vatly1.example.repository.IUserProfileRepository;
+import com.vatly1.example.model.dto.ExperimentSubmissionDTO;
 import com.vatly1.example.service.IExperimentService;
 import com.vatly1.example.service.IFileStorageService;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +60,8 @@ public class ExperimentServiceImpl implements IExperimentService {
     private final com.vatly1.example.service.INotificationService notificationService;
     private final ExperimentRubricRepository experimentRubricRepository;
     private final ExperimentScoreRepository experimentScoreRepository;
+    private final IUserRepository userRepository;
+    private final IUserProfileRepository userProfileRepository;
 
     @Override
     public List<ExperimentDTO> getExperimentsBySubject(UUID subjectId) {
@@ -412,6 +417,180 @@ public class ExperimentServiceImpl implements IExperimentService {
         } catch (DataIntegrityViolationException e) {
             throw new CustomException("Bài nộp đã được xác nhận kết quả trước đó, không thể sửa đổi", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    @Override
+    public List<ExperimentSubmissionDTO> getSubmissions(
+            UUID assignmentId, UUID experimentId, UUID classId, UUID studentId,
+            SubmissionStatus status,
+            UUID currentUserId, String currentUserRole) {
+
+        // Phân quyền: Nếu là STUDENT, chỉ được xem bài nộp của chính mình
+        if (currentUserRole != null && currentUserRole.equalsIgnoreCase("STUDENT")) {
+            if (studentId != null && !studentId.equals(currentUserId)) {
+                throw new CustomException("Bạn không có quyền xem bài nộp của sinh viên khác", HttpStatus.FORBIDDEN);
+            }
+            studentId = currentUserId;
+        }
+
+        List<ExperimentSubmission> list;
+
+        if (assignmentId != null) {
+            list = experimentSubmissionRepository.findByAssignmentId(assignmentId);
+        } else if (classId != null) {
+            List<ExperimentAssignment> assignments = experimentAssignmentRepository.findByClassId(classId);
+            if (assignments.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<UUID> assignIds = assignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toList());
+            list = experimentSubmissionRepository.findByAssignmentIdIn(assignIds);
+        } else if (experimentId != null) {
+            List<ExperimentAssignment> assignments = experimentAssignmentRepository.findByExperimentId(experimentId);
+            if (assignments.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<UUID> assignIds = assignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toList());
+            list = experimentSubmissionRepository.findByAssignmentIdIn(assignIds);
+        } else if (studentId != null) {
+            list = experimentSubmissionRepository.findByStudentId(studentId);
+        } else if (status != null) {
+            list = experimentSubmissionRepository.findByStatus(status);
+        } else {
+            list = experimentSubmissionRepository.findAll();
+        }
+
+        // Áp dụng các bộ lọc kết hợp bổ sung nếu truyền nhiều param cùng lúc
+        if (studentId != null) {
+            UUID finalStudentId = studentId;
+            list = list.stream().filter(s -> finalStudentId.equals(s.getStudentId())).collect(Collectors.toList());
+        }
+        if (status != null) {
+            list = list.stream().filter(s -> status == s.getStatus()).collect(Collectors.toList());
+        }
+        if (assignmentId != null) {
+            UUID finalAssignId = assignmentId;
+            list = list.stream().filter(s -> finalAssignId.equals(s.getAssignmentId())).collect(Collectors.toList());
+        }
+
+        // Sắp xếp bài nộp mới nhất lên đầu
+        list.sort(java.util.Comparator.comparing(
+                ExperimentSubmission::getSubmittedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())
+        ));
+
+        return list.stream()
+                .map(sub -> mapToSubmissionDTO(sub, false, currentUserId, currentUserRole))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ExperimentSubmissionDTO getSubmissionById(UUID submissionId, UUID currentUserId, String currentUserRole) {
+        ExperimentSubmission submission = experimentSubmissionRepository.findById(submissionId)
+                .orElseThrow(() -> new CustomException("Bài nộp không tồn tại", HttpStatus.NOT_FOUND));
+
+        if (currentUserRole != null && currentUserRole.equalsIgnoreCase("STUDENT")) {
+            if (currentUserId == null || !currentUserId.equals(submission.getStudentId())) {
+                throw new CustomException("Bạn không có quyền xem bài nộp này", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        return mapToSubmissionDTO(submission, true, currentUserId, currentUserRole);
+    }
+
+    private ExperimentSubmissionDTO mapToSubmissionDTO(
+            ExperimentSubmission submission, boolean includeRubrics,
+            UUID currentUserId, String currentUserRole) {
+
+        ExperimentSubmissionDTO dto = ExperimentSubmissionDTO.builder()
+                .submissionId(submission.getSubmissionId())
+                .assignmentId(submission.getAssignmentId())
+                .studentId(submission.getStudentId())
+                .submittedAt(submission.getSubmittedAt())
+                .evidenceUrl(submission.getEvidenceUrl())
+                .fileId(submission.getFileId())
+                .rawDataJson(submission.getRawDataJson())
+                .status(submission.getStatus())
+                .build();
+
+        // Thông tin sinh viên
+        if (submission.getStudentId() != null) {
+            userRepository.findById(submission.getStudentId()).ifPresent(u -> {
+                dto.setStudentUsername(u.getUsername());
+                dto.setStudentEmail(u.getEmail());
+            });
+            userProfileRepository.findById(submission.getStudentId()).ifPresent(p -> {
+                dto.setStudentFullName(p.getFullName());
+                dto.setStudentCode(p.getStudentCode());
+            });
+        }
+
+        // Thông tin bài giao, lớp học, thí nghiệm
+        if (submission.getAssignmentId() != null) {
+            experimentAssignmentRepository.findById(submission.getAssignmentId()).ifPresent(assign -> {
+                dto.setClassId(assign.getClassId());
+                dto.setDueDate(assign.getDueDate());
+                dto.setExperimentId(assign.getExperimentId());
+
+                if (assign.getClassId() != null) {
+                    classRepository.findById(assign.getClassId()).ifPresent(c -> {
+                        dto.setClassCode(c.getClassCode());
+                    });
+                }
+
+                if (assign.getExperimentId() != null) {
+                    experimentRepository.findById(assign.getExperimentId()).ifPresent(exp -> {
+                        dto.setExperimentTitle(exp.getTitle());
+                    });
+                }
+            });
+        }
+
+        // Điểm số và số lượng Rubric
+        List<ExperimentScore> scores = experimentScoreRepository.findBySubmissionId(submission.getSubmissionId());
+        java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
+        int gradedCount = 0;
+        for (ExperimentScore s : scores) {
+            if (s.getScore() != null) {
+                totalScore = totalScore.add(s.getScore());
+                gradedCount++;
+            }
+        }
+        dto.setTotalScore(scores.isEmpty() ? null : totalScore);
+        dto.setGradedRubricCount(gradedCount);
+        dto.setIsGraded(submission.getStatus() == SubmissionStatus.GRADED
+                || submission.getStatus() == SubmissionStatus.CONFIRMED
+                || !scores.isEmpty());
+
+        if (dto.getExperimentId() != null) {
+            List<ExperimentRubric> rubrics = experimentRubricRepository.findByExperimentId(dto.getExperimentId());
+            dto.setTotalRubricCount(rubrics.size());
+            java.math.BigDecimal maxScore = rubrics.stream()
+                    .map(ExperimentRubric::getMaxScore)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            dto.setTotalMaxScore(maxScore);
+        }
+
+        // Thông tin xác nhận kết quả
+        experimentConfirmationRepository.findBySubmissionId(submission.getSubmissionId()).ifPresent(conf -> {
+            dto.setIsConfirmed(true);
+            dto.setConfirmedBy(conf.getInstructorId());
+            dto.setConfirmedAt(conf.getConfirmedAt());
+            dto.setConfirmNote(conf.getNote());
+        });
+        if (dto.getIsConfirmed() == null) {
+            dto.setIsConfirmed(submission.getStatus() == SubmissionStatus.CONFIRMED);
+        }
+
+        if (includeRubrics) {
+            try {
+                dto.setRubrics(getSubmissionRubrics(submission.getSubmissionId(), null, currentUserId, currentUserRole));
+            } catch (Exception ignored) {
+                dto.setRubrics(java.util.Collections.emptyList());
+            }
+        }
+
+        return dto;
     }
 
     private ExperimentDTO mapToDTO(Experiment experiment) {

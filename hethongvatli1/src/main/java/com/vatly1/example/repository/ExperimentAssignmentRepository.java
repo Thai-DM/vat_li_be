@@ -10,5 +10,6 @@ import java.util.UUID;
 @Repository
 public interface ExperimentAssignmentRepository extends JpaRepository<ExperimentAssignment, UUID> {
     List<ExperimentAssignment> findByClassId(UUID classId);
+    List<ExperimentAssignment> findByExperimentId(UUID experimentId);
     boolean existsByExperimentIdAndClassId(UUID experimentId, UUID classId);
 }

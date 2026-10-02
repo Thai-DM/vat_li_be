@@ -628,4 +628,94 @@ public class ExperimentControllerTest {
                         .header("Authorization", "Bearer " + taToken))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("EXP-16: TA lấy danh sách bài nộp GET /api/v1/experiments/submissions thành công")
+    void getSubmissions_asTA_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        String res = mockMvc.perform(get("/api/v1/experiments/submissions")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data").isArray())
+                .andReturn().getResponse().getContentAsString();
+
+        com.fasterxml.jackson.databind.JsonNode data = objectMapper.readTree(res).get("data");
+        Assertions.assertTrue(data.size() > 0);
+
+        // Tìm bài nộp vừa tạo
+        boolean found = false;
+        for (com.fasterxml.jackson.databind.JsonNode item : data) {
+            if (subId.equals(item.get("submissionId").asText())) {
+                found = true;
+                Assertions.assertEquals("sv_an", item.get("studentUsername").asText());
+                Assertions.assertNotNull(item.get("experimentTitle"));
+                Assertions.assertEquals("PENDING", item.get("status").asText());
+                Assertions.assertEquals(3, item.get("totalRubricCount").asInt());
+                Assertions.assertEquals(10.0, item.get("totalMaxScore").asDouble(), 0.01);
+                break;
+            }
+        }
+        Assertions.assertTrue(found, "Bài nộp vừa tạo phải có trong danh sách bài nộp của TA");
+    }
+
+    @Test
+    @DisplayName("EXP-17: TA lọc bài nộp theo assignmentId, classId, status hoặc gọi /assignments/{id}/submissions")
+    void getSubmissions_withFilters_andByAssignment_success() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+        ExperimentSubmission sub = experimentSubmissionRepository.findById(UUID.fromString(subId)).orElseThrow();
+        UUID assignmentId = sub.getAssignmentId();
+
+        // 1. Lọc qua query param ?assignmentId
+        mockMvc.perform(get("/api/v1/experiments/submissions?assignmentId=" + assignmentId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].submissionId").value(subId));
+
+        // 2. Gọi endpoint chuyên biệt /assignments/{assignmentId}/submissions
+        mockMvc.perform(get("/api/v1/experiments/assignments/" + assignmentId + "/submissions")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].submissionId").value(subId));
+
+        // 3. Lọc theo status=PENDING
+        mockMvc.perform(get("/api/v1/experiments/submissions?status=PENDING")
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("EXP-18: TA và Sinh viên xem chi tiết bài nộp GET /submissions/{id}, sinh viên khác bị 403")
+    void getSubmissionById_success_andRBAC() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // 1. TA xem chi tiết bài nộp -> 200 OK kèm toàn bộ rubrics
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId)
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.submissionId").value(subId))
+                .andExpect(jsonPath("$.data.studentUsername").value("sv_an"))
+                .andExpect(jsonPath("$.data.rubrics").isArray())
+                .andExpect(jsonPath("$.data.rubrics.length()").value(3));
+
+        // 2. Sinh viên chủ bài nộp (sv_an) xem chi tiết -> 200 OK
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.submissionId").value(subId));
+
+        // 3. Sinh viên khác (sv_binh) cố xem bài nộp của sv_an -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId)
+                        .header("Authorization", "Bearer " + studentBinhToken))
+                .andExpect(status().isForbidden());
+
+        // 4. Tra cứu submissionId không tồn tại -> 404 Not Found
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + taToken))
+                .andExpect(status().isNotFound());
+    }
 }
