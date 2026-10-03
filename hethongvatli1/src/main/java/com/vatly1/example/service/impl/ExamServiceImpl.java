@@ -695,8 +695,12 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         checkExamOwnership(exam, instructorId);
 
-        if (examAttemptRepository.countByExamId(examId) > 0) {
-            throw new CustomException("Cannot delete exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        // Xóa các lượt làm bài (attempts) và câu trả lời (answers) liên quan đến bài thi
+        List<ExamAttempt> attempts = examAttemptRepository.findByExamId(examId);
+        if (!attempts.isEmpty()) {
+            List<UUID> attemptIds = attempts.stream().map(ExamAttempt::getAttemptId).collect(Collectors.toList());
+            examAnswerRepository.deleteByAttemptIdIn(attemptIds);
+            examAttemptRepository.deleteByExamId(examId);
         }
 
         examQuestionRepository.deleteByExamId(examId);

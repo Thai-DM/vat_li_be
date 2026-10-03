@@ -40,4 +40,8 @@ public interface IExamAttemptRepository extends JpaRepository<ExamAttempt, UUID>
     List<ExamAttempt> findByExamIdAndStudentIdOrderByAttemptNumberAsc(UUID examId, UUID studentId);
 
     boolean existsByExamIdAndStudentId(UUID examId, UUID studentId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM ExamAttempt a WHERE a.examId = :examId")
+    void deleteByExamId(@Param("examId") UUID examId);
 }

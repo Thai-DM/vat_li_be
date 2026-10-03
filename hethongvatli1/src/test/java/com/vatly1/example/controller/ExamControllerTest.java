@@ -11,6 +11,7 @@ import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.repository.IClassRepository;
+import com.vatly1.example.repository.IExamAnswerRepository;
 import com.vatly1.example.repository.IExamAttemptRepository;
 import com.vatly1.example.repository.IUserRepository;
 import com.vatly1.example.repository.QuestionBankRepository;
@@ -67,6 +68,9 @@ public class ExamControllerTest {
 
     @Autowired
     private IExamAttemptRepository examAttemptRepository;
+
+    @Autowired
+    private IExamAnswerRepository examAnswerRepository;
 
     @Autowired
     private IClassRepository classRepository;
@@ -910,8 +914,8 @@ public class ExamControllerTest {
     }
 
     @Test
-    @DisplayName("EXAM-23: Từ chối xóa đề thi hoặc gỡ câu hỏi khi đã có sinh viên làm bài")
-    void testExam23_CannotDeleteExamOrRemoveQuestionWhenAttemptsExist() throws Exception {
+    @DisplayName("EXAM-23: Từ chối gỡ câu hỏi nhưng cho phép xóa bài thi khi đã có sinh viên làm bài")
+    void testExam23_CannotRemoveQuestionWhenAttemptsExist_ButCanDeleteExam() throws Exception {
         String examId = createExamHelper(instructorToken, classId, "Đề thi đã có sinh viên làm bài", null, null);
 
         String qPayload = """
@@ -927,20 +931,32 @@ public class ExamControllerTest {
                         .content(qPayload))
                 .andExpect(status().isOk());
 
-        // Sinh viên bắt đầu làm bài
-        mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
+        // Sinh viên bắt đầu làm bài và nộp câu trả lời
+        String attRes = mockMvc.perform(post("/api/v1/exams/" + examId + "/attempts")
                         .header("Authorization", "Bearer " + studentToken))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String attemptId = objectMapper.readTree(attRes).get("data").get("attemptId").asText();
 
-        // Cố gắng gỡ câu hỏi khỏi đề -> 400
+        // Cố gắng gỡ câu hỏi khỏi đề khi đã có lượt thi -> 400 Bad Request
         mockMvc.perform(delete("/api/v1/exams/" + examId + "/questions/" + questionId)
                         .header("Authorization", "Bearer " + instructorToken))
                 .andExpect(status().isBadRequest());
 
-        // Cố gắng xóa đề thi -> 400
+        // Giảng viên xóa bài thi đã có sinh viên làm -> Thành công 200 OK
         mockMvc.perform(delete("/api/v1/exams/" + examId)
                         .header("Authorization", "Bearer " + instructorToken))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Exam deleted successfully"));
+
+        // Xác nhận bài thi không còn tồn tại
+        mockMvc.perform(get("/api/v1/exams/" + examId)
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isNotFound());
+
+        // Xác nhận toàn bộ lượt làm bài (attempts) và câu trả lời (answers) của đề thi đã được cascade xóa sạch
+        Assertions.assertEquals(0, examAttemptRepository.countByExamId(UUID.fromString(examId)));
+        Assertions.assertEquals(0, examAnswerRepository.findByAttemptId(UUID.fromString(attemptId)).size());
     }
 
     @Test
