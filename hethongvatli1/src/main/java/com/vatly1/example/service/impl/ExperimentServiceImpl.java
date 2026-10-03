@@ -17,7 +17,9 @@ import com.vatly1.example.repository.ExperimentAssignmentRepository;
 import com.vatly1.example.repository.ExperimentRepository;
 import com.vatly1.example.repository.ExperimentSubmissionRepository;
 import com.vatly1.example.repository.FileUploadRepository;
+import com.vatly1.example.entity.Class;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
+import com.vatly1.example.repository.IClassStaffRepository;
 import com.vatly1.example.entity.ExperimentConfirmation;
 import com.vatly1.example.entity.ExperimentRubric;
 import com.vatly1.example.entity.ExperimentScore;
@@ -54,6 +56,7 @@ public class ExperimentServiceImpl implements IExperimentService {
     private final ExperimentConfirmationRepository experimentConfirmationRepository;
     private final ISubjectRepository subjectRepository;
     private final IClassRepository classRepository;
+    private final IClassStaffRepository classStaffRepository;
     private final FileUploadRepository fileUploadRepository;
     private final IFileStorageService fileStorageService;
     private final IClassEnrollmentRepository enrollmentRepository;
@@ -110,14 +113,47 @@ public class ExperimentServiceImpl implements IExperimentService {
         return mapToDTO(experiment);
     }
 
+    private void validateClassAccessForStaffOrInstructor(UUID classId, UUID currentUserId, String currentUserRole, String message) {
+        if (currentUserRole == null || currentUserRole.equalsIgnoreCase("ADMIN")) {
+            return;
+        }
+        if (classId == null || currentUserId == null) {
+            return;
+        }
+        if (currentUserRole.equalsIgnoreCase("INSTRUCTOR") || currentUserRole.equalsIgnoreCase("TA")) {
+            Class clazz = classRepository.findById(classId)
+                    .orElseThrow(() -> new CustomException("Không tìm thấy lớp học", HttpStatus.NOT_FOUND));
+            boolean isOwner = clazz.getInstructorId() != null && clazz.getInstructorId().equals(currentUserId);
+            boolean isStaff = classStaffRepository.existsByClassIdAndUserId(classId, currentUserId);
+            if (!isOwner && !isStaff) {
+                throw new CustomException(
+                        message != null ? message : "Bạn không có quyền truy cập bài nộp của lớp học này",
+                        HttpStatus.FORBIDDEN
+                );
+            }
+        }
+    }
+
     @Override
     public ExperimentAssignmentDTO assignExperiment(UUID experimentId, CreateExperimentAssignmentDTO dto, UUID assignedBy) {
         if (!experimentRepository.existsById(experimentId)) {
             throw new CustomException("Experiment not found", HttpStatus.NOT_FOUND);
         }
-        if (!classRepository.existsById(dto.getClassId())) {
-            throw new CustomException("Class not found", HttpStatus.NOT_FOUND);
+        Class clazz = classRepository.findById(dto.getClassId())
+                .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
+
+        if (assignedBy != null) {
+            userRepository.findById(assignedBy).ifPresent(user -> {
+                if (user.getRole() != com.vatly1.example.entity.enums.UserRole.ADMIN) {
+                    boolean isOwner = clazz.getInstructorId() != null && clazz.getInstructorId().equals(assignedBy);
+                    boolean isStaff = classStaffRepository.existsByClassIdAndUserId(dto.getClassId(), assignedBy);
+                    if (!isOwner && !isStaff) {
+                        throw new CustomException("Bạn không có quyền giao bài cho lớp học này", HttpStatus.FORBIDDEN);
+                    }
+                }
+            });
         }
+
         if (experimentAssignmentRepository.existsByExperimentIdAndClassId(experimentId, dto.getClassId())) {
             throw new CustomException("Experiment already assigned to this class", HttpStatus.BAD_REQUEST);
         }
@@ -195,6 +231,20 @@ public class ExperimentServiceImpl implements IExperimentService {
             throw new CustomException("Bài nộp đã được xác nhận kết quả trước đó, không thể sửa đổi", HttpStatus.BAD_REQUEST);
         }
 
+        if (graderId != null && submission.getAssignmentId() != null) {
+            userRepository.findById(graderId).ifPresent(grader -> {
+                if (grader.getRole() != com.vatly1.example.entity.enums.UserRole.ADMIN) {
+                    ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId()).orElse(null);
+                    if (assignment != null && assignment.getClassId() != null) {
+                        validateClassAccessForStaffOrInstructor(
+                                assignment.getClassId(), graderId, grader.getRole().name(),
+                                "Bạn không có quyền chấm bài nộp của lớp học này"
+                        );
+                    }
+                }
+            });
+        }
+
         if (scoreDTO != null && scoreDTO.getRubricId() != null) {
             if (submission.getAssignmentId() != null) {
                 ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId()).orElse(null);
@@ -262,6 +312,15 @@ public class ExperimentServiceImpl implements IExperimentService {
 
         ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId())
                 .orElseThrow(() -> new CustomException("Không tìm thấy đợt giao bài thí nghiệm", HttpStatus.NOT_FOUND));
+
+        if (currentUserRole != null && (currentUserRole.equalsIgnoreCase("INSTRUCTOR") || currentUserRole.equalsIgnoreCase("TA"))) {
+            if (assignment.getClassId() != null) {
+                validateClassAccessForStaffOrInstructor(
+                        assignment.getClassId(), currentUserId, currentUserRole,
+                        "Bạn không có quyền xem tiêu chí của bài nộp này"
+                );
+            }
+        }
 
         Experiment experiment = experimentRepository.findById(assignment.getExperimentId())
                 .orElseThrow(() -> new CustomException("Không tìm thấy bài thí nghiệm", HttpStatus.NOT_FOUND));
@@ -394,6 +453,23 @@ public class ExperimentServiceImpl implements IExperimentService {
             throw new CustomException("Bài nộp đã được xác nhận kết quả trước đó, không thể sửa đổi", HttpStatus.BAD_REQUEST);
         }
 
+        if (instructorId != null && submission.getAssignmentId() != null) {
+            userRepository.findById(instructorId).ifPresent(user -> {
+                if (user.getRole() != com.vatly1.example.entity.enums.UserRole.ADMIN) {
+                    ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId()).orElse(null);
+                    if (assignment != null && assignment.getClassId() != null) {
+                        Class clazz = classRepository.findById(assignment.getClassId()).orElse(null);
+                        if (clazz != null) {
+                            boolean isOwner = clazz.getInstructorId() != null && clazz.getInstructorId().equals(instructorId);
+                            if (!isOwner) {
+                                throw new CustomException("Bạn không có quyền xác nhận bài nộp của lớp học này", HttpStatus.FORBIDDEN);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         submission.setStatus(SubmissionStatus.CONFIRMED);
         experimentSubmissionRepository.save(submission);
 
@@ -434,16 +510,27 @@ public class ExperimentServiceImpl implements IExperimentService {
             studentId = currentUserId;
         }
 
-        // Lọc theo giảng viên:
-        // Nếu instructorId được truyền, hoặc myClassesOnly=true, hoặc người gọi là INSTRUCTOR và không chọn lớp/bài giao cụ thể
-        UUID targetInstructorId = instructorId;
-        if (targetInstructorId == null && Boolean.TRUE.equals(myClassesOnly)) {
-            targetInstructorId = currentUserId;
-        }
-        if (targetInstructorId == null && currentUserRole != null && currentUserRole.equalsIgnoreCase("INSTRUCTOR")
-                && assignmentId == null && classId == null && experimentId == null && studentId == null
-                && !Boolean.FALSE.equals(myClassesOnly)) {
-            targetInstructorId = currentUserId;
+        boolean isStaffOrInstructor = currentUserRole != null
+                && (currentUserRole.equalsIgnoreCase("INSTRUCTOR") || currentUserRole.equalsIgnoreCase("TA"));
+
+        if (isStaffOrInstructor) {
+            // Không được truyền instructorId của giảng viên khác
+            if (instructorId != null && currentUserId != null && !instructorId.equals(currentUserId)) {
+                throw new CustomException("Bạn không có quyền xem bài nộp của giảng viên khác", HttpStatus.FORBIDDEN);
+            }
+
+            // Nếu truyền classId cụ thể -> Kiểm tra quyền phụ trách lớp
+            if (classId != null) {
+                validateClassAccessForStaffOrInstructor(classId, currentUserId, currentUserRole, "Bạn không có quyền truy cập bài nộp của lớp học này");
+            }
+
+            // Nếu truyền assignmentId cụ thể -> Kiểm tra quyền phụ trách lớp của bài giao đó
+            if (assignmentId != null) {
+                ExperimentAssignment assign = experimentAssignmentRepository.findById(assignmentId).orElse(null);
+                if (assign != null && assign.getClassId() != null) {
+                    validateClassAccessForStaffOrInstructor(assign.getClassId(), currentUserId, currentUserRole, "Bạn không có quyền truy cập bài nộp của lớp học này");
+                }
+            }
         }
 
         List<ExperimentSubmission> list;
@@ -457,8 +544,28 @@ public class ExperimentServiceImpl implements IExperimentService {
             }
             List<UUID> assignIds = assignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toList());
             list = experimentSubmissionRepository.findByAssignmentIdIn(assignIds);
-        } else if (targetInstructorId != null) {
-            List<UUID> classIds = classRepository.findClassIdsByInstructorIdOrStaffUserId(targetInstructorId);
+        } else if (isStaffOrInstructor) {
+            // Giảng viên hoặc Trợ giảng khi không chỉ định classId/assignmentId
+            // BẮT BUỘC chỉ được lấy bài nộp thuộc các lớp mình phụ trách / hỗ trợ giảng dạy
+            List<UUID> myClassIds = classRepository.findClassIdsByInstructorIdOrStaffUserId(currentUserId);
+            if (myClassIds.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<ExperimentAssignment> assignments;
+            if (experimentId != null) {
+                assignments = experimentAssignmentRepository.findByExperimentId(experimentId).stream()
+                        .filter(a -> a.getClassId() != null && myClassIds.contains(a.getClassId()))
+                        .collect(Collectors.toList());
+            } else {
+                assignments = experimentAssignmentRepository.findByClassIdIn(myClassIds);
+            }
+            if (assignments.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<UUID> assignIds = assignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toList());
+            list = experimentSubmissionRepository.findByAssignmentIdIn(assignIds);
+        } else if (instructorId != null) {
+            List<UUID> classIds = classRepository.findClassIdsByInstructorIdOrStaffUserId(instructorId);
             if (classIds.isEmpty()) {
                 return java.util.Collections.emptyList();
             }
@@ -484,7 +591,7 @@ public class ExperimentServiceImpl implements IExperimentService {
         }
 
         // Áp dụng các bộ lọc kết hợp bổ sung nếu truyền nhiều param cùng lúc
-        if (experimentId != null && (classId != null || targetInstructorId != null)) {
+        if (experimentId != null && classId != null) {
             List<ExperimentAssignment> expAssignments = experimentAssignmentRepository.findByExperimentId(experimentId);
             java.util.Set<UUID> expAssignIds = expAssignments.stream().map(ExperimentAssignment::getAssignmentId).collect(Collectors.toSet());
             list = list.stream().filter(s -> expAssignIds.contains(s.getAssignmentId())).collect(Collectors.toList());
@@ -520,6 +627,18 @@ public class ExperimentServiceImpl implements IExperimentService {
         if (currentUserRole != null && currentUserRole.equalsIgnoreCase("STUDENT")) {
             if (currentUserId == null || !currentUserId.equals(submission.getStudentId())) {
                 throw new CustomException("Bạn không có quyền xem bài nộp này", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        if (currentUserRole != null && (currentUserRole.equalsIgnoreCase("INSTRUCTOR") || currentUserRole.equalsIgnoreCase("TA"))) {
+            if (submission.getAssignmentId() != null) {
+                ExperimentAssignment assignment = experimentAssignmentRepository.findById(submission.getAssignmentId()).orElse(null);
+                if (assignment != null && assignment.getClassId() != null) {
+                    validateClassAccessForStaffOrInstructor(
+                            assignment.getClassId(), currentUserId, currentUserRole,
+                            "Bạn không có quyền xem bài nộp của lớp học này"
+                    );
+                }
             }
         }
 

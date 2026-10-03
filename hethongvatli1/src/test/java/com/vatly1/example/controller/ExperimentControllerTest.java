@@ -80,11 +80,20 @@ public class ExperimentControllerTest {
             .andReturn().getResponse().getContentAsString();
         subjectId = objectMapper.readTree(subjectRes).get("data").get("content").get(0).get("subjectId").asText();
 
-        // Get student's enrolled class
-        String myClassesRes = mockMvc.perform(get("/api/v1/students/me/classes?page=0&size=1")
-                .header("Authorization", "Bearer " + studentToken))
+        // Get class taught by gv_nguyen and assisted by ta_hung where sv_an is enrolled (PHY101-01)
+        String myClassesRes = mockMvc.perform(get("/api/v1/classes?page=0&size=10")
+                .header("Authorization", "Bearer " + instructorToken))
             .andReturn().getResponse().getContentAsString();
-        classId = objectMapper.readTree(myClassesRes).get("data").get("content").get(0).get("classId").asText();
+        com.fasterxml.jackson.databind.JsonNode content = objectMapper.readTree(myClassesRes).get("data").get("content");
+        for (com.fasterxml.jackson.databind.JsonNode c : content) {
+            if ("PHY101-01".equals(c.get("classCode").asText())) {
+                classId = c.get("classId").asText();
+                break;
+            }
+        }
+        if (classId == null && content.size() > 0) {
+            classId = content.get(0).get("classId").asText();
+        }
 
         // Create an experiment for tests
         String experimentContent = """
@@ -763,5 +772,103 @@ public class ExperimentControllerTest {
                         .header("Authorization", "Bearer " + instructorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("EXP-21: Giảng viên không phụ trách lớp (gv_tran) bị chặn 403 khi lấy bài nộp / rubric của lớp khác")
+    void otherInstructor_cannotAccessSubmissionsOfOtherClass() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+        ExperimentSubmission sub = experimentSubmissionRepository.findById(UUID.fromString(subId)).orElseThrow();
+        ExperimentAssignment assign = experimentAssignmentRepository.findById(sub.getAssignmentId()).orElseThrow();
+        UUID targetClassId = assign.getClassId();
+        UUID assignmentId = assign.getAssignmentId();
+
+        String instructorOtherToken = signin("gv_tran", "gv_tran123456");
+
+        // 1. Cố gọi GET /api/v1/experiments/submissions?classId={targetClassId} -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/submissions?classId=" + targetClassId)
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 2. Cố gọi GET /api/v1/classes/{classId}/experiment-submissions -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/classes/" + targetClassId + "/experiment-submissions")
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 3. Cố gọi GET /api/v1/experiments/assignments/{assignmentId}/submissions -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/assignments/" + assignmentId + "/submissions")
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 4. Cố gọi GET /api/v1/experiments/submissions/{submissionId} -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId)
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 5. Cố gọi GET /api/v1/experiments/submissions/{submissionId}/rubrics -> 403 Forbidden
+        mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 6. Cố truyền ?instructorId={gv_nguyen} -> 403 Forbidden
+        com.vatly1.example.entity.User gvNguyen = userRepository.findByUsername("gv_nguyen");
+        mockMvc.perform(get("/api/v1/experiments/submissions?instructorId=" + gvNguyen.getUserId())
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isForbidden());
+
+        // 7. Gọi GET /api/v1/experiments/submissions không truyền param: Tuyệt đối không được thấy bài nộp của lớp khác
+        String listRes = mockMvc.perform(get("/api/v1/experiments/submissions")
+                        .header("Authorization", "Bearer " + instructorOtherToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.JsonNode listData = objectMapper.readTree(listRes).get("data");
+        for (com.fasterxml.jackson.databind.JsonNode item : listData) {
+            Assertions.assertNotEquals(subId, item.get("submissionId").asText(),
+                    "Danh sách bài nộp của gv_tran tuyệt đối không được chứa bài nộp của lớp do gv_nguyen phụ trách");
+        }
+    }
+
+    @Test
+    @DisplayName("EXP-22: Giảng viên không phụ trách lớp (gv_tran) bị chặn 403 khi chấm điểm hoặc xác nhận bài nộp của lớp khác")
+    void otherInstructor_cannotGradeOrConfirmSubmissionsOfOtherClass() throws Exception {
+        String subId = createSubmissionForSeededExperiment();
+
+        // Lấy rubricId
+        String rubricsRes = mockMvc.perform(get("/api/v1/experiments/submissions/" + subId + "/rubrics")
+                        .header("Authorization", "Bearer " + instructorToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.JsonNode list = objectMapper.readTree(rubricsRes).get("data");
+        String targetRubricId = list.get(0).get("rubricId").asText();
+
+        String instructorOtherToken = signin("gv_tran", "gv_tran123456");
+
+        // 1. gv_tran cố chấm điểm bài nộp của lớp gv_nguyen -> 403 Forbidden
+        String gradePayload = """
+            {
+                "rubricId": "%s",
+                "score": 3.0,
+                "feedback": "Hacked score"
+            }
+            """.formatted(targetRubricId);
+
+        mockMvc.perform(post("/api/v1/experiments/submissions/" + subId + "/scores")
+                        .header("Authorization", "Bearer " + instructorOtherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(gradePayload))
+                .andExpect(status().isForbidden());
+
+        // 2. gv_tran cố xác nhận kết quả bài nộp của lớp gv_nguyen -> 403 Forbidden
+        String confirmPayload = """
+            {
+                "note": "Xác nhận trái phép"
+            }
+            """;
+
+        mockMvc.perform(post("/api/v1/experiments/submissions/" + subId + "/confirmation")
+                        .header("Authorization", "Bearer " + instructorOtherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmPayload))
+                .andExpect(status().isForbidden());
     }
 }
