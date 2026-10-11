@@ -2,7 +2,9 @@ package com.vatly1.example.controller;
 
 import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.request.CreateQuestionDTO;
+import com.vatly1.example.model.request.RejectQuestionDTO;
 import com.vatly1.example.model.dto.QuestionBankDTO;
+import com.vatly1.example.model.dto.QuestionApprovalDTO;
 import com.vatly1.example.model.response.QuestionImportResultDTO;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.service.IQuestionBankService;
@@ -23,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,17 +37,18 @@ public class QuestionBankController {
 
     private final IQuestionBankService questionBankService;
 
-    @Operation(summary = "Lấy danh sách câu hỏi theo bộ lọc", description = "Tìm kiếm câu hỏi theo môn học (tùy chọn), chương mục và độ khó Bloom. Không bắt buộc truyền môn học; nếu bỏ trống sẽ lấy tất cả câu hỏi.")
+    @Operation(summary = "Lấy danh sách câu hỏi theo bộ lọc", description = "Tìm kiếm câu hỏi theo môn học (tùy chọn), chương, bài học và độ khó Bloom. Không bắt buộc truyền môn học; nếu bỏ trống sẽ lấy tất cả câu hỏi.")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<Page<QuestionBankDTO>>> getQuestions(
             @RequestParam(required = false) UUID subjectId,
+            @RequestParam(required = false) UUID chapterId,
             @RequestParam(required = false) UUID topicId,
             @RequestParam(required = false) DifficultyLevel difficultyLevel,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<QuestionBankDTO> questions = questionBankService.getQuestions(subjectId, topicId, difficultyLevel, pageable);
+        Page<QuestionBankDTO> questions = questionBankService.getQuestions(subjectId, chapterId, topicId, difficultyLevel, pageable);
         return ResponseEntity.ok(ApiResponse.<Page<QuestionBankDTO>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")
@@ -99,12 +103,84 @@ public class QuestionBankController {
     @Operation(summary = "Phê duyệt câu hỏi vào ngân hàng chính thức", description = "Chuyển trạng thái câu hỏi thành APPROVED để sẵn sàng sinh đề.")
     @PutMapping("/{questionId}/approve")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<QuestionBankDTO>> approveQuestion(@PathVariable UUID questionId) {
-        QuestionBankDTO approved = questionBankService.approveQuestion(questionId);
+    public ResponseEntity<ApiResponse<QuestionBankDTO>> approveQuestion(
+            @PathVariable UUID questionId,
+            @RequestParam(required = false) String comment,
+            HttpServletRequest request) {
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString(request.getAttribute("userId").toString()) : null;
+        String role = request.getAttribute("role") != null ? request.getAttribute("role").toString() : null;
+        QuestionBankDTO approved = questionBankService.approveQuestion(questionId, currentUserId, role, comment);
         return ResponseEntity.ok(ApiResponse.<QuestionBankDTO>builder()
                 .status(HttpStatus.OK.value())
-                .message("Success")
+                .message("Question approved successfully")
                 .data(approved)
+                .build());
+    }
+
+    @Operation(summary = "Từ chối duyệt câu hỏi", description = "Admin từ chối câu hỏi với lý do bắt buộc, đưa câu hỏi về trạng thái REJECTED.")
+    @PutMapping("/{questionId}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<QuestionBankDTO>> rejectQuestion(
+            @PathVariable UUID questionId,
+            @Valid @RequestBody RejectQuestionDTO rejectDTO,
+            HttpServletRequest request) {
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString(request.getAttribute("userId").toString()) : null;
+        String role = request.getAttribute("role") != null ? request.getAttribute("role").toString() : null;
+        QuestionBankDTO rejected = questionBankService.rejectQuestion(questionId, rejectDTO.getRejectionReason(), currentUserId, role, rejectDTO.getComment());
+        return ResponseEntity.ok(ApiResponse.<QuestionBankDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Question rejected successfully")
+                .data(rejected)
+                .build());
+    }
+
+    @Operation(summary = "Gửi yêu cầu duyệt câu hỏi", description = "Giảng viên chuyển câu hỏi từ DRAFT hoặc REJECTED sang PENDING để chờ Admin phê duyệt.")
+    @PutMapping("/{questionId}/submit-review")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<QuestionBankDTO>> submitQuestionForReview(
+            @PathVariable UUID questionId,
+            @RequestParam(required = false) String comment,
+            HttpServletRequest request) {
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString(request.getAttribute("userId").toString()) : null;
+        String role = request.getAttribute("role") != null ? request.getAttribute("role").toString() : null;
+        QuestionBankDTO submitted = questionBankService.submitQuestionForReview(questionId, currentUserId, role, comment);
+        return ResponseEntity.ok(ApiResponse.<QuestionBankDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Question submitted for review successfully")
+                .data(submitted)
+                .build());
+    }
+
+    @Operation(summary = "Lấy lịch sử phê duyệt câu hỏi", description = "Xem nhật ký kiểm toán toàn bộ các bước phê duyệt / từ chối / gửi duyệt của câu hỏi.")
+    @GetMapping("/{questionId}/approvals")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<List<QuestionApprovalDTO>>> getApprovalHistory(
+            @PathVariable UUID questionId,
+            HttpServletRequest request) {
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString(request.getAttribute("userId").toString()) : null;
+        String role = request.getAttribute("role") != null ? request.getAttribute("role").toString() : null;
+        List<QuestionApprovalDTO> history = questionBankService.getQuestionApprovalHistory(questionId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<QuestionApprovalDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(history)
+                .build());
+    }
+
+    @Operation(summary = "Gán danh sách CLO cho câu hỏi", description = "Liên kết câu hỏi với các chuẩn đầu ra (CLO) trong cùng môn học.")
+    @PutMapping("/{questionId}/clos")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<QuestionBankDTO>> assignClos(
+            @PathVariable UUID questionId,
+            @RequestBody List<UUID> cloIds,
+            HttpServletRequest request) {
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString(request.getAttribute("userId").toString()) : null;
+        String role = request.getAttribute("role") != null ? request.getAttribute("role").toString() : null;
+        QuestionBankDTO updated = questionBankService.assignClosToQuestion(questionId, cloIds, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<QuestionBankDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("CLOs assigned successfully")
+                .data(updated)
                 .build());
     }
 

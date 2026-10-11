@@ -17,6 +17,7 @@ public interface IExamAnswerRepository extends JpaRepository<ExamAnswer, UUID> {
     List<ExamAnswer> findByQuestionId(UUID questionId);
     Optional<ExamAnswer> findByAttemptIdAndQuestionId(UUID attemptId, UUID questionId);
     boolean existsByAttemptIdAndQuestionId(UUID attemptId, UUID questionId);
+    boolean existsByQuestionId(UUID questionId);
 
     @Modifying
     @Query("DELETE FROM ExamAnswer ea WHERE ea.attemptId = :attemptId")

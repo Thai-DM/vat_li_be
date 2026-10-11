@@ -12,4 +12,9 @@ public interface TopicRepository extends JpaRepository<Topic, UUID> {
     List<Topic> findBySubjectIdOrderByOrderIndexAsc(UUID subjectId);
     List<Topic> findAllByOrderByOrderIndexAsc();
     boolean existsBySubjectIdAndTopicName(UUID subjectId, String topicName);
+
+    List<Topic> findByChapterIdOrderByOrderIndexAsc(UUID chapterId);
+    List<Topic> findBySubjectIdAndChapterIdIsNullOrderByOrderIndexAsc(UUID subjectId);
+    long countByChapterId(UUID chapterId);
+    boolean existsByChapterId(UUID chapterId);
 }

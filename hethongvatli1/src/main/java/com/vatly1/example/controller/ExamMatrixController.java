@@ -92,4 +92,41 @@ public class ExamMatrixController {
         MatrixValidationResultDTO result = examMatrixService.validateExamMatrix(matrixId);
         return ResponseEntity.ok(ApiResponse.success(result, "Kiểm tra tính hợp lệ ngân hàng câu hỏi hoàn tất"));
     }
+
+    @Operation(summary = "Công bố ma trận đề thi (PUBLISH)", description = "Chuyển ma trận sang trạng thái PUBLISHED và khóa ma trận.")
+    @PostMapping("/{matrixId}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ExamMatrixDTO>> publishMatrix(
+            @PathVariable UUID matrixId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamMatrixDTO published = examMatrixService.publishMatrix(matrixId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(published, "Công bố ma trận đề thi thành công"));
+    }
+
+    @Operation(summary = "Lưu trữ ma trận đề thi (ARCHIVE)", description = "Chuyển ma trận sang trạng thái ARCHIVED.")
+    @PostMapping("/{matrixId}/archive")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ExamMatrixDTO>> archiveMatrix(
+            @PathVariable UUID matrixId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamMatrixDTO archived = examMatrixService.archiveMatrix(matrixId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(archived, "Lưu trữ ma trận đề thi thành công"));
+    }
+
+    @Operation(summary = "Nhân bản phiên bản ma trận (CLONE REVISION)", description = "Tạo phiên bản mới (revisionNumber + 1) ở trạng thái DRAFT từ ma trận hiện có.")
+    @PostMapping("/{matrixId}/clone-revision")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ExamMatrixDTO>> cloneMatrixRevision(
+            @PathVariable UUID matrixId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ExamMatrixDTO cloned = examMatrixService.cloneMatrixRevision(matrixId, currentUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<ExamMatrixDTO>builder()
+                .status(HttpStatus.CREATED.value())
+                .message("Nhân bản phiên bản ma trận thành công")
+                .data(cloned)
+                .build());
+    }
 }

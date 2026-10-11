@@ -23,13 +23,16 @@ public class StudentExamQuestionDTO {
     private DifficultyLevel difficultyLevel;
     private UUID topicId;
     private String topicName;
+    private UUID chapterId;
+    private String chapterName;
     private Integer orderIndex;
     private BigDecimal scoreWeight;
     private List<StudentQuestionOptionDTO> options;
+    private List<String> acceptedAnswers; // null khi đang thi; chỉ trả về khi đã chấm bài và được phép xem đáp án
 
     // Trạng thái trả lời của sinh viên cho lượt thi hiện hành
     private List<UUID> selectedOptionIds; // Các phương án sinh viên đã chọn/lưu tạm thời
-    private String answerText;           // Câu trả lời tự luận ngắn (nếu có)
+    private String answerText;           // Câu trả lời điền từ (FILL_BLANK) hoặc tự luận ngắn
     private Boolean isCorrect;           // null khi đang thi; true/false khi đã nộp/chấm bài
     private BigDecimal score;            // Điểm đạt được của câu hỏi này sau khi chấm
 }

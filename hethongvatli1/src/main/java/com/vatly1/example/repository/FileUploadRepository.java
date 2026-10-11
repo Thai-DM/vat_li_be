@@ -8,4 +8,6 @@ import java.util.UUID;
 
 @Repository
 public interface FileUploadRepository extends JpaRepository<FileUpload, UUID> {
+    java.util.Optional<FileUpload> findByStoredUrl(String storedUrl);
+    java.util.Optional<FileUpload> findFirstByStoredUrlContaining(String filename);
 }

@@ -18,6 +18,8 @@ public class TopicDTO {
 
     private UUID subjectId;
 
+    private UUID chapterId;
+
     private String topicName;
 
     private Integer orderIndex;

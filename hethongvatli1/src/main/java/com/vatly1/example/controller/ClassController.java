@@ -38,6 +38,7 @@ public class ClassController {
     private final ILogService logService;
     private final com.vatly1.example.service.IStudentExcelService studentExcelService;
     private final com.vatly1.example.service.IExperimentService experimentService;
+    private final com.vatly1.example.service.IClassSettingsService classSettingsService;
 
     // --- CLASS MANAGEMENT ---
 
@@ -102,9 +103,9 @@ public class ClassController {
         return ResponseEntity.ok(ApiResponse.success(classStaffService.getClassStaff(id, currentUserId, role)));
     }
 
-    @Operation(summary = "Phân công nhân sự", description = "Thêm một Giảng viên/Trợ giảng vào lớp. (Chỉ Admin hoặc chủ lớp)")
+    @Operation(summary = "Phân công nhân sự", description = "Thêm một Giảng viên/Trợ giảng vào lớp. (Chỉ Admin)")
     @PostMapping("/{id}/staff")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> assignStaff(HttpServletRequest request, @PathVariable UUID id, @Valid @RequestBody AssignStaffDTO dto) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         String role = (String) request.getAttribute("role");
@@ -112,14 +113,66 @@ public class ClassController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(null, "Staff assigned successfully"));
     }
 
-    @Operation(summary = "Xóa nhân sự khỏi lớp", description = "Xóa Giảng viên/Trợ giảng khỏi lớp. (Chỉ Admin hoặc chủ lớp)")
+    @Operation(summary = "Xóa nhân sự khỏi lớp", description = "Xóa Giảng viên/Trợ giảng khỏi lớp. (Chỉ Admin)")
     @DeleteMapping("/{id}/staff/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> removeStaff(HttpServletRequest request, @PathVariable UUID id, @PathVariable UUID userId) {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         String role = (String) request.getAttribute("role");
         classStaffService.removeStaff(id, userId, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.success(null, "Staff removed successfully"));
+    }
+
+    @Operation(summary = "Phân công / thay đổi giảng viên phụ trách lớp", description = "Chỉ Admin mới có quyền phân công hoặc thay đổi giảng viên phụ trách.")
+    @PutMapping("/{id}/instructor")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ClassDTO>> assignInstructor(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignInstructorDTO dto) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ClassDTO updated = classService.assignInstructor(id, dto.getInstructorId(), currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Phân công giảng viên thành công"));
+    }
+
+    @Operation(summary = "Thu hồi phân công giảng viên phụ trách lớp", description = "Chỉ Admin mới có quyền thu hồi phân công giảng viên.")
+    @DeleteMapping("/{id}/instructor")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ClassDTO>> revokeInstructor(
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ClassDTO updated = classService.revokeInstructor(id, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Thu hồi phân công giảng viên thành công"));
+    }
+
+    // --- CLASS SETTINGS MANAGEMENT ---
+
+    @Operation(summary = "Lấy cấu hình học tập của lớp", description = "Xem cấu hình hoạt động luyện tập, quiz, số lượt của lớp.")
+    @GetMapping("/{id}/settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<ClassSettingsDTO>> getClassSettings(
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ClassSettingsDTO settings = classSettingsService.getClassSettings(id, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.success(settings));
+    }
+
+    @Operation(summary = "Cập nhật cấu hình học tập của lớp", description = "Cập nhật bật/tắt luyện tập, quiz, số lượt tối đa. (Dành cho Giảng viên phụ trách hoặc Admin)")
+    @PutMapping("/{id}/settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ClassSettingsDTO>> updateClassSettings(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateClassSettingsDTO dto) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ClassSettingsDTO settings = classSettingsService.updateClassSettings(id, dto, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.success(settings, "Cập nhật cấu hình lớp học thành công"));
     }
 
     // --- ENROLLMENT MANAGEMENT ---
@@ -205,10 +258,13 @@ public class ClassController {
     @PostMapping(value = "/{id}/students/import-excel", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
     public ResponseEntity<ApiResponse<StudentImportResultDTO>> importStudentsToClass(
+            HttpServletRequest request,
             @PathVariable UUID id,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestParam(value = "defaultPassword", required = false) String defaultPassword) {
-        StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, id);
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, id, currentUserId, role);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(result, "Nhập danh sách sinh viên vào lớp thành công"));
     }

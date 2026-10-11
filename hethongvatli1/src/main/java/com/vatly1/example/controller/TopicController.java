@@ -2,6 +2,7 @@ package com.vatly1.example.controller;
 
 import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.request.CreateTopicDTO;
+import com.vatly1.example.model.request.AssignChapterDTO;
 import com.vatly1.example.model.dto.TopicDTO;
 import com.vatly1.example.service.ITopicService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -111,6 +112,36 @@ public class TopicController {
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(null)
+                .build());
+    }
+
+    @Operation(summary = "Gán hoặc gỡ chương học cho bài học", description = "Gán bài học vào chương học hoặc gỡ bài học khỏi chương (chapterId = null).")
+    @PutMapping("/api/v1/topics/{topicId}/assign-chapter")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<TopicDTO>> assignChapter(
+            @PathVariable UUID topicId,
+            @RequestBody(required = false) AssignChapterDTO assignChapterDTO,
+            @RequestParam(required = false) UUID chapterId) {
+        UUID targetChapterId = chapterId;
+        if (targetChapterId == null && assignChapterDTO != null) {
+            targetChapterId = assignChapterDTO.getChapterId();
+        }
+        TopicDTO updatedTopic = topicService.assignChapter(topicId, targetChapterId);
+        return ResponseEntity.ok(ApiResponse.<TopicDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(updatedTopic)
+                .build());
+    }
+
+    @Operation(summary = "Lấy danh sách bài học chưa phân chương theo môn", description = "Trả về toàn bộ các bài học trong môn có chapterId = NULL.")
+    @GetMapping("/api/v1/subjects/{subjectId}/topics/unassigned")
+    public ResponseEntity<ApiResponse<List<TopicDTO>>> getUnassignedTopics(@PathVariable UUID subjectId) {
+        List<TopicDTO> unassigned = topicService.getUnassignedTopicsBySubject(subjectId);
+        return ResponseEntity.ok(ApiResponse.<List<TopicDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(unassigned)
                 .build());
     }
 }

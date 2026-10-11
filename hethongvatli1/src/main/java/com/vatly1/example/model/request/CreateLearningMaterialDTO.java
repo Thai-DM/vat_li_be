@@ -19,6 +19,8 @@ import java.util.UUID;
 public class CreateLearningMaterialDTO {
 
     private UUID topicId;
+    private com.vatly1.example.entity.enums.MaterialScope scope;
+    private UUID classId;
 
     @NotBlank(message = "Title is required")
     private String title;

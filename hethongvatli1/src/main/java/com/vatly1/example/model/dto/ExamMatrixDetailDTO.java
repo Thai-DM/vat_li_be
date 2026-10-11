@@ -16,8 +16,11 @@ import java.util.UUID;
 public class ExamMatrixDetailDTO {
     private UUID detailId;
     private UUID matrixId;
+    private UUID subjectId;
     private UUID topicId;
     private String topicName;
+    private UUID cloId;
+    private String cloCode;
     private DifficultyLevel difficultyLevel;
     private Integer numQuestions;
     private BigDecimal weightPercent;

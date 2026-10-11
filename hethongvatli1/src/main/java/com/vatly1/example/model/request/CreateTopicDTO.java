@@ -17,6 +17,8 @@ public class CreateTopicDTO {
 
     private UUID subjectId;
 
+    private UUID chapterId;
+
     @NotBlank(message = "Topic name is required")
     private String topicName;
 

@@ -23,7 +23,10 @@ public class ExamQuestionDetailDTO {
     private DifficultyLevel difficultyLevel;
     private UUID topicId;
     private String topicName;
+    private UUID chapterId;
+    private String chapterName;
     private Integer orderIndex;
     private BigDecimal scoreWeight;
     private List<QuestionOptionDTO> options;
+    private List<String> acceptedAnswers;
 }

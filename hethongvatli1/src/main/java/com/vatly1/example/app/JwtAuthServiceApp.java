@@ -74,6 +74,7 @@ public class JwtAuthServiceApp implements CommandLineRunner {
     createUserIfNotExists("sv_an", "sv_an@email.com", UserRole.STUDENT, "Lê Văn An", "SV001");
     createUserIfNotExists("sv_binh", "sv_binh@email.com", UserRole.STUDENT, "Nguyễn Thị Bình", "SV002");
     createUserIfNotExists("sv_cuong", "sv_cuong@email.com", UserRole.STUDENT, "Trần Hùng Cường", "SV003");
+    createUserIfNotExists("sv_dung", "sv_dung@email.com", UserRole.STUDENT, "Đỗ Tiến Dũng", "SV004");
   }
 
   private void createUserIfNotExists(String username, String email, UserRole role, String fullName, String studentCode) {
@@ -138,6 +139,7 @@ public class JwtAuthServiceApp implements CommandLineRunner {
     User svAn = userRepository.findByUsername("sv_an");
     User svBinh = userRepository.findByUsername("sv_binh");
     User svCuong = userRepository.findByUsername("sv_cuong");
+    User svDung = userRepository.findByUsername("sv_dung");
 
     if (phy101 != null && hk1_2526 != null && gvNguyen != null && gvTran != null) {
       // Class PHY101 - Lớp 01
@@ -157,9 +159,9 @@ public class JwtAuthServiceApp implements CommandLineRunner {
       }
 
       // Enroll students
-      if (svAn != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).studentId(svAn.getUserId()).status(EnrollmentStatus.ACTIVE).build());
-      if (svBinh != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).studentId(svBinh.getUserId()).status(EnrollmentStatus.ACTIVE).build());
-      if (svCuong != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).studentId(svCuong.getUserId()).status(EnrollmentStatus.ACTIVE).build());
+      if (svAn != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).subjectId(phy101.getSubjectId()).semesterId(hk1_2526.getSemesterId()).studentId(svAn.getUserId()).status(EnrollmentStatus.ACTIVE).build());
+      if (svBinh != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).subjectId(phy101.getSubjectId()).semesterId(hk1_2526.getSemesterId()).studentId(svBinh.getUserId()).status(EnrollmentStatus.ACTIVE).build());
+      if (svCuong != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c1.getClassId()).subjectId(phy101.getSubjectId()).semesterId(hk1_2526.getSemesterId()).studentId(svCuong.getUserId()).status(EnrollmentStatus.ACTIVE).build());
 
       // Class PHY101 - Lớp 02
       Class c2 = Class.builder()
@@ -172,8 +174,8 @@ public class JwtAuthServiceApp implements CommandLineRunner {
           .build();
       c2 = classRepository.save(c2);
       
-      // Enroll svAn to class 2
-      if (svAn != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c2.getClassId()).studentId(svAn.getUserId()).status(EnrollmentStatus.ACTIVE).build());
+      // Enroll svDung to class 2
+      if (svDung != null) classEnrollmentRepository.save(ClassEnrollment.builder().classId(c2.getClassId()).subjectId(phy101.getSubjectId()).semesterId(hk1_2526.getSemesterId()).studentId(svDung.getUserId()).status(EnrollmentStatus.ACTIVE).build());
 
       // Class PHY102 - Lớp 01
       if (phy102 != null) {

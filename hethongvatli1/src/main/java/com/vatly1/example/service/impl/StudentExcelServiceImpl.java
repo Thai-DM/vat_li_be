@@ -4,6 +4,7 @@ import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.ClassEnrollment;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.UserProfile;
+import com.vatly1.example.entity.enums.ClassStatus;
 import com.vatly1.example.entity.enums.EnrollmentStatus;
 import com.vatly1.example.entity.enums.GenderType;
 import com.vatly1.example.entity.enums.UserRole;
@@ -34,6 +35,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import com.vatly1.example.repository.IClassStaffRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -43,6 +48,8 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     private final IUserProfileRepository userProfileRepository;
     private final IClassRepository classRepository;
     private final IClassEnrollmentRepository classEnrollmentRepository;
+    private final IClassStaffRepository classStaffRepository;
+    private final PlatformTransactionManager transactionManager;
     private final PasswordEncoder passwordEncoder;
 
     private static final String DEFAULT_FALLBACK_PASSWORD = "Vatly1@123";
@@ -171,8 +178,12 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
     }
 
     @Override
-    @Transactional
     public StudentImportResultDTO importStudentsFromExcel(MultipartFile file, String defaultPassword, UUID classId) {
+        return importStudentsFromExcel(file, defaultPassword, classId, null, "ADMIN");
+    }
+
+    @Override
+    public StudentImportResultDTO importStudentsFromExcel(MultipartFile file, String defaultPassword, UUID classId, UUID currentUserId, String currentUserRole) {
         if (file == null || file.isEmpty()) {
             throw new CustomException("Tệp tải lên không được để trống", HttpStatus.BAD_REQUEST);
         }
@@ -188,6 +199,12 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
         Class defaultClass = null;
         if (classId != null) {
             defaultClass = classRepository.findById(classId).orElse(null);
+            if (defaultClass == null) {
+                throw new CustomException("Không tìm thấy lớp học phần với ID: " + classId, HttpStatus.NOT_FOUND);
+            }
+            if (!hasPermissionOnClass(defaultClass, currentUserId, currentUserRole)) {
+                throw new CustomException("Bạn không có quyền quản lý lớp học này (" + defaultClass.getClassCode() + ")", HttpStatus.FORBIDDEN);
+            }
         }
 
         List<StudentImportItemDTO> items = new ArrayList<>();
@@ -197,6 +214,8 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
         int totalCreated = 0;
         int totalSkipped = 0;
         int totalEnrolled = 0;
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
 
         try (InputStream is = file.getInputStream(); Workbook workbook = WorkbookFactory.create(is)) {
             if (workbook.getNumberOfSheets() == 0) {
@@ -279,7 +298,6 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
 
                 // Xử lý Email
                 if (email == null || email.isBlank()) {
-                    // Tự động sinh email nếu để trống
                     email = studentCode.toLowerCase() + "@student.vatli1.edu.vn";
                 } else {
                     email = email.trim().toLowerCase();
@@ -294,15 +312,13 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 }
                 itemBuilder.username(username);
 
-                // Xử lý Ngày sinh (cần parse trước để dùng làm mật khẩu nếu mật khẩu để trống hoặc là mẫu mặc định)
+                // Xử lý Ngày sinh
                 LocalDate dob = parseDate(row, colMap.get("dateOfBirth"), dobStr);
                 itemBuilder.dateOfBirth(dob);
 
-                // Xử lý Mật khẩu:
-                // Yêu cầu người dùng: Nhận file Excel có ngày sinh -> Tự động suy ra mật khẩu là 8 số theo ngày sinh (ddMMyyyy)
+                // Xử lý Mật khẩu
                 String effectivePassword;
                 if (dob != null) {
-                    // Ưu tiên cao nhất: Tự động suy ra 8 chữ số ngày sinh ddMMyyyy (ví dụ: 20/08/2004 -> 20082004, 05/03/2004 -> 05032004)
                     effectivePassword = dob.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
                 } else if (dobStr != null && !dobStr.replaceAll("[^0-9]", "").isBlank()) {
                     String cleanDigits = dobStr.replaceAll("[^0-9]", "");
@@ -326,7 +342,7 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 GenderType gender = parseGender(genderStr);
                 itemBuilder.gender(gender);
 
-                // Xử lý Số điện thoại (tự động thêm '0' nếu là số 9 chữ số bị Excel làm mất số 0 đầu)
+                // Xử lý Số điện thoại
                 if (phone != null && !phone.isBlank()) {
                     phone = phone.replaceAll("[^0-9+]", "");
                     if (phone.length() == 9 && (phone.startsWith("3") || phone.startsWith("5") || phone.startsWith("7") || phone.startsWith("8") || phone.startsWith("9"))) {
@@ -344,101 +360,220 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 }
                 itemBuilder.classCode(effectiveClassCode);
 
-                // Kiểm tra xem sinh viên / người dùng này đã tồn tại trong hệ thống chưa (hỗ trợ cập nhật khi re-import)
-                User existingUser = userRepository.findByUsername(username);
-                if (existingUser == null && email != null) {
-                    existingUser = userRepository.findByEmail(email).orElse(null);
-                }
-                if (existingUser == null) {
-                    UserProfile existingProfile = userProfileRepository.findByStudentCode(studentCode).orElse(null);
-                    if (existingProfile != null) {
-                        existingUser = userRepository.findById(existingProfile.getUserId()).orElse(null);
-                    }
-                }
+                // Chuẩn bị biến final để thực thi trong lambda transaction độc lập
+                final String fStudentCode = studentCode;
+                final String fFullName = fullName;
+                final String fEmail = email;
+                final String fUsername = username;
+                final String fEffectivePassword = effectivePassword;
+                final LocalDate fDob = dob;
+                final GenderType fGender = gender;
+                final String fPhone = phone;
+                final String fEffectiveClassCode = effectiveClassCode;
+                final Class fDefaultClass = defaultClass;
 
-                if (existingUser != null) {
-                    // Cập nhật thông tin tài khoản và mật khẩu theo ngày sinh mới nhất
-                    existingUser.setPasswordHash(passwordEncoder.encode(effectivePassword));
-                    if (email != null && !email.equalsIgnoreCase(existingUser.getEmail())) {
-                        if (!userRepository.existsByEmail(email)) {
-                            existingUser.setEmail(email);
+                final boolean[] rowCreated = new boolean[]{false};
+                final boolean[] rowSkipped = new boolean[]{false};
+                final boolean[] rowEnrolled = new boolean[]{false};
+
+                // Thực thi giao dịch độc lập cho từng dòng (Atomic Row Transaction)
+                transactionTemplate.execute(status -> {
+                    // 1. Kiểm tra quyền và tính hợp lệ của lớp học đích
+                    Class targetClass = null;
+                    if (fEffectiveClassCode != null && !fEffectiveClassCode.isBlank()) {
+                        targetClass = classRepository.findByClassCode(fEffectiveClassCode).orElse(null);
+                        if (targetClass == null) {
+                            String msg = String.format("Dòng %d: Không tìm thấy lớp học có mã '%s'.", displayRow, fEffectiveClassCode);
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+                        if (!hasPermissionOnClass(targetClass, currentUserId, currentUserRole)) {
+                            String msg = String.format("Dòng %d: Bạn không có quyền ghi danh sinh viên vào lớp '%s'.", displayRow, fEffectiveClassCode);
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+                    } else if (fDefaultClass != null) {
+                        targetClass = fDefaultClass;
+                    }
+
+                    // 2. Tìm kiếm người dùng hiện có (hỗ trợ cập nhật khi re-import)
+                    User existingUser = userRepository.findByUsername(fUsername);
+                    if (existingUser == null && fEmail != null) {
+                        existingUser = userRepository.findByEmail(fEmail).orElse(null);
+                    }
+                    if (existingUser == null) {
+                        UserProfile existingProfile = userProfileRepository.findByStudentCode(fStudentCode).orElse(null);
+                        if (existingProfile != null) {
+                            existingUser = userRepository.findById(existingProfile.getUserId()).orElse(null);
                         }
                     }
-                    userRepository.save(existingUser);
 
-                    // Cập nhật hoặc tạo mới hồ sơ UserProfile
-                    UserProfile profile = userProfileRepository.findById(existingUser.getUserId()).orElse(null);
-                    if (profile == null) {
-                        profile = UserProfile.builder().userId(existingUser.getUserId()).build();
+                    UUID studentUserId;
+                    if (existingUser != null) {
+                        studentUserId = existingUser.getUserId();
+                        existingUser.setPasswordHash(passwordEncoder.encode(fEffectivePassword));
+                        if (fEmail != null && !fEmail.equalsIgnoreCase(existingUser.getEmail())) {
+                            if (!userRepository.existsByEmail(fEmail)) {
+                                existingUser.setEmail(fEmail);
+                            }
+                        }
+                        userRepository.save(existingUser);
+
+                        UserProfile profile = userProfileRepository.findById(existingUser.getUserId()).orElse(null);
+                        if (profile == null) {
+                            profile = UserProfile.builder().userId(existingUser.getUserId()).build();
+                        }
+                        profile.setFullName(fFullName);
+                        profile.setStudentCode(fStudentCode);
+                        if (fDob != null) profile.setDateOfBirth(fDob);
+                        if (fGender != null) profile.setGender(fGender);
+                        if (fPhone != null && !fPhone.isBlank()) profile.setPhone(fPhone);
+                        userProfileRepository.save(profile);
+
+                        rowSkipped[0] = true;
+                        itemBuilder.userId(existingUser.getUserId())
+                                .status("SKIPPED")
+                                .message(String.format("Tài khoản sinh viên '%s' đã tồn tại trong hệ thống (đã cập nhật hồ sơ & mật khẩu theo ngày sinh: %s)", fUsername, fEffectivePassword));
+                    } else {
+                        // Kiểm tra xung đột trước khi tạo mới
+                        if (userRepository.existsByUsername(fUsername)) {
+                            String msg = String.format("Dòng %d: Tên đăng nhập '%s' đã tồn tại cho một người dùng khác.", displayRow, fUsername);
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+
+                        if (userRepository.existsByEmail(fEmail)) {
+                            String msg = String.format("Dòng %d: Email '%s' đã được sử dụng bởi tài khoản khác.", displayRow, fEmail);
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+
+                        User newUser = User.builder()
+                                .username(fUsername)
+                                .email(fEmail)
+                                .passwordHash(passwordEncoder.encode(fEffectivePassword))
+                                .role(UserRole.STUDENT)
+                                .status(UserStatus.ACTIVE)
+                                .build();
+                        User savedUser = userRepository.save(newUser);
+                        studentUserId = savedUser.getUserId();
+
+                        UserProfile newProfile = UserProfile.builder()
+                                .userId(savedUser.getUserId())
+                                .fullName(fFullName)
+                                .studentCode(fStudentCode)
+                                .dateOfBirth(fDob)
+                                .gender(fGender)
+                                .phone(fPhone)
+                                .build();
+                        userProfileRepository.save(newProfile);
+
+                        rowCreated[0] = true;
+                        itemBuilder.userId(savedUser.getUserId())
+                                .status("SUCCESS")
+                                .message(String.format("Tạo tài khoản thành công (mật khẩu: %s)", fEffectivePassword));
                     }
-                    profile.setFullName(fullName);
-                    profile.setStudentCode(studentCode);
-                    if (dob != null) profile.setDateOfBirth(dob);
-                    if (gender != null) profile.setGender(gender);
-                    if (phone != null && !phone.isBlank()) profile.setPhone(phone);
-                    userProfileRepository.save(profile);
 
-                    // Ghi danh vào lớp học nếu có
-                    if (enrollStudentToClass(existingUser.getUserId(), effectiveClassCode, defaultClass)) {
-                        totalEnrolled++;
+                    // 3. Thực hiện ghi danh vào lớp đích nếu có
+                    if (targetClass != null) {
+                        if (targetClass.getStatus() != ClassStatus.ACTIVE) {
+                            String msg = String.format("Dòng %d: Lớp học '%s' không ở trạng thái hoạt động (ACTIVE).", displayRow, targetClass.getClassCode());
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowCreated[0] = false;
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+
+                        // Kiểm tra sinh viên có đang ACTIVE ở lớp nào KHÁC cùng môn học và học kỳ không
+                        List<ClassEnrollment> existingList = classEnrollmentRepository.findByStudentIdAndSubjectIdAndSemesterId(
+                                studentUserId, targetClass.getSubjectId(), targetClass.getSemesterId());
+                        final UUID targetClassId = targetClass.getClassId();
+                        Optional<ClassEnrollment> activeOther = existingList.stream()
+                                .filter(e -> e.getStatus() == EnrollmentStatus.ACTIVE && !e.getClassId().equals(targetClassId))
+                                .findFirst();
+                        if (activeOther.isPresent()) {
+                            String otherCode = classRepository.findById(activeOther.get().getClassId())
+                                    .map(Class::getClassCode).orElse(activeOther.get().getClassId().toString());
+                            String msg = String.format("Dòng %d: Sinh viên '%s' đã có đăng ký hoạt động ở lớp khác (%s) của môn học này trong cùng học kỳ.", displayRow, fStudentCode, otherCode);
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowCreated[0] = false;
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
+
+                        // Kiểm tra sĩ số tối đa nếu cần thêm mới
+                        Optional<ClassEnrollment> existingEnr = classEnrollmentRepository.findByClassIdAndStudentId(targetClass.getClassId(), studentUserId);
+                        if (existingEnr.isEmpty() || existingEnr.get().getStatus() != EnrollmentStatus.ACTIVE) {
+                            if (targetClass.getMaxStudents() != null) {
+                                int currentCount = classEnrollmentRepository.countByClassIdAndStatus(targetClass.getClassId(), EnrollmentStatus.ACTIVE);
+                                if (currentCount >= targetClass.getMaxStudents()) {
+                                    String msg = String.format("Dòng %d: Lớp '%s' đã đủ số lượng sinh viên tối đa (%d).", displayRow, targetClass.getClassCode(), targetClass.getMaxStudents());
+                                    errors.add(msg);
+                                    items.add(itemBuilder.status("ERROR").message(msg).build());
+                                    rowCreated[0] = false;
+                                    rowSkipped[0] = true;
+                                    status.setRollbackOnly();
+                                    return null;
+                                }
+                            }
+                        }
+
+                        // Lưu hoặc tái kích hoạt enrollment
+                        try {
+                            if (existingEnr.isPresent()) {
+                                ClassEnrollment enr = existingEnr.get();
+                                if (enr.getStatus() != EnrollmentStatus.ACTIVE) {
+                                    enr.setStatus(EnrollmentStatus.ACTIVE);
+                                    enr.setSubjectId(targetClass.getSubjectId());
+                                    enr.setSemesterId(targetClass.getSemesterId());
+                                    classEnrollmentRepository.save(enr);
+                                    rowEnrolled[0] = true;
+                                }
+                            } else {
+                                ClassEnrollment enr = ClassEnrollment.builder()
+                                        .classId(targetClass.getClassId())
+                                        .studentId(studentUserId)
+                                        .subjectId(targetClass.getSubjectId())
+                                        .semesterId(targetClass.getSemesterId())
+                                        .status(EnrollmentStatus.ACTIVE)
+                                        .build();
+                                classEnrollmentRepository.save(enr);
+                                rowEnrolled[0] = true;
+                            }
+                        } catch (org.springframework.dao.DataIntegrityViolationException dive) {
+                            String msg = String.format("Dòng %d: Xung đột ghi danh sinh viên '%s' vào lớp '%s' (vi phạm ràng buộc dữ liệu môn/học kỳ).", displayRow, fStudentCode, targetClass.getClassCode());
+                            errors.add(msg);
+                            items.add(itemBuilder.status("ERROR").message(msg).build());
+                            rowCreated[0] = false;
+                            rowSkipped[0] = true;
+                            status.setRollbackOnly();
+                            return null;
+                        }
                     }
 
-                    totalSkipped++;
-                    itemBuilder.userId(existingUser.getUserId())
-                            .status("SKIPPED")
-                            .message(String.format("Tài khoản sinh viên '%s' đã tồn tại trong hệ thống (đã cập nhật hồ sơ & mật khẩu theo ngày sinh: %s)", username, effectivePassword));
                     items.add(itemBuilder.build());
-                    continue;
-                }
+                    return null;
+                });
 
-                // Kiểm tra xung đột trước khi tạo mới
-                if (userRepository.existsByUsername(username)) {
-                    String msg = String.format("Dòng %d: Tên đăng nhập '%s' đã tồn tại cho một người dùng khác.", displayRow, username);
-                    errors.add(msg);
-                    items.add(itemBuilder.status("ERROR").message(msg).build());
-                    totalSkipped++;
-                    continue;
-                }
-
-                if (userRepository.existsByEmail(email)) {
-                    String msg = String.format("Dòng %d: Email '%s' đã được sử dụng bởi tài khoản khác.", displayRow, email);
-                    errors.add(msg);
-                    items.add(itemBuilder.status("ERROR").message(msg).build());
-                    totalSkipped++;
-                    continue;
-                }
-
-                // Tạo tài khoản User mới
-                User newUser = User.builder()
-                        .username(username)
-                        .email(email)
-                        .passwordHash(passwordEncoder.encode(effectivePassword))
-                        .role(UserRole.STUDENT)
-                        .status(UserStatus.ACTIVE)
-                        .build();
-                User savedUser = userRepository.save(newUser);
-
-                // Tạo hồ sơ UserProfile
-                UserProfile newProfile = UserProfile.builder()
-                        .userId(savedUser.getUserId())
-                        .fullName(fullName)
-                        .studentCode(studentCode)
-                        .dateOfBirth(dob)
-                        .gender(gender)
-                        .phone(phone)
-                        .build();
-                userProfileRepository.save(newProfile);
-
-                // Ghi danh vào lớp học phần nếu có chỉ định
-                if (enrollStudentToClass(savedUser.getUserId(), effectiveClassCode, defaultClass)) {
-                    totalEnrolled++;
-                }
-
-                totalCreated++;
-                itemBuilder.userId(savedUser.getUserId())
-                        .status("SUCCESS")
-                        .message(String.format("Tạo tài khoản thành công (mật khẩu: %s)", effectivePassword));
-                items.add(itemBuilder.build());
+                if (rowCreated[0]) totalCreated++;
+                if (rowSkipped[0]) totalSkipped++;
+                if (rowEnrolled[0]) totalEnrolled++;
             }
 
         } catch (CustomException ce) {
@@ -459,25 +594,26 @@ public class StudentExcelServiceImpl implements IStudentExcelService {
                 .build();
     }
 
-    private boolean enrollStudentToClass(UUID studentId, String classCode, Class defaultClass) {
-        Class targetClass = null;
-        if (classCode != null && !classCode.isBlank()) {
-            targetClass = classRepository.findByClassCode(classCode).orElse(null);
+    private boolean hasPermissionOnClass(Class clazz, UUID currentUserId, String currentUserRole) {
+        if (currentUserId == null || currentUserRole == null) {
+            return true;
         }
-        if (targetClass == null && defaultClass != null) {
-            targetClass = defaultClass;
+        UserRole role;
+        try {
+            role = UserRole.valueOf(currentUserRole.toUpperCase());
+        } catch (Exception e) {
+            return false;
         }
-
-        if (targetClass != null) {
-            if (!classEnrollmentRepository.existsByClassIdAndStudentId(targetClass.getClassId(), studentId)) {
-                ClassEnrollment enrollment = ClassEnrollment.builder()
-                        .classId(targetClass.getClassId())
-                        .studentId(studentId)
-                        .status(EnrollmentStatus.ACTIVE)
-                        .build();
-                classEnrollmentRepository.save(enrollment);
-                return true;
-            }
+        if (role == UserRole.ADMIN) {
+            return true;
+        }
+        if (role == UserRole.INSTRUCTOR) {
+            boolean isOwner = clazz.getInstructorId() != null && clazz.getInstructorId().equals(currentUserId);
+            boolean isAssigned = classStaffRepository.existsByClassIdAndUserId(clazz.getClassId(), currentUserId);
+            return isOwner || isAssigned;
+        }
+        if (role == UserRole.TA) {
+            return classStaffRepository.existsByClassIdAndUserId(clazz.getClassId(), currentUserId);
         }
         return false;
     }

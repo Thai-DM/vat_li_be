@@ -23,4 +23,6 @@ public class CreateClassDTO {
     private String classCode;
 
     private Integer maxStudents;
+
+    private java.util.UUID instructorId;
 }

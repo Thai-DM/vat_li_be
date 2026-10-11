@@ -11,18 +11,24 @@ import com.vatly1.example.model.request.BatchSubmitAnswerDTO;
 import com.vatly1.example.model.request.SubmitAnswerDTO;
 import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.Exam;
+import com.vatly1.example.entity.ExamMatrix;
 import com.vatly1.example.entity.ExamAnswer;
 import com.vatly1.example.entity.ExamAttempt;
 import com.vatly1.example.entity.ExamMatrixDetail;
 import com.vatly1.example.entity.ExamQuestion;
 import com.vatly1.example.entity.QuestionBank;
+import com.vatly1.example.entity.QuestionClo;
 import com.vatly1.example.entity.QuestionOption;
 import com.vatly1.example.entity.User;
+import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.AttemptStatus;
 import com.vatly1.example.entity.enums.UserRole;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.entity.Topic;
 import com.vatly1.example.entity.UserProfile;
+import com.vatly1.example.entity.enums.MatrixStatus;
+import com.vatly1.example.model.request.BulkProvisionFinalExamDTO;
+import com.vatly1.example.model.response.BulkProvisionFinalExamResultDTO;
 import com.vatly1.example.model.dto.ExamAttemptSummaryDTO;
 import com.vatly1.example.model.dto.ExamQuestionDetailDTO;
 import com.vatly1.example.model.dto.QuestionOptionDTO;
@@ -41,6 +47,11 @@ import com.vatly1.example.repository.IExamRepository;
 import com.vatly1.example.repository.IUserProfileRepository;
 import com.vatly1.example.repository.IUserRepository;
 import com.vatly1.example.repository.QuestionBankRepository;
+import com.vatly1.example.entity.Chapter;
+import com.vatly1.example.entity.QuestionAcceptedAnswer;
+import com.vatly1.example.repository.IChapterRepository;
+import com.vatly1.example.repository.QuestionAcceptedAnswerRepository;
+import com.vatly1.example.utils.AnswerNormalizationUtil;
 import com.vatly1.example.repository.QuestionOptionRepository;
 import com.vatly1.example.repository.TopicRepository;
 import com.vatly1.example.service.IExamService;
@@ -54,6 +65,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -78,11 +91,17 @@ public class ExamServiceImpl implements IExamService {
     private final IUserRepository userRepository;
     private final IUserProfileRepository userProfileRepository;
     private final TopicRepository topicRepository;
+    private final IChapterRepository chapterRepository;
     private final QuestionBankRepository questionBankRepository;
     private final QuestionOptionRepository questionOptionRepository;
+    private final QuestionAcceptedAnswerRepository questionAcceptedAnswerRepository;
     private final com.vatly1.example.service.ISystemSettingService systemSettingService;
     private final com.vatly1.example.service.INotificationService notificationService;
     private final com.vatly1.example.repository.IExamParticipantRepository examParticipantRepository;
+    private final com.vatly1.example.repository.IExamMatrixRepository examMatrixRepository;
+    private final com.vatly1.example.repository.IQuestionCloRepository questionCloRepository;
+    private final com.vatly1.example.service.algorithm.CloAwareQuestionMatcher cloAwareQuestionMatcher;
+    private final com.vatly1.example.service.IClassSettingsService classSettingsService;
 
     @Override
     @Transactional
@@ -96,6 +115,10 @@ public class ExamServiceImpl implements IExamService {
         boolean isStaff = classStaffRepository.existsByClassIdAndUserId(dto.getClassId(), creatorId);
         if (!isAdmin && !isInstructor && !isStaff) {
             throw new CustomException("Access denied: You are not authorized to manage exams for this class", HttpStatus.FORBIDDEN);
+        }
+
+        if (dto.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL && !isAdmin) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền tạo kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
         }
 
         Exam exam = Exam.builder()
@@ -139,6 +162,22 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         checkExamOwnership(exam, instructorId);
 
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            User user = userRepository.findById(instructorId).orElse(null);
+            boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+            if (!isAdmin) {
+                throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền tự động sinh câu hỏi cho kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        if (examAttemptRepository.existsByExamId(examId)) {
+            throw new CustomException("Cannot auto-generate questions for an exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot auto-generate questions for an exam that has already ended", HttpStatus.BAD_REQUEST);
+        }
+
         if (exam.getMatrixId() == null) {
             throw new CustomException("Exam has no associated matrix", HttpStatus.BAD_REQUEST);
         }
@@ -147,32 +186,213 @@ public class ExamServiceImpl implements IExamService {
     }
 
     private int populateQuestionsFromMatrix(UUID examId, UUID matrixId) {
+        Exam exam = examRepository.findByIdForUpdate(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if (examAttemptRepository.existsByExamId(examId)) {
+            throw new CustomException("Cannot auto-generate questions for an exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot auto-generate questions for an exam that has already ended", HttpStatus.BAD_REQUEST);
+        }
+
+        ExamMatrix matrix = examMatrixRepository.findById(matrixId)
+                .orElseThrow(() -> new CustomException("Không tìm thấy ma trận đề thi", HttpStatus.NOT_FOUND));
+
+        Class clazz = classRepository.findById(exam.getClassId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy lớp học của bài thi", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(matrix.getSubjectId(), clazz.getSubjectId())) {
+            throw new CustomException("Ma trận đề thi không thuộc môn học của lớp học này", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            return populateFinalExamQuestions(exam, matrix);
+        } else {
+            return populatePracticeExamQuestions(examId, matrixId);
+        }
+    }
+
+    private int populateFinalExamQuestions(Exam exam, ExamMatrix matrix) {
+        if (matrix.getExamType() != com.vatly1.example.entity.enums.ExamType.FINAL) {
+            throw new CustomException("Bài thi cuối kỳ (FINAL) chỉ được sử dụng ma trận đề thi loại FINAL", HttpStatus.BAD_REQUEST);
+        }
+
+        if (matrix.getStatus() != com.vatly1.example.entity.enums.MatrixStatus.PUBLISHED) {
+            throw new CustomException("Ma trận đề thi cuối kỳ phải ở trạng thái PUBLISHED mới được sử dụng để sinh đề thi", HttpStatus.BAD_REQUEST);
+        }
+
+        if (examQuestionRepository.countByExamId(exam.getExamId()) > 0) {
+            throw new CustomException("Bài thi đã có danh sách câu hỏi, không được phép sinh lại đề thi", HttpStatus.BAD_REQUEST);
+        }
+
+        List<ExamMatrixDetail> details = examMatrixDetailRepository.findByMatrixId(matrix.getMatrixId());
+        if (details == null || details.isEmpty()) {
+            throw new CustomException("Ma trận đề thi không có cấu hình chi tiết (details)", HttpStatus.BAD_REQUEST);
+        }
+
+        int totalRequired = 0;
+        for (ExamMatrixDetail d : details) {
+            if (d.getNumQuestions() != null && d.getNumQuestions() < 0) {
+                throw new CustomException("Số lượng câu hỏi trong ma trận không được âm", HttpStatus.BAD_REQUEST);
+            }
+            totalRequired += (d.getNumQuestions() != null ? d.getNumQuestions() : 0);
+        }
+
+        if (totalRequired <= 0) {
+            throw new CustomException("Ma trận đề thi yêu cầu tổng số câu hỏi phải lớn hơn 0", HttpStatus.BAD_REQUEST);
+        }
+
+        Set<UUID> topicIds = details.stream()
+                .map(ExamMatrixDetail::getTopicId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        List<QuestionBank> candidates = topicIds.isEmpty() ? Collections.emptyList() :
+                questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(
+                        matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED);
+
+        Set<UUID> candidateIds = candidates.stream()
+                .map(QuestionBank::getQuestionId)
+                .collect(Collectors.toSet());
+
+        List<QuestionClo> questionClos = candidateIds.isEmpty() ? Collections.emptyList() :
+                questionCloRepository.findBySubjectIdAndQuestionIdIn(matrix.getSubjectId(), candidateIds);
+
+        Map<UUID, Set<UUID>> questionCloMap = new HashMap<>();
+        for (QuestionClo qc : questionClos) {
+            questionCloMap.computeIfAbsent(qc.getQuestionId(), k -> new HashSet<>()).add(qc.getCloId());
+        }
+
+        com.vatly1.example.service.algorithm.CloAwareQuestionMatcher.MatchResult matchResult =
+                cloAwareQuestionMatcher.match(details, candidates, questionCloMap, null);
+
+        if (!matchResult.isFeasible()) {
+            String diagMsg = matchResult.getDiagnostics().isEmpty() ?
+                    String.format("Yêu cầu %d câu nhưng chỉ phân bổ được %d câu", matchResult.getTotalRequiredQuestions(), matchResult.getTotalMatchedQuestions()) :
+                    String.join("; ", matchResult.getDiagnostics());
+            log.warn("FINAL Exam question generation failed for examId {}: {}", exam.getExamId(), diagMsg);
+            throw new CustomException("Không thể sinh đề thi cuối kỳ: " + diagMsg, HttpStatus.BAD_REQUEST);
+        }
+
+        int orderIndex = 0;
+        int addedCount = 0;
+        Set<UUID> chosenQuestionIds = new HashSet<>();
+
+        for (ExamMatrixDetail detail : details) {
+            List<QuestionBank> assigned = matchResult.getAssignedQuestions(detail);
+            BigDecimal weight = detail.getWeightPercent() != null ? detail.getWeightPercent() : BigDecimal.ONE;
+
+            for (QuestionBank q : assigned) {
+                if (chosenQuestionIds.contains(q.getQuestionId())) {
+                    throw new CustomException("Phát hiện trùng lặp câu hỏi (Question ID: " + q.getQuestionId() + ") trong quá trình sinh đề thi", HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+                chosenQuestionIds.add(q.getQuestionId());
+                orderIndex++;
+
+                ExamQuestion eq = ExamQuestion.builder()
+                        .examId(exam.getExamId())
+                        .questionId(q.getQuestionId())
+                        .orderIndex(orderIndex)
+                        .scoreWeight(weight)
+                        .build();
+                examQuestionRepository.save(eq);
+                addedCount++;
+            }
+        }
+
+        if (addedCount != matchResult.getTotalRequiredQuestions()) {
+            throw new CustomException("Lỗi lưu trữ câu hỏi đề thi: số lượng câu hỏi lưu (" + addedCount + ") không khớp với ma trận (" + matchResult.getTotalRequiredQuestions() + ")", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        log.info("FINAL Exam {} questions populated successfully: {} questions from matrix {}",
+                exam.getExamId(), addedCount, matrix.getMatrixId());
+        return addedCount;
+    }
+
+    private int populatePracticeExamQuestions(UUID examId, UUID matrixId) {
         List<ExamMatrixDetail> details = examMatrixDetailRepository.findByMatrixId(matrixId);
+        if (details == null || details.isEmpty()) {
+            throw new CustomException("Ma trận đề thi không có cấu hình chi tiết (details)", HttpStatus.BAD_REQUEST);
+        }
+
+        // Track questions already in the exam to avoid duplicates across matrix details or previous generations
+        Set<UUID> chosenQuestionIds = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(examId)
+                .stream()
+                .map(ExamQuestion::getQuestionId)
+                .collect(Collectors.toSet());
+
         int orderIndex = (int) examQuestionRepository.countByExamId(examId);
         int addedCount = 0;
 
         for (ExamMatrixDetail detail : details) {
-            List<QuestionBank> questions = questionBankRepository.findByTopicIdAndDifficultyLevel(
-                    detail.getTopicId(), detail.getDifficultyLevel());
-            if (questions.isEmpty()) {
-                questions = questionBankRepository.findByTopicId(detail.getTopicId());
+            int requiredCount = detail.getNumQuestions() != null ? detail.getNumQuestions() : 0;
+            if (requiredCount <= 0) {
+                continue;
             }
 
-            int countForDetail = Math.min(detail.getNumQuestions(), questions.size());
+            // 1. Primary query: strictly APPROVED with matching topic and difficulty
+            List<QuestionBank> primaryCandidates = questionBankRepository.findByTopicIdAndDifficultyLevelAndApprovalStatus(
+                    detail.getTopicId(), detail.getDifficultyLevel(), ApprovalStatus.APPROVED)
+                    .stream()
+                    .filter(q -> !chosenQuestionIds.contains(q.getQuestionId()))
+                    .collect(Collectors.toList());
+
+            List<QuestionBank> selectedForDetail = new ArrayList<>();
+
+            if (primaryCandidates.size() >= requiredCount) {
+                Collections.shuffle(primaryCandidates);
+                selectedForDetail.addAll(primaryCandidates.subList(0, requiredCount));
+            } else {
+                // Take all available primary candidates
+                selectedForDetail.addAll(primaryCandidates);
+                int neededMore = requiredCount - selectedForDetail.size();
+
+                // 2. Fallback query: strictly APPROVED within the same topic (other difficulty levels)
+                Set<UUID> currentSelectedIds = selectedForDetail.stream()
+                        .map(QuestionBank::getQuestionId)
+                        .collect(Collectors.toSet());
+
+                List<QuestionBank> fallbackCandidates = questionBankRepository.findByTopicIdAndApprovalStatus(
+                        detail.getTopicId(), ApprovalStatus.APPROVED)
+                        .stream()
+                        .filter(q -> !chosenQuestionIds.contains(q.getQuestionId()) && !currentSelectedIds.contains(q.getQuestionId()))
+                        .collect(Collectors.toList());
+
+                if (fallbackCandidates.size() >= neededMore) {
+                    Collections.shuffle(fallbackCandidates);
+                    selectedForDetail.addAll(fallbackCandidates.subList(0, neededMore));
+                    Topic topic = topicRepository.findById(detail.getTopicId()).orElse(null);
+                    String topicName = topic != null ? topic.getTopicName() : detail.getTopicId().toString();
+                    log.warn("Bài thi ID {}: Chủ đề '{}' thiếu {} câu mức độ {} (chỉ có {} câu đúng độ khó đã duyệt). Tự động bù {} câu APPROVED từ độ khó khác trong cùng chủ đề.",
+                            examId, topicName, neededMore, detail.getDifficultyLevel(), primaryCandidates.size(), neededMore);
+                } else {
+                    // Insufficient APPROVED questions to fulfill matrix requirement
+                    Topic topic = topicRepository.findById(detail.getTopicId()).orElse(null);
+                    String topicName = topic != null ? topic.getTopicName() : detail.getTopicId().toString();
+                    int totalAvailable = selectedForDetail.size() + fallbackCandidates.size();
+
+                    throw new CustomException(
+                            String.format("Không đủ câu hỏi đã được phê duyệt (APPROVED) cho chủ đề '%s' (mức độ %s). Yêu cầu: %d câu, khả dụng: %d câu.",
+                                    topicName, detail.getDifficultyLevel(), requiredCount, totalAvailable),
+                            HttpStatus.BAD_REQUEST
+                    );
+                }
+            }
+
             BigDecimal weight = detail.getWeightPercent() != null ? detail.getWeightPercent() : BigDecimal.ONE;
 
-            for (int i = 0; i < countForDetail; i++) {
-                QuestionBank q = questions.get(i);
-                if (!examQuestionRepository.existsByExamIdAndQuestionId(examId, q.getQuestionId())) {
-                    ExamQuestion eq = ExamQuestion.builder()
-                            .examId(examId)
-                            .questionId(q.getQuestionId())
-                            .orderIndex(++orderIndex)
-                            .scoreWeight(weight)
-                            .build();
-                    examQuestionRepository.save(eq);
-                    addedCount++;
-                }
+            for (QuestionBank q : selectedForDetail) {
+                chosenQuestionIds.add(q.getQuestionId());
+                ExamQuestion eq = ExamQuestion.builder()
+                        .examId(examId)
+                        .questionId(q.getQuestionId())
+                        .orderIndex(++orderIndex)
+                        .scoreWeight(weight)
+                        .build();
+                examQuestionRepository.save(eq);
+                addedCount++;
             }
         }
         return addedCount;
@@ -183,10 +403,33 @@ public class ExamServiceImpl implements IExamService {
     public void addQuestionToExam(UUID examId, AddExamQuestionDTO dto, UUID instructorId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
-        checkExamOwnership(exam, instructorId);
+        Class clazz = checkExamOwnership(exam, instructorId);
 
-        if (!questionBankRepository.existsById(dto.getQuestionId())) {
-            throw new CustomException("Question not found in question bank", HttpStatus.NOT_FOUND);
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            User user = userRepository.findById(instructorId).orElse(null);
+            boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+            if (!isAdmin) {
+                throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền điều chỉnh câu hỏi kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        if (examAttemptRepository.existsByExamId(examId)) {
+            throw new CustomException("Cannot modify questions for an exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot modify questions for an exam that has already ended", HttpStatus.BAD_REQUEST);
+        }
+
+        QuestionBank question = questionBankRepository.findById(dto.getQuestionId())
+                .orElseThrow(() -> new CustomException("Question not found in question bank", HttpStatus.NOT_FOUND));
+
+        if (question.getApprovalStatus() != ApprovalStatus.APPROVED) {
+            throw new CustomException("Only APPROVED questions can be added to an exam", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!Objects.equals(question.getSubjectId(), clazz.getSubjectId())) {
+            throw new CustomException("Question does not belong to the same subject as the exam", HttpStatus.BAD_REQUEST);
         }
 
         if (examQuestionRepository.existsByExamIdAndQuestionId(examId, dto.getQuestionId())) {
@@ -211,7 +454,7 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
 
         if ("STUDENT".equalsIgnoreCase(role)) {
-            if (!classEnrollmentRepository.existsByClassIdAndStudentId(classId, currentUserId)) {
+            if (!classEnrollmentRepository.isStudentActivelyEnrolledInClass(classId, currentUserId)) {
                 throw new CustomException("Access denied: You are not enrolled in this class", HttpStatus.FORBIDDEN);
             }
         } else if ("INSTRUCTOR".equalsIgnoreCase(role)) {
@@ -269,7 +512,7 @@ public class ExamServiceImpl implements IExamService {
         User studentUser = userRepository.findById(studentId).orElse(null);
         boolean isAdmin = studentUser != null && studentUser.getRole() == UserRole.ADMIN;
         if (!isAdmin) {
-            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), studentId);
+            boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), studentId);
             boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
             if (!isEnrolled && !isTransferred) {
                 throw new CustomException("Bạn không có tên trong danh sách ca thi này", HttpStatus.FORBIDDEN);
@@ -284,7 +527,35 @@ public class ExamServiceImpl implements IExamService {
             throw new CustomException("Exam has already ended", HttpStatus.BAD_REQUEST);
         }
 
+        long questionCount = examQuestionRepository.countByExamId(examId);
+        if (questionCount == 0) {
+            throw new CustomException("Kỳ thi chưa có câu hỏi hoặc chưa sẵn sàng để làm bài", HttpStatus.BAD_REQUEST);
+        }
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL && exam.getMatrixId() != null) {
+            List<ExamMatrixDetail> matrixDetails = examMatrixDetailRepository.findByMatrixId(exam.getMatrixId());
+            int totalRequired = matrixDetails.stream()
+                    .mapToInt(d -> d.getNumQuestions() != null ? d.getNumQuestions() : 0)
+                    .sum();
+            if (questionCount < totalRequired) {
+                throw new CustomException(String.format("Kỳ thi cuối kỳ chưa có đủ số lượng câu hỏi theo ma trận đề (%d/%d câu)",
+                        questionCount, totalRequired), HttpStatus.BAD_REQUEST);
+            }
+        }
+
         int nextAttemptNumber = 1;
+
+        if (classSettingsService != null && exam.getClassId() != null) {
+            com.vatly1.example.entity.ClassSettings settings = classSettingsService.getEffectiveSettings(exam.getClassId());
+            if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
+                if (!Boolean.TRUE.equals(settings.getPracticeEnabled())) {
+                    throw new CustomException("Hoạt động luyện tập hiện đang bị khóa đối với lớp này", HttpStatus.BAD_REQUEST);
+                }
+            } else if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.QUIZ) {
+                if (!Boolean.TRUE.equals(settings.getQuizEnabled())) {
+                    throw new CustomException("Hoạt động Quiz hiện đang bị khóa đối với lớp này", HttpStatus.BAD_REQUEST);
+                }
+            }
+        }
 
         if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
             // For practice exams: check if student has an unfinished (IN_PROGRESS) attempt
@@ -296,7 +567,12 @@ public class ExamServiceImpl implements IExamService {
 
             long existingCount = examAttemptRepository.countByExamIdAndStudentId(examId, studentId);
             int maxAttempts = 10;
-            if (systemSettingService != null) {
+            if (classSettingsService != null && exam.getClassId() != null) {
+                com.vatly1.example.entity.ClassSettings settings = classSettingsService.getEffectiveSettings(exam.getClassId());
+                if (settings.getMaxPracticeAttempts() != null) {
+                    maxAttempts = settings.getMaxPracticeAttempts();
+                }
+            } else if (systemSettingService != null) {
                 try {
                     com.vatly1.example.entity.SystemSetting maxSetting = systemSettingService.getSettingByKey("exam.max_attempts");
                     if (maxSetting != null && maxSetting.getSettingValue() != null) {
@@ -371,8 +647,14 @@ public class ExamServiceImpl implements IExamService {
                         .questionId(dto.getQuestionId())
                         .build());
 
-        answer.setSelectedOptionIds(dto.getSelectedOptionIds() != null ? new ArrayList<>(dto.getSelectedOptionIds()) : new ArrayList<>());
-        answer.setAnswerText(dto.getAnswerText());
+        QuestionBank qb = questionBankRepository.findById(dto.getQuestionId()).orElse(null);
+        if (qb != null && qb.getQuestionType() == com.vatly1.example.entity.enums.QuestionType.FILL_BLANK) {
+            answer.setAnswerText(dto.getAnswerText());
+            answer.setSelectedOptionIds(new ArrayList<>());
+        } else {
+            answer.setSelectedOptionIds(dto.getSelectedOptionIds() != null ? new ArrayList<>(dto.getSelectedOptionIds()) : new ArrayList<>());
+            answer.setAnswerText(null);
+        }
         examAnswerRepository.save(answer);
     }
 
@@ -405,26 +687,52 @@ public class ExamServiceImpl implements IExamService {
 
         for (ExamQuestion eq : questions) {
             ExamAnswer ans = answerMap.get(eq.getQuestionId());
-            List<QuestionOption> correctOptions = questionOptionRepository.findByQuestionIdAndIsCorrectTrue(eq.getQuestionId());
-            Set<UUID> correctOptionIds = correctOptions.stream()
-                    .map(QuestionOption::getOptionId)
-                    .collect(Collectors.toSet());
-
+            QuestionBank qb = questionBankRepository.findById(eq.getQuestionId()).orElse(null);
             BigDecimal weight = eq.getScoreWeight() != null ? eq.getScoreWeight() : BigDecimal.ONE;
 
-            if (ans != null && ans.getSelectedOptionIds() != null && !ans.getSelectedOptionIds().isEmpty()) {
-                Set<UUID> studentSelectedIds = new HashSet<>(ans.getSelectedOptionIds());
-                boolean correct = !correctOptionIds.isEmpty() && studentSelectedIds.equals(correctOptionIds);
+            if (qb != null && qb.getQuestionType() == com.vatly1.example.entity.enums.QuestionType.FILL_BLANK) {
+                List<QuestionAcceptedAnswer> acceptedAnswers =
+                        questionAcceptedAnswerRepository.findByQuestionIdOrderByOrderIndexAsc(eq.getQuestionId());
+                List<String> acceptedTexts = acceptedAnswers.stream()
+                        .map(QuestionAcceptedAnswer::getAcceptedText)
+                        .collect(Collectors.toList());
 
+                String studentText = (ans != null) ? ans.getAnswerText() : null;
+                boolean correct = AnswerNormalizationUtil.isMatchAny(studentText, acceptedTexts);
+
+                if (ans == null) {
+                    ans = ExamAnswer.builder()
+                            .attemptId(attemptId)
+                            .questionId(eq.getQuestionId())
+                            .build();
+                }
                 ans.setIsCorrect(correct);
                 BigDecimal score = correct ? weight : BigDecimal.ZERO;
                 ans.setScore(score);
-                totalScore = totalScore.add(score);
+                if (correct) {
+                    totalScore = totalScore.add(score);
+                }
                 examAnswerRepository.save(ans);
-            } else if (ans != null) {
-                ans.setIsCorrect(false);
-                ans.setScore(BigDecimal.ZERO);
-                examAnswerRepository.save(ans);
+            } else {
+                List<QuestionOption> correctOptions = questionOptionRepository.findByQuestionIdAndIsCorrectTrue(eq.getQuestionId());
+                Set<UUID> correctOptionIds = correctOptions.stream()
+                        .map(QuestionOption::getOptionId)
+                        .collect(Collectors.toSet());
+
+                if (ans != null && ans.getSelectedOptionIds() != null && !ans.getSelectedOptionIds().isEmpty()) {
+                    Set<UUID> studentSelectedIds = new HashSet<>(ans.getSelectedOptionIds());
+                    boolean correct = !correctOptionIds.isEmpty() && studentSelectedIds.equals(correctOptionIds);
+
+                    ans.setIsCorrect(correct);
+                    BigDecimal score = correct ? weight : BigDecimal.ZERO;
+                    ans.setScore(score);
+                    totalScore = totalScore.add(score);
+                    examAnswerRepository.save(ans);
+                } else if (ans != null) {
+                    ans.setIsCorrect(false);
+                    ans.setScore(BigDecimal.ZERO);
+                    examAnswerRepository.save(ans);
+                }
             }
         }
 
@@ -529,7 +837,7 @@ public class ExamServiceImpl implements IExamService {
         if ("INSTRUCTOR".equalsIgnoreCase(role)) {
             checkExamOwnership(exam, currentUserId);
         } else if ("STUDENT".equalsIgnoreCase(role)) {
-            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), currentUserId);
+            boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), currentUserId);
             boolean isParticipant = examParticipantRepository.existsByExamIdAndStudentId(examId, currentUserId);
             if (!isEnrolled && !isParticipant) {
                 throw new CustomException("Access denied: You are not authorized to view questions for this exam", HttpStatus.FORBIDDEN);
@@ -549,23 +857,45 @@ public class ExamServiceImpl implements IExamService {
             if (qb == null) continue;
 
             String topicName = null;
+            UUID chapterId = null;
+            String chapterName = null;
             if (qb.getTopicId() != null) {
                 Topic topic = topicRepository.findById(qb.getTopicId()).orElse(null);
                 if (topic != null) {
                     topicName = topic.getTopicName();
+                    if (topic.getChapterId() != null) {
+                        chapterId = topic.getChapterId();
+                        Chapter chapter = chapterRepository.findById(topic.getChapterId()).orElse(null);
+                        if (chapter != null) {
+                            chapterName = chapter.getChapterName();
+                        }
+                    }
                 }
             }
 
-            List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
-            List<QuestionOptionDTO> optionDTOs = options.stream()
-                    .map(opt -> QuestionOptionDTO.builder()
-                            .optionId(opt.getOptionId())
-                            .questionId(opt.getQuestionId())
-                            .content(opt.getOptionText())
-                            .isCorrect(hideAnswers ? null : opt.getIsCorrect())
-                            .orderIndex(opt.getOrderIndex())
-                            .build())
-                    .collect(Collectors.toList());
+            List<QuestionOptionDTO> optionDTOs;
+            List<String> acceptedAnswers = null;
+
+            if (qb.getQuestionType() == com.vatly1.example.entity.enums.QuestionType.FILL_BLANK) {
+                optionDTOs = Collections.emptyList();
+                if (!hideAnswers) {
+                    acceptedAnswers = questionAcceptedAnswerRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId())
+                            .stream()
+                            .map(QuestionAcceptedAnswer::getAcceptedText)
+                            .collect(Collectors.toList());
+                }
+            } else {
+                List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
+                optionDTOs = options.stream()
+                        .map(opt -> QuestionOptionDTO.builder()
+                                .optionId(opt.getOptionId())
+                                .questionId(opt.getQuestionId())
+                                .content(opt.getOptionText())
+                                .isCorrect(hideAnswers ? null : opt.getIsCorrect())
+                                .orderIndex(opt.getOrderIndex())
+                                .build())
+                        .collect(Collectors.toList());
+            }
 
             results.add(ExamQuestionDetailDTO.builder()
                     .examId(examId)
@@ -575,20 +905,69 @@ public class ExamServiceImpl implements IExamService {
                     .difficultyLevel(qb.getDifficultyLevel())
                     .topicId(qb.getTopicId())
                     .topicName(topicName)
+                    .chapterId(chapterId)
+                    .chapterName(chapterName)
                     .orderIndex(eq.getOrderIndex())
                     .scoreWeight(eq.getScoreWeight())
                     .options(optionDTOs)
+                    .acceptedAnswers(acceptedAnswers)
                     .build());
         }
 
         return results;
     }
 
-    private List<StudentExamQuestionDTO> buildStudentQuestionsForAttempt(ExamAttempt attempt, Exam exam, String role) {
-        boolean isGraded = attempt.getStatus() == AttemptStatus.GRADED;
-        boolean canSeeAnswers = "ADMIN".equalsIgnoreCase(role) || "INSTRUCTOR".equalsIgnoreCase(role) || "TA".equalsIgnoreCase(role) || isGraded;
+    private boolean hasActiveOrUpcomingFinalExamsSharingQuestions(Exam currentExam, List<ExamQuestion> examQuestions) {
+        if (currentExam.getExamType() != com.vatly1.example.entity.enums.ExamType.FINAL) {
+            return false;
+        }
+        Instant now = Instant.now();
+        // 1. Kiểm tra các đề FINAL khác cùng matrixId (nếu đề được sinh từ ma trận chung)
+        if (currentExam.getMatrixId() != null) {
+            List<Exam> sameMatrixExams = examRepository.findByMatrixId(currentExam.getMatrixId());
+            for (Exam other : sameMatrixExams) {
+                if (!Objects.equals(other.getExamId(), currentExam.getExamId())
+                        && other.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+                    if (other.getEndTime() == null || !now.isAfter(other.getEndTime())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        // 2. Kiểm tra các đề FINAL khác chia sẻ bất kỳ câu hỏi nào trong đề này
+        if (examQuestions != null && !examQuestions.isEmpty()) {
+            List<UUID> questionIds = examQuestions.stream()
+                    .map(ExamQuestion::getQuestionId)
+                    .collect(Collectors.toList());
+            List<UUID> relatedExamIds = examQuestionRepository.findDistinctExamIdsByQuestionIdIn(questionIds);
+            for (UUID otherId : relatedExamIds) {
+                if (!Objects.equals(otherId, currentExam.getExamId())) {
+                    Exam other = examRepository.findById(otherId).orElse(null);
+                    if (other != null && other.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+                        if (other.getEndTime() == null || !now.isAfter(other.getEndTime())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
 
+    private List<StudentExamQuestionDTO> buildStudentQuestionsForAttempt(ExamAttempt attempt, Exam exam, String role) {
         List<ExamQuestion> examQuestions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(attempt.getExamId());
+        boolean isGraded = attempt.getStatus() == AttemptStatus.GRADED;
+        boolean isStaffOrAdmin = "ADMIN".equalsIgnoreCase(role) || "INSTRUCTOR".equalsIgnoreCase(role) || "TA".equalsIgnoreCase(role);
+        boolean isExamEnded = exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime());
+        boolean hasConflictFinal = hasActiveOrUpcomingFinalExamsSharingQuestions(exam, examQuestions);
+        boolean answersAllowed = isStaffOrAdmin || (isGraded && (exam.getExamType() != com.vatly1.example.entity.enums.ExamType.FINAL || (isExamEnded && !hasConflictFinal)));
+        if (!isStaffOrAdmin && exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE && classSettingsService != null && exam.getClassId() != null) {
+            com.vatly1.example.entity.ClassSettings settings = classSettingsService.getEffectiveSettings(exam.getClassId());
+            if (!Boolean.TRUE.equals(settings.getPracticeShowSolution())) {
+                answersAllowed = false;
+            }
+        }
+        final boolean canSeeAnswers = answersAllowed;
         List<ExamAnswer> studentAnswers = examAnswerRepository.findByAttemptId(attempt.getAttemptId());
         Map<UUID, ExamAnswer> answerMap = studentAnswers.stream()
                 .collect(Collectors.toMap(ExamAnswer::getQuestionId, a -> a, (a1, a2) -> a1));
@@ -599,23 +978,45 @@ public class ExamServiceImpl implements IExamService {
             if (qb == null) continue;
 
             String topicName = null;
+            UUID chapterId = null;
+            String chapterName = null;
             if (qb.getTopicId() != null) {
                 Topic topic = topicRepository.findById(qb.getTopicId()).orElse(null);
                 if (topic != null) {
                     topicName = topic.getTopicName();
+                    if (topic.getChapterId() != null) {
+                        chapterId = topic.getChapterId();
+                        Chapter chapter = chapterRepository.findById(topic.getChapterId()).orElse(null);
+                        if (chapter != null) {
+                            chapterName = chapter.getChapterName();
+                        }
+                    }
                 }
             }
 
-            List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
-            List<StudentQuestionOptionDTO> optionDTOs = options.stream()
-                    .map(opt -> StudentQuestionOptionDTO.builder()
-                            .optionId(opt.getOptionId())
-                            .questionId(opt.getQuestionId())
-                            .content(opt.getOptionText())
-                            .orderIndex(opt.getOrderIndex())
-                            .isCorrect(canSeeAnswers ? opt.getIsCorrect() : null)
-                            .build())
-                    .collect(Collectors.toList());
+            List<StudentQuestionOptionDTO> optionDTOs;
+            List<String> acceptedAnswers = null;
+
+            if (qb.getQuestionType() == com.vatly1.example.entity.enums.QuestionType.FILL_BLANK) {
+                optionDTOs = Collections.emptyList();
+                if (canSeeAnswers) {
+                    acceptedAnswers = questionAcceptedAnswerRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId())
+                            .stream()
+                            .map(QuestionAcceptedAnswer::getAcceptedText)
+                            .collect(Collectors.toList());
+                }
+            } else {
+                List<QuestionOption> options = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(qb.getQuestionId());
+                optionDTOs = options.stream()
+                        .map(opt -> StudentQuestionOptionDTO.builder()
+                                .optionId(opt.getOptionId())
+                                .questionId(opt.getQuestionId())
+                                .content(opt.getOptionText())
+                                .orderIndex(opt.getOrderIndex())
+                                .isCorrect(canSeeAnswers ? opt.getIsCorrect() : null)
+                                .build())
+                        .collect(Collectors.toList());
+            }
 
             ExamAnswer ans = answerMap.get(eq.getQuestionId());
 
@@ -627,13 +1028,16 @@ public class ExamServiceImpl implements IExamService {
                     .difficultyLevel(qb.getDifficultyLevel())
                     .topicId(qb.getTopicId())
                     .topicName(topicName)
+                    .chapterId(chapterId)
+                    .chapterName(chapterName)
                     .orderIndex(eq.getOrderIndex())
                     .scoreWeight(eq.getScoreWeight())
                     .options(optionDTOs)
+                    .acceptedAnswers(acceptedAnswers)
                     .selectedOptionIds(ans != null && ans.getSelectedOptionIds() != null ? ans.getSelectedOptionIds() : new ArrayList<>())
                     .answerText(ans != null ? ans.getAnswerText() : null)
-                    .isCorrect(isGraded && ans != null ? ans.getIsCorrect() : null)
-                    .score(isGraded && ans != null ? ans.getScore() : null)
+                    .isCorrect(canSeeAnswers && ans != null ? ans.getIsCorrect() : null)
+                    .score(canSeeAnswers && ans != null ? ans.getScore() : null)
                     .build());
         }
 
@@ -647,8 +1051,20 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         checkExamOwnership(exam, instructorId);
 
+        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            User user = userRepository.findById(instructorId).orElse(null);
+            boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+            if (!isAdmin) {
+                throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền điều chỉnh câu hỏi kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+            }
+        }
+
         if (examAttemptRepository.countByExamId(examId) > 0) {
             throw new CustomException("Cannot remove question from an exam that already has student attempts", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot modify questions for an exam that has already ended", HttpStatus.BAD_REQUEST);
         }
 
         if (!examQuestionRepository.existsByExamIdAndQuestionId(examId, questionId)) {
@@ -664,6 +1080,16 @@ public class ExamServiceImpl implements IExamService {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         checkExamOwnership(exam, instructorId);
+
+        User user = userRepository.findById(instructorId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+        if (!isAdmin && (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL || dto.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL)) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền cập nhật kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+        }
+
+        if (examAttemptRepository.existsByExamId(examId)) {
+            throw new CustomException("Không thể cập nhật cấu hình kỳ thi đã có sinh viên làm bài", HttpStatus.BAD_REQUEST);
+        }
 
         if (dto.getTitle() != null && !dto.getTitle().isBlank()) {
             exam.setTitle(dto.getTitle().trim());
@@ -695,12 +1121,14 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         checkExamOwnership(exam, instructorId);
 
-        // Xóa các lượt làm bài (attempts) và câu trả lời (answers) liên quan đến bài thi
-        List<ExamAttempt> attempts = examAttemptRepository.findByExamId(examId);
-        if (!attempts.isEmpty()) {
-            List<UUID> attemptIds = attempts.stream().map(ExamAttempt::getAttemptId).collect(Collectors.toList());
-            examAnswerRepository.deleteByAttemptIdIn(attemptIds);
-            examAttemptRepository.deleteByExamId(examId);
+        User user = userRepository.findById(instructorId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
+        if (!isAdmin && exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền xóa kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+        }
+
+        if (examAttemptRepository.existsByExamId(examId)) {
+            throw new CustomException("Không thể xóa kỳ thi đã có sinh viên làm bài", HttpStatus.BAD_REQUEST);
         }
 
         examQuestionRepository.deleteByExamId(examId);
@@ -794,7 +1222,7 @@ public class ExamServiceImpl implements IExamService {
         return toAttemptDTO(saved);
     }
 
-    private void checkExamOwnership(Exam exam, UUID instructorId) {
+    private Class checkExamOwnership(Exam exam, UUID instructorId) {
         Class clazz = classRepository.findById(exam.getClassId())
                 .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
         User user = userRepository.findById(instructorId).orElse(null);
@@ -804,6 +1232,7 @@ public class ExamServiceImpl implements IExamService {
         if (!isAdmin && !isInstructor && !isStaff) {
             throw new CustomException("Access denied: You are not authorized to modify this exam", HttpStatus.FORBIDDEN);
         }
+        return clazz;
     }
 
     private ExamDTO toExamDTO(Exam exam) {
@@ -950,7 +1379,7 @@ public class ExamServiceImpl implements IExamService {
         User studentUser = userRepository.findById(studentId).orElse(null);
         boolean isAdmin = studentUser != null && studentUser.getRole() == UserRole.ADMIN;
         if (!isAdmin) {
-            boolean isEnrolled = classEnrollmentRepository.existsByClassIdAndStudentId(exam.getClassId(), studentId);
+            boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), studentId);
             boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
             if (!isEnrolled && !isTransferred) {
                 throw new CustomException("Bạn không có tên trong danh sách ca thi này", HttpStatus.FORBIDDEN);
@@ -962,7 +1391,16 @@ public class ExamServiceImpl implements IExamService {
         boolean isEnded = exam.getEndTime() != null && now.isAfter(exam.getEndTime());
 
         int maxAttempts = 1;
-        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
+        boolean activityAllowed = true;
+        if (classSettingsService != null && exam.getClassId() != null) {
+            com.vatly1.example.entity.ClassSettings settings = classSettingsService.getEffectiveSettings(exam.getClassId());
+            if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
+                activityAllowed = Boolean.TRUE.equals(settings.getPracticeEnabled());
+                maxAttempts = settings.getMaxPracticeAttempts() != null ? settings.getMaxPracticeAttempts() : 10;
+            } else if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.QUIZ) {
+                activityAllowed = Boolean.TRUE.equals(settings.getQuizEnabled());
+            }
+        } else if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.PRACTICE) {
             maxAttempts = 10;
             if (systemSettingService != null) {
                 try {
@@ -983,7 +1421,9 @@ public class ExamServiceImpl implements IExamService {
         boolean hasInProgress = inProgress.isPresent();
         UUID currentAttemptId = inProgress.map(ExamAttempt::getAttemptId).orElse(null);
 
-        boolean canStart = isStarted && !isEnded && !hasInProgress && remainingAttempts > 0;
+        long questionCount = examQuestionRepository.countByExamId(examId);
+        boolean hasQuestions = questionCount > 0;
+        boolean canStart = isStarted && !isEnded && !hasInProgress && remainingAttempts > 0 && hasQuestions && activityAllowed;
 
         return ExamAttemptPolicyDTO.builder()
                 .examId(exam.getExamId())
@@ -1000,6 +1440,158 @@ public class ExamServiceImpl implements IExamService {
                 .isStarted(isStarted)
                 .isEnded(isEnded)
                 .durationMinutes(exam.getDurationMinutes())
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BulkProvisionFinalExamResultDTO bulkProvisionFinalExams(BulkProvisionFinalExamDTO dto, UUID adminId) {
+        User admin = userRepository.findById(adminId).orElse(null);
+        if (admin == null || admin.getRole() != UserRole.ADMIN) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền khởi tạo kỳ thi cuối kỳ hàng loạt (Bulk Provisioning)", HttpStatus.FORBIDDEN);
+        }
+
+        if (dto.getMatrixId() == null) {
+            throw new CustomException("matrixId không được để trống", HttpStatus.BAD_REQUEST);
+        }
+
+        ExamMatrix matrix = examMatrixRepository.findByIdForUpdate(dto.getMatrixId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy ma trận đề thi với ID: " + dto.getMatrixId(), HttpStatus.NOT_FOUND));
+
+        if (matrix.getExamType() != com.vatly1.example.entity.enums.ExamType.FINAL) {
+            throw new CustomException("Chỉ ma trận đề thi loại FINAL mới được sử dụng cho Bulk Provisioning FINAL", HttpStatus.BAD_REQUEST);
+        }
+
+        if (matrix.getStatus() != MatrixStatus.PUBLISHED || !Boolean.TRUE.equals(matrix.getIsLocked())) {
+            throw new CustomException(String.format("Ma trận đề thi phải ở trạng thái PUBLISHED và đã khóa (isLocked=true) mới được dùng để tạo kỳ thi. Trạng thái hiện tại: %s, isLocked: %s",
+                    matrix.getStatus(), matrix.getIsLocked()), HttpStatus.BAD_REQUEST);
+        }
+
+        if (dto.getClassIds() == null || dto.getClassIds().isEmpty()) {
+            throw new CustomException("Danh sách mã lớp (classIds) không được để trống", HttpStatus.BAD_REQUEST);
+        }
+
+        // Chống duplicate UUID trong classIds
+        Set<UUID> uniqueClassIds = new HashSet<>(dto.getClassIds());
+        if (uniqueClassIds.size() != dto.getClassIds().size()) {
+            throw new CustomException("Danh sách lớp học (classIds) chứa ID trùng lặp", HttpStatus.BAD_REQUEST);
+        }
+
+        if (dto.getDurationMinutes() == null || dto.getDurationMinutes() <= 0) {
+            throw new CustomException("Thời lượng thi (durationMinutes) phải lớn hơn 0", HttpStatus.BAD_REQUEST);
+        }
+
+        if (dto.getStartTime() == null || dto.getEndTime() == null) {
+            throw new CustomException("Thời gian bắt đầu và kết thúc kỳ thi không được để trống", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!dto.getStartTime().isBefore(dto.getEndTime())) {
+            throw new CustomException("Thời gian bắt đầu thi phải trước thời gian kết thúc thi", HttpStatus.BAD_REQUEST);
+        }
+
+        // Revalidate tập câu hỏi APPROVED nếu autoGenerateQuestions = true
+        if (Boolean.TRUE.equals(dto.getAutoGenerateQuestions())) {
+            List<ExamMatrixDetail> details = examMatrixDetailRepository.findByMatrixId(matrix.getMatrixId());
+            if (details == null || details.isEmpty()) {
+                throw new CustomException("Ma trận đề thi không có cấu hình chi tiết (details)", HttpStatus.BAD_REQUEST);
+            }
+            Set<UUID> topicIds = details.stream().map(ExamMatrixDetail::getTopicId).filter(Objects::nonNull).collect(Collectors.toSet());
+            List<QuestionBank> candidates = topicIds.isEmpty() ? Collections.emptyList() :
+                    questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED);
+            Set<UUID> candidateIds = candidates.stream().map(QuestionBank::getQuestionId).collect(Collectors.toSet());
+            List<QuestionClo> questionClos = candidateIds.isEmpty() ? Collections.emptyList() :
+                    questionCloRepository.findBySubjectIdAndQuestionIdIn(matrix.getSubjectId(), candidateIds);
+            Map<UUID, Set<UUID>> questionCloMap = new HashMap<>();
+            for (QuestionClo qc : questionClos) {
+                questionCloMap.computeIfAbsent(qc.getQuestionId(), k -> new HashSet<>()).add(qc.getCloId());
+            }
+            com.vatly1.example.service.algorithm.CloAwareQuestionMatcher.MatchResult matchResult =
+                    cloAwareQuestionMatcher.match(details, candidates, questionCloMap, null);
+            if (!matchResult.isFeasible()) {
+                String warnMsg = matchResult.getDiagnostics().isEmpty()
+                        ? String.format("Cần %d câu nhưng chỉ phân bổ được %d câu", matchResult.getTotalRequiredQuestions(), matchResult.getTotalMatchedQuestions())
+                        : String.join("; ", matchResult.getDiagnostics());
+                throw new CustomException("Không thể khởi tạo kỳ thi hàng loạt: Ngân hàng câu hỏi không đáp ứng ma trận đề: " + warnMsg, HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        // Pre-lock all classes in deterministic sorted UUID order to prevent deadlocks
+        List<UUID> sortedClassIds = dto.getClassIds().stream().distinct().sorted().collect(Collectors.toList());
+        Map<UUID, Class> classMap = new HashMap<>();
+        for (UUID classId : sortedClassIds) {
+            Class clazz = classRepository.findByIdForUpdate(classId)
+                    .orElseThrow(() -> new CustomException("Không tìm thấy lớp học với ID: " + classId, HttpStatus.NOT_FOUND));
+            classMap.put(classId, clazz);
+        }
+
+        List<ExamDTO> createdExamDTOs = new ArrayList<>();
+
+        for (UUID classId : dto.getClassIds()) {
+            Class clazz = classMap.get(classId);
+
+            if (!Objects.equals(clazz.getSubjectId(), matrix.getSubjectId())) {
+                throw new CustomException(String.format("Lớp học '%s' (ID: %s) không thuộc môn học của ma trận đề thi",
+                        clazz.getClassCode() != null ? clazz.getClassCode() : classId, classId), HttpStatus.BAD_REQUEST);
+            }
+
+            if (dto.getSemesterId() != null && !Objects.equals(clazz.getSemesterId(), dto.getSemesterId())) {
+                throw new CustomException(String.format("Lớp học '%s' không thuộc học kỳ được chỉ định (ID: %s)",
+                        clazz.getClassCode() != null ? clazz.getClassCode() : classId, dto.getSemesterId()), HttpStatus.BAD_REQUEST);
+            }
+
+            if (examRepository.existsByClassIdAndMatrixId(classId, matrix.getMatrixId())) {
+                throw new CustomException(String.format("Lớp học '%s' đã có bài thi FINAL sử dụng ma trận đề này (Revision %d)",
+                        clazz.getClassCode() != null ? clazz.getClassCode() : classId, matrix.getRevisionNumber()), HttpStatus.CONFLICT);
+            }
+
+            String examTitle = dto.getTitle() != null && !dto.getTitle().isBlank()
+                    ? dto.getTitle().trim()
+                    : String.format("%s - %s", matrix.getMatrixName(), clazz.getClassCode() != null ? clazz.getClassCode() : "Class");
+
+            Exam exam = Exam.builder()
+                    .classId(classId)
+                    .matrixId(matrix.getMatrixId())
+                    .title(examTitle)
+                    .examType(com.vatly1.example.entity.enums.ExamType.FINAL)
+                    .durationMinutes(dto.getDurationMinutes())
+                    .startTime(dto.getStartTime())
+                    .endTime(dto.getEndTime())
+                    .createdBy(adminId)
+                    .createdAt(Instant.now())
+                    .build();
+
+            Exam savedExam = examRepository.save(exam);
+
+            if (Boolean.TRUE.equals(dto.getAutoGenerateQuestions())) {
+                populateFinalExamQuestions(savedExam, matrix);
+            }
+
+            try {
+                notificationService.sendNotificationToClass(
+                        savedExam.getClassId(),
+                        "Kỳ thi cuối kỳ: " + savedExam.getTitle(),
+                        "Lớp học đã được xếp lịch kỳ thi cuối kỳ: " + savedExam.getTitle() + " (Thời lượng: " + savedExam.getDurationMinutes() + " phút).",
+                        com.vatly1.example.entity.enums.NotificationType.EXAM_NEW,
+                        savedExam.getExamId(),
+                        "EXAM"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send bulk provision notification: {}", e.getMessage());
+            }
+
+            createdExamDTOs.add(toExamDTO(savedExam));
+        }
+
+        log.info("Bulk provisioned FINAL exams successfully: {} classes for matrix {} (Rev {}) by admin {}",
+                createdExamDTOs.size(), matrix.getMatrixId(), matrix.getRevisionNumber(), adminId);
+
+        return BulkProvisionFinalExamResultDTO.builder()
+                .matrixId(matrix.getMatrixId())
+                .matrixName(matrix.getMatrixName())
+                .revisionNumber(matrix.getRevisionNumber())
+                .totalClassesRequested(dto.getClassIds().size())
+                .totalClassesProvisioned(createdExamDTOs.size())
+                .createdExams(createdExamDTOs)
                 .build();
     }
 }

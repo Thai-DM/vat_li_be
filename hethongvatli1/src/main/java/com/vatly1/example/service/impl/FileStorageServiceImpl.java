@@ -31,6 +31,9 @@ public class FileStorageServiceImpl implements IFileStorageService {
     private final MinioClient minioClient;
     private final Path localFileStorageLocation;
 
+    @Value("${minio.allow-local-fallback:true}")
+    private boolean allowLocalFallback = true;
+
     @Autowired
     public FileStorageServiceImpl(
             MinioConfig minioConfig,
@@ -57,59 +60,80 @@ public class FileStorageServiceImpl implements IFileStorageService {
         if (file == null || file.isEmpty()) {
             throw new CustomException("Tệp tải lên không được để trống", HttpStatus.BAD_REQUEST);
         }
+        try {
+            return storeFile(file.getInputStream(), file.getOriginalFilename(), file.getSize(), file.getContentType(), folder);
+        } catch (IOException e) {
+            throw new CustomException("Không thể đọc tệp: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-        String originalFilename = file.getOriginalFilename() != null ? StringUtils.cleanPath(file.getOriginalFilename()) : "file";
-        if (originalFilename.contains("..")) {
-            throw new CustomException("Tên tệp không hợp lệ: " + originalFilename, HttpStatus.BAD_REQUEST);
+    @Override
+    public String storeFile(InputStream inputStream, String originalFilename, long size, String contentType, String folder) {
+        if (inputStream == null) {
+            throw new CustomException("Dữ liệu tệp không được để trống", HttpStatus.BAD_REQUEST);
+        }
+
+        String cleanFilename = originalFilename != null ? StringUtils.cleanPath(originalFilename) : "file";
+        if (cleanFilename.contains("..")) {
+            throw new CustomException("Tên tệp không hợp lệ: " + cleanFilename, HttpStatus.BAD_REQUEST);
         }
 
         String fileExtension = "";
-        int i = originalFilename.lastIndexOf('.');
+        int i = cleanFilename.lastIndexOf('.');
         if (i > 0) {
-            fileExtension = originalFilename.substring(i);
+            fileExtension = cleanFilename.substring(i);
         }
 
         String generatedFilename = UUID.randomUUID().toString() + fileExtension;
         String objectName = (folder != null && !folder.isBlank()) ? folder + "/" + generatedFilename : generatedFilename;
+
+        String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "application/octet-stream";
 
         // 1. Thử tải lên MinIO nếu được kích hoạt
         if (minioConfig.isEnabled() && minioClient != null) {
             try {
                 minioConfig.initBucket(minioClient);
 
-                String contentType = file.getContentType();
-                if (contentType == null || contentType.isBlank()) {
-                    contentType = "application/octet-stream";
-                }
-
-                try (InputStream is = file.getInputStream()) {
-                    minioClient.putObject(
-                            PutObjectArgs.builder()
-                                    .bucket(minioConfig.getBucketName())
-                                    .object(objectName)
-                                    .stream(is, file.getSize(), -1)
-                                    .contentType(contentType)
-                                    .build()
-                    );
-                }
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(minioConfig.getBucketName())
+                                .object(objectName)
+                                .stream(inputStream, size, -1)
+                                .contentType(effectiveContentType)
+                                .build()
+                );
 
                 log.info("Uploaded file '{}' to MinIO bucket '{}' successfully.", objectName, minioConfig.getBucketName());
                 return "/api/v1/files/" + objectName;
             } catch (Exception e) {
-                log.warn("Failed to upload to MinIO, falling back to local storage: {}", e.getMessage());
+                log.warn("Failed to upload to MinIO: {}", e.getMessage());
+                if (!allowLocalFallback) {
+                    throw new CustomException("Tải lên MinIO thất bại và hệ thống không cho phép lưu trữ cục bộ: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+                log.warn("Falling back to local storage as permitted by policy...");
                 // Fallback to local disk below
             }
+        } else if (!allowLocalFallback) {
+            throw new CustomException("MinIO là kho lưu trữ bắt buộc nhưng không khả dụng hoặc chưa được bật", HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-        // 2. Lưu trữ cục bộ (Dùng cho môi trường Test hoặc khi MinIO tạm thời không khả dụng)
+        // 2. Lưu trữ cục bộ (Dùng cho môi trường Test hoặc khi MinIO tạm thời không khả dụng và cho phép fallback)
         try {
             Path targetLocation = this.localFileStorageLocation.resolve(generatedFilename);
-            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
             log.info("Saved file locally to '{}'", targetLocation);
             return "/api/v1/files/" + generatedFilename;
         } catch (IOException ex) {
-            throw new CustomException("Không thể lưu trữ tệp " + originalFilename + ": " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new CustomException("Không thể lưu trữ tệp " + cleanFilename + ": " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public boolean isAllowLocalFallback() {
+        return allowLocalFallback;
+    }
+
+    public void setAllowLocalFallback(boolean allowLocalFallback) {
+        this.allowLocalFallback = allowLocalFallback;
     }
 
     @Override

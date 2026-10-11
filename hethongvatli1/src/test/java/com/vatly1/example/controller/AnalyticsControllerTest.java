@@ -174,6 +174,7 @@ public class AnalyticsControllerTest {
         targetMaterial = learningMaterialRepository.findAll().stream()
                 .findFirst()
                 .orElseGet(() -> learningMaterialRepository.save(LearningMaterial.builder()
+                        .subjectId(targetTopic.getSubjectId())
                         .topicId(targetTopic.getTopicId())
                         .title("Bài giảng Cơ học chương 1")
                         .type(MaterialType.PDF)

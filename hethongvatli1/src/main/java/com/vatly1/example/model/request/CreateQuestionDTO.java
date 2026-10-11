@@ -1,6 +1,7 @@
 package com.vatly1.example.model.request;
 
 
+import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.QuestionType;
 import jakarta.validation.constraints.NotBlank;
@@ -37,8 +38,14 @@ public class CreateQuestionDTO {
     private DifficultyLevel difficultyLevel;
     
     private String cognitiveLevel;
+
+    private ApprovalStatus approvalStatus;
     
+    private List<UUID> cloIds;
+
     private List<CreateQuestionOptionDTO> options;
+    
+    private List<String> acceptedAnswers;
     
     @Data
     @Builder

@@ -31,6 +31,17 @@ public class LearningMaterial {
     @Column(name = "topic_id")
     private java.util.UUID topicId;
 
+    @Column(name = "subject_id", nullable = false)
+    private java.util.UUID subjectId;
+
+    @Column(name = "scope", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private com.vatly1.example.entity.enums.MaterialScope scope = com.vatly1.example.entity.enums.MaterialScope.SHARED;
+
+    @Column(name = "class_id")
+    private java.util.UUID classId;
+
     @Column(name = "file_id")
     private java.util.UUID fileId;
 
@@ -48,7 +59,8 @@ public class LearningMaterial {
     private String contentText;
 
     @Column(name = "version")
-    private Integer version;
+    @Builder.Default
+    private Integer version = 1;
 
     @Column(name = "approval_status")
     @Enumerated(EnumType.STRING)
@@ -60,11 +72,14 @@ public class LearningMaterial {
     @Column(name = "created_by")
     private java.util.UUID createdBy;
 
-    @Column(name = "created_at")
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private java.time.Instant createdAt;
 
+    @org.hibernate.annotations.UpdateTimestamp
     @Column(name = "updated_at")
     private java.time.Instant updatedAt;
+
 
 
 }

@@ -12,4 +12,10 @@ public interface IExamMatrixDetailRepository extends JpaRepository<ExamMatrixDet
     List<ExamMatrixDetail> findByMatrixId(UUID matrixId);
     void deleteByMatrixId(UUID matrixId);
     long countByMatrixId(UUID matrixId);
+
+    List<ExamMatrixDetail> findByCloId(UUID cloId);
+    List<ExamMatrixDetail> findByTopicId(UUID topicId);
+    boolean existsByCloId(UUID cloId);
+    boolean existsByTopicId(UUID topicId);
+    long countByCloId(UUID cloId);
 }

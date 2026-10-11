@@ -12,11 +12,15 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import jakarta.persistence.UniqueConstraint;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
-@Table(name = "classes")
+@Table(name = "classes", uniqueConstraints = {
+    @UniqueConstraint(name = "uq_classes_id_subject_semester", columnNames = {"class_id", "subject_id", "semester_id"}),
+    @UniqueConstraint(name = "uq_classes_subject_semester_code", columnNames = {"subject_id", "semester_id", "class_code"})
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

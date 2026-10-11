@@ -21,6 +21,7 @@ public class NotificationConverter {
             case MATERIAL_NEW -> "Tài liệu học tập mới";
             case ANNOUNCEMENT -> "Thông báo lớp học";
             case SYSTEM -> "Thông báo hệ thống";
+            default -> "Thông báo";
         };
     }
 

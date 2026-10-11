@@ -14,6 +14,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
 @Entity
 @Table(name = "exam_matrix_details")
 @Data
@@ -25,23 +28,27 @@ public class ExamMatrixDetail {
     @Column(name = "detail_id")
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private java.util.UUID detailId;
+    private UUID detailId;
 
-    @Column(name = "matrix_id")
-    private java.util.UUID matrixId;
+    @Column(name = "matrix_id", nullable = false)
+    private UUID matrixId;
 
-    @Column(name = "topic_id")
-    private java.util.UUID topicId;
+    @Column(name = "subject_id", nullable = false)
+    private UUID subjectId;
 
-    @Column(name = "difficulty_level")
+    @Column(name = "topic_id", nullable = false)
+    private UUID topicId;
+
+    @Column(name = "clo_id")
+    private UUID cloId;
+
+    @Column(name = "difficulty_level", nullable = false)
     @Enumerated(EnumType.STRING)
     private DifficultyLevel difficultyLevel;
 
-    @Column(name = "num_questions")
+    @Column(name = "num_questions", nullable = false)
     private Integer numQuestions;
 
     @Column(name = "weight_percent")
-    private java.math.BigDecimal weightPercent;
-
-
+    private BigDecimal weightPercent;
 }

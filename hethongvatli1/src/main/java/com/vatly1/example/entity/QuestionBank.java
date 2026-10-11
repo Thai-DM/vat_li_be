@@ -59,7 +59,17 @@ public class QuestionBank {
     @Enumerated(EnumType.STRING)
     private ApprovalStatus approvalStatus;
 
-    @Column(name = "created_at")
+    @Column(name = "reviewed_by")
+    private java.util.UUID reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private java.time.Instant reviewedAt;
+
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private java.time.Instant createdAt;
 
 

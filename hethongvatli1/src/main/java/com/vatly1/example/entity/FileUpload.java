@@ -55,10 +55,12 @@ public class FileUpload {
 
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private FileProcessingStatus status;
+    @Builder.Default
+    private FileProcessingStatus status = FileProcessingStatus.COMPLETED;
 
     @Column(name = "progress_percent")
-    private java.math.BigDecimal progressPercent;
+    @Builder.Default
+    private java.math.BigDecimal progressPercent = java.math.BigDecimal.valueOf(100);
 
     @Column(name = "error_message")
     private String errorMessage;
@@ -68,10 +70,23 @@ public class FileUpload {
     private com.fasterxml.jackson.databind.JsonNode metadataJson;
 
     @Column(name = "created_at")
-    private java.time.Instant createdAt;
+    @Builder.Default
+    private java.time.Instant createdAt = java.time.Instant.now();
 
     @Column(name = "updated_at")
-    private java.time.Instant updatedAt;
+    @Builder.Default
+    private java.time.Instant updatedAt = java.time.Instant.now();
 
+    @jakarta.persistence.PrePersist
+    public void prePersist() {
+        if (this.createdAt == null) this.createdAt = java.time.Instant.now();
+        if (this.updatedAt == null) this.updatedAt = java.time.Instant.now();
+        if (this.status == null) this.status = FileProcessingStatus.COMPLETED;
+        if (this.progressPercent == null) this.progressPercent = java.math.BigDecimal.valueOf(100);
+    }
 
+    @jakarta.persistence.PreUpdate
+    public void preUpdate() {
+        this.updatedAt = java.time.Instant.now();
+    }
 }

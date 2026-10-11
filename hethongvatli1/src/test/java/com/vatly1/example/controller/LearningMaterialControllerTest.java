@@ -32,6 +32,9 @@ public class LearningMaterialControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.vatly1.example.repository.ISubjectRepository subjectRepository;
+
     private String adminToken;
     private String studentToken;
     private String topicId;
@@ -41,10 +44,25 @@ public class LearningMaterialControllerTest {
         adminToken = signin("admin", "admin123456");
         studentToken = signin("sv_an", "sv_an123456");
 
-        String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=1")
-                .header("Authorization", "Bearer " + adminToken))
-            .andReturn().getResponse().getContentAsString();
-        String subjectId = objectMapper.readTree(subjectRes).get("data").get("content").get(0).get("subjectId").asText();
+        com.vatly1.example.entity.Subject phy101 = subjectRepository.findAll().stream()
+                .filter(s -> "PHY101".equals(s.getSubjectCode()))
+                .findFirst().orElse(null);
+        String subjectId;
+        if (phy101 != null) {
+            subjectId = phy101.getSubjectId().toString();
+        } else {
+            String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=100")
+                    .header("Authorization", "Bearer " + adminToken))
+                .andReturn().getResponse().getContentAsString();
+            com.fasterxml.jackson.databind.JsonNode subjects = objectMapper.readTree(subjectRes).get("data").get("content");
+            subjectId = subjects.get(0).get("subjectId").asText();
+            for (com.fasterxml.jackson.databind.JsonNode s : subjects) {
+                if ("PHY101".equals(s.get("subjectCode").asText())) {
+                    subjectId = s.get("subjectId").asText();
+                    break;
+                }
+            }
+        }
 
         String topicName = "Topic Material " + System.currentTimeMillis();
         String topicContent = """

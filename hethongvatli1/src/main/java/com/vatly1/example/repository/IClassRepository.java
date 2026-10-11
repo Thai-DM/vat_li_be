@@ -41,4 +41,14 @@ public interface IClassRepository extends JpaRepository<Class, UUID> {
 
     java.util.Optional<Class> findByClassCode(String classCode);
     boolean existsByClassCode(String classCode);
+
+    @Query("SELECT COUNT(c) > 0 FROM Class c WHERE c.subjectId = :subjectId AND (c.instructorId = :userId OR c.classId IN (SELECT cs.classId FROM ClassStaff cs WHERE cs.userId = :userId))")
+    boolean isInstructorAssignedToSubject(@Param("subjectId") UUID subjectId, @Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(c) > 0 FROM Class c WHERE c.classId = :classId AND (c.instructorId = :userId OR c.classId IN (SELECT cs.classId FROM ClassStaff cs WHERE cs.userId = :userId))")
+    boolean isInstructorAssignedToClass(@Param("classId") UUID classId, @Param("userId") UUID userId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Class c WHERE c.classId = :classId")
+    java.util.Optional<Class> findByIdForUpdate(@Param("classId") UUID classId);
 }

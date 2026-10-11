@@ -16,4 +16,8 @@ public interface IClassService {
     ClassDTO updateClass(UUID id, UpdateClassDTO dto, UUID currentUserId, String currentUserRole);
     ClassDTO updateClassStatus(UUID id, UpdateClassStatusDTO dto, UUID currentUserId, String currentUserRole);
     Page<ClassDTO> getMyClasses(UUID studentId, int page, int size);
+    ClassDTO assignInstructor(UUID classId, UUID instructorId, UUID currentUserId, String currentUserRole);
+    ClassDTO revokeInstructor(UUID classId, UUID currentUserId, String currentUserRole);
+    Page<ClassDTO> getInstructorClasses(UUID instructorId, int page, int size);
+    ClassDTO getInstructorClassById(UUID classId, UUID instructorId);
 }

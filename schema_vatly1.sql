@@ -98,7 +98,9 @@ CREATE TABLE classes (
     max_students   INT,
     status         class_status NOT NULL DEFAULT 'active',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (subject_id, semester_id, class_code)
+    UNIQUE (subject_id, semester_id, class_code),
+    CONSTRAINT uq_classes_id_subject_semester UNIQUE (class_id, subject_id, semester_id),
+    CONSTRAINT uq_classes_id_subject UNIQUE (class_id, subject_id)
 );
 
 -- Bảng 6: class_staff - Phân công GV / Trợ giảng cho lớp
@@ -114,10 +116,19 @@ CREATE TABLE class_enrollments (
     enrollment_id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     class_id       UUID NOT NULL REFERENCES classes(class_id) ON DELETE CASCADE,
     student_id     UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    subject_id     UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    semester_id    UUID NOT NULL REFERENCES semesters(semester_id) ON DELETE RESTRICT,
     enrolled_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    status         enrollment_status NOT NULL DEFAULT 'active',
-    UNIQUE (class_id, student_id)
+    status         VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+    UNIQUE (class_id, student_id),
+    CONSTRAINT fk_enrollment_class_subject_semester FOREIGN KEY (class_id, subject_id, semester_id) REFERENCES classes(class_id, subject_id, semester_id) ON DELETE CASCADE,
+    CONSTRAINT chk_class_enrollment_status CHECK (status IN ('ACTIVE', 'DROPPED', 'COMPLETED'))
 );
+
+-- Ràng buộc duy nhất: Một sinh viên chỉ được có tối đa 1 đăng ký active trong cùng môn học và học kỳ
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_enrollment_subject_semester
+ON class_enrollments (student_id, subject_id, semester_id)
+WHERE status = 'ACTIVE';
 
 -- ============================================================
 -- B. QUAN LY FILE UPLOAD & ASYNC PROCESSING (RABBITMQ)
@@ -146,19 +157,59 @@ CREATE TABLE file_uploads (
 -- C. HOC LIEU
 -- ============================================================
 
--- Bảng 9: topics - Chương / Chủ đề trong môn học
+-- Bảng 8b: chapters - Chương học theo môn học (Subject-Centric)
+CREATE TABLE chapters (
+    chapter_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id   UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    chapter_code VARCHAR(50) NOT NULL,
+    chapter_name VARCHAR(255) NOT NULL,
+    description  TEXT,
+    order_index  INT NOT NULL DEFAULT 0,
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_chapters_subject_code UNIQUE (subject_id, chapter_code),
+    CONSTRAINT uq_chapters_id_subject UNIQUE (chapter_id, subject_id)
+);
+CREATE INDEX idx_chapters_subject_order ON chapters(subject_id, order_index);
+CREATE INDEX idx_chapters_subject_active ON chapters(subject_id, is_active);
+
+-- Bảng 9: topics - Bài học / Chủ đề trong môn học (hỗ trợ phân cấp theo Chương)
 CREATE TABLE topics (
     topic_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subject_id   UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    chapter_id   UUID,
     topic_name   TEXT NOT NULL,
     order_index  INT NOT NULL DEFAULT 0,
-    description  TEXT
+    description  TEXT,
+    CONSTRAINT fk_topics_chapter_subject FOREIGN KEY (chapter_id, subject_id) REFERENCES chapters(chapter_id, subject_id) ON DELETE RESTRICT,
+    CONSTRAINT uq_topics_id_subject UNIQUE (topic_id, subject_id)
 );
+CREATE INDEX idx_topics_chapter ON topics(chapter_id);
+CREATE INDEX idx_topics_chapter_subject ON topics(chapter_id, subject_id);
 
--- Bảng 10: learning_materials - Tài liệu bài giảng
+-- Bảng 9b: clos - Chuẩn đầu ra học phần (Course Learning Outcomes)
+CREATE TABLE clos (
+    clo_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id  UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    clo_code    VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    order_index INT NOT NULL,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_clos_subject_code UNIQUE (subject_id, clo_code),
+    CONSTRAINT uq_clos_id_subject UNIQUE (clo_id, subject_id)
+);
+CREATE INDEX idx_clos_subject_order ON clos(subject_id, order_index);
+
+-- Bảng 10: learning_materials - Tài liệu bài giảng (hỗ trợ SHARED theo Môn và CLASS theo Lớp)
 CREATE TABLE learning_materials (
     material_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    topic_id         UUID NOT NULL REFERENCES topics(topic_id) ON DELETE CASCADE,
+    topic_id         UUID NOT NULL,
+    subject_id       UUID NOT NULL,
+    scope            VARCHAR(20) NOT NULL DEFAULT 'SHARED',
+    class_id         UUID,
     file_id          UUID REFERENCES file_uploads(file_id) ON DELETE SET NULL, -- Liên kết quản lý file & async processing
     title            TEXT NOT NULL,
     type             material_type NOT NULL,
@@ -169,8 +220,25 @@ CREATE TABLE learning_materials (
     source_citation  TEXT,
     created_by       UUID REFERENCES users(user_id),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_learning_materials_scope CHECK (scope IN ('SHARED', 'CLASS')),
+    CONSTRAINT chk_learning_materials_scope_class CHECK (
+        (scope = 'SHARED' AND class_id IS NULL)
+        OR
+        (scope = 'CLASS' AND class_id IS NOT NULL)
+    ),
+    CONSTRAINT fk_materials_topic_subject FOREIGN KEY (topic_id, subject_id) REFERENCES topics(topic_id, subject_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_materials_class_subject FOREIGN KEY (class_id, subject_id) REFERENCES classes(class_id, subject_id) ON DELETE RESTRICT
 );
+CREATE INDEX idx_materials_subject ON learning_materials(subject_id);
+CREATE INDEX idx_materials_topic ON learning_materials(topic_id);
+CREATE INDEX idx_materials_topic_subject ON learning_materials(topic_id, subject_id);
+CREATE INDEX idx_materials_scope ON learning_materials(scope);
+CREATE INDEX idx_materials_class ON learning_materials(class_id);
+CREATE INDEX idx_materials_class_topic ON learning_materials(class_id, topic_id);
+CREATE INDEX idx_materials_subject_scope ON learning_materials(subject_id, scope);
+CREATE INDEX idx_materials_approval ON learning_materials(approval_status);
+CREATE INDEX idx_materials_file_id ON learning_materials(file_id);
 
 -- Bảng 11: material_approvals - Lịch sử phê duyệt học liệu
 CREATE TABLE material_approvals (
@@ -333,8 +401,40 @@ CREATE TABLE question_bank (
     cognitive_level  TEXT,                      -- Nho, Hieu, Van dung (Bloom)
     created_by       UUID REFERENCES users(user_id),
     approval_status  approval_status NOT NULL DEFAULT 'pending',
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    reviewed_by      UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    reviewed_at      TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_question_bank_id_subject UNIQUE (question_id, subject_id)
 );
+CREATE INDEX idx_question_bank_reviewed_by ON question_bank(reviewed_by);
+
+-- Bảng 24b: question_clos - Quan hệ N-N giữa câu hỏi và chuẩn đầu ra CLO (Composite FK kiểm soát cùng môn)
+CREATE TABLE question_clos (
+    question_id UUID NOT NULL,
+    clo_id      UUID NOT NULL,
+    subject_id  UUID NOT NULL,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_question_clos PRIMARY KEY (question_id, clo_id),
+    CONSTRAINT fk_question_clos_question_subject FOREIGN KEY (question_id, subject_id) REFERENCES question_bank(question_id, subject_id) ON DELETE CASCADE,
+    CONSTRAINT fk_question_clos_clo_subject FOREIGN KEY (clo_id, subject_id) REFERENCES clos(clo_id, subject_id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_question_clos_clo ON question_clos(clo_id);
+CREATE INDEX idx_question_clos_subject ON question_clos(subject_id);
+
+-- Bảng 24c: question_approvals - Nhật ký kiểm toán phê duyệt câu hỏi (Append-Only Audit Trail)
+CREATE TABLE question_approvals (
+    approval_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL REFERENCES question_bank(question_id) ON DELETE RESTRICT,
+    actor_id    UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    action      VARCHAR(50) NOT NULL,
+    from_status VARCHAR(50),
+    to_status   VARCHAR(50) NOT NULL,
+    comment     TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_question_approvals_question_created ON question_approvals(question_id, created_at DESC);
+CREATE INDEX idx_question_approvals_actor ON question_approvals(actor_id);
 
 -- Bảng 25: question_options - Các phương án trả lời
 CREATE TABLE question_options (

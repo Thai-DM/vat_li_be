@@ -1,6 +1,7 @@
 package com.vatly1.example.repository;
 
 import com.vatly1.example.entity.QuestionBank;
+import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,4 +22,16 @@ public interface QuestionBankRepository extends JpaRepository<QuestionBank, UUID
     List<QuestionBank> findByTopicId(UUID topicId);
     long countByTopicIdAndDifficultyLevel(UUID topicId, DifficultyLevel difficultyLevel);
     long countByTopicId(UUID topicId);
+
+    List<QuestionBank> findByTopicIdAndDifficultyLevelAndApprovalStatus(UUID topicId, DifficultyLevel difficultyLevel, ApprovalStatus approvalStatus);
+    List<QuestionBank> findByTopicIdAndApprovalStatus(UUID topicId, ApprovalStatus approvalStatus);
+    long countByTopicIdAndDifficultyLevelAndApprovalStatus(UUID topicId, DifficultyLevel difficultyLevel, ApprovalStatus approvalStatus);
+    long countByTopicIdAndApprovalStatus(UUID topicId, ApprovalStatus approvalStatus);
+
+    List<QuestionBank> findBySubjectIdAndTopicIdInAndApprovalStatus(UUID subjectId, java.util.Collection<UUID> topicIds, ApprovalStatus approvalStatus);
+    List<QuestionBank> findBySubjectIdAndApprovalStatus(UUID subjectId, ApprovalStatus approvalStatus);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT q FROM QuestionBank q WHERE q.questionId = :id")
+    java.util.Optional<QuestionBank> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);
 }

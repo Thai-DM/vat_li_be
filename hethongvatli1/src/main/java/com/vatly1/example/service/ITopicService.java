@@ -13,4 +13,7 @@ public interface ITopicService {
     TopicDTO createTopic(CreateTopicDTO dto);
     TopicDTO updateTopic(UUID topicId, CreateTopicDTO dto);
     void deleteTopic(UUID topicId);
+    TopicDTO assignChapter(UUID topicId, UUID chapterId);
+    List<TopicDTO> getTopicsByChapter(UUID chapterId);
+    List<TopicDTO> getUnassignedTopicsBySubject(UUID subjectId);
 }

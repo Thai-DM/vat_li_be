@@ -21,4 +21,16 @@ public interface IExamMatrixService {
     void deleteExamMatrix(UUID matrixId, UUID deleterId);
 
     MatrixValidationResultDTO validateExamMatrix(UUID matrixId);
+
+    MatrixValidationResultDTO validateMatrixQuestionAvailability(UUID matrixId);
+
+    ExamMatrixDTO createFinalExamMatrix(CreateExamMatrixDTO dto, UUID creatorId);
+
+    ExamMatrixDTO publishMatrix(UUID matrixId, UUID adminId);
+
+    ExamMatrixDTO archiveMatrix(UUID matrixId, UUID adminId);
+
+    ExamMatrixDTO cloneMatrixRevision(UUID matrixId, UUID adminId);
+
+    List<ExamMatrixDTO> getMatricesBySubject(UUID subjectId);
 }

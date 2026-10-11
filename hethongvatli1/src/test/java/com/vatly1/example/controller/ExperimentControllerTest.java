@@ -384,7 +384,7 @@ public class ExperimentControllerTest {
     @DisplayName("EXP-10: 04 Thí nghiệm ảo 3D Vật lý 1 chuẩn được seed tự động và có đầy đủ Rubric JSON, WebGL URL")
     void testSeededPhysics1Experiments_availableWithRubrics() throws Exception {
         // Tìm subject PHY101
-        String subjectsRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=10")
+        String subjectsRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=50")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

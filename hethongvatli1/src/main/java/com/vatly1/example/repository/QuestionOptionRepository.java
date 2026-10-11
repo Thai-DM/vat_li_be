@@ -12,5 +12,6 @@ public interface QuestionOptionRepository extends JpaRepository<QuestionOption, 
     List<QuestionOption> findByQuestionIdOrderByOrderIndexAsc(UUID questionId);
     List<QuestionOption> findByQuestionId(UUID questionId);
     List<QuestionOption> findByQuestionIdAndIsCorrectTrue(UUID questionId);
+    boolean existsByOptionIdAndQuestionId(UUID optionId, UUID questionId);
     void deleteByQuestionId(UUID questionId);
 }

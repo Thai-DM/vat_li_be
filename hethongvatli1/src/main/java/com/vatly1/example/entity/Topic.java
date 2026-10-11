@@ -27,6 +27,9 @@ public class Topic {
     @Column(name = "subject_id")
     private java.util.UUID subjectId;
 
+    @Column(name = "chapter_id")
+    private java.util.UUID chapterId;
+
     @Column(name = "topic_name")
     private String topicName;
 

@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${PG_TEST_DB_URL:jdbc:postgresql://localhost:5432/vatly1_test}
+    username: ${PG_TEST_DB_USERNAME:postgres}
+    password: ${PG_TEST_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+
+minio:
+  enabled: false

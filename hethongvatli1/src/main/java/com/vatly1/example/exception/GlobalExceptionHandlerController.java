@@ -181,8 +181,34 @@ public class GlobalExceptionHandlerController {
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
     log.warn("Database integrity violation: {}", ex.getMessage());
+    String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+    if (msg.contains("uq_active_enrollment_subject_semester")) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(ApiResponse.error(HttpStatus.CONFLICT.value(), "Sinh viên đã đăng ký vào một lớp khác của môn học này trong cùng học kỳ"));
+    }
+    if (msg.contains("uq_chapters_subject_code")) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(ApiResponse.error(HttpStatus.CONFLICT.value(), "Mã chương đã tồn tại trong môn học này"));
+    }
+    if (msg.contains("uq_matrix_family_revision")) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(ApiResponse.error(HttpStatus.CONFLICT.value(), "Phiên bản ma trận đề thi (revision) đã tồn tại trong nhóm ma trận này"));
+    }
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Dữ liệu bị trùng lặp hoặc vi phạm ràng buộc toàn vẹn cơ sở dữ liệu"));
+  }
+
+  /**
+   * 13.1. Xử lý xung đột đồng thời Optimistic Locking (@Version)
+   */
+  @ExceptionHandler({
+      org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+      jakarta.persistence.OptimisticLockException.class
+  })
+  public ResponseEntity<ApiResponse<Void>> handleOptimisticLockException(Exception ex) {
+    log.warn("Optimistic locking conflict: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ApiResponse.error(HttpStatus.CONFLICT.value(), "Dữ liệu đã bị thay đổi bởi thao tác khác cùng thời điểm. Vui lòng tải lại và thử lại."));
   }
 
   /**

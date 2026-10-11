@@ -18,5 +18,9 @@ public class MatrixValidationItemDTO {
     private DifficultyLevel difficultyLevel;
     private int requiredQuestions;
     private long availableQuestions;
+    private Integer exactAvailable;
+    private Integer fallbackAvailable;
+    private Integer fallbackNeeded;
+    private Boolean isExactSufficient;
     private boolean isSufficient;
 }

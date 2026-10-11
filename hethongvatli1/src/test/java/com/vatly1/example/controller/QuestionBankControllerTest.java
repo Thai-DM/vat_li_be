@@ -1,5 +1,6 @@
 package com.vatly1.example.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +22,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayOutputStream;
+import java.util.UUID;
 
 @SpringBootTest(classes = JwtAuthServiceApp.class)
 @AutoConfigureMockMvc
@@ -43,10 +45,19 @@ public class QuestionBankControllerTest {
         adminToken = signin("admin", "admin123456");
         studentToken = signin("sv_an", "sv_an123456");
 
-        String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=1")
+        String subjectRes = mockMvc.perform(get("/api/v1/subjects?page=0&size=10&isActive=true")
                 .header("Authorization", "Bearer " + adminToken))
             .andReturn().getResponse().getContentAsString();
-        subjectId = objectMapper.readTree(subjectRes).get("data").get("content").get(0).get("subjectId").asText();
+        JsonNode content = objectMapper.readTree(subjectRes).get("data").get("content");
+        for (JsonNode node : content) {
+            if (node.has("isActive") && node.get("isActive").asBoolean()) {
+                subjectId = node.get("subjectId").asText();
+                break;
+            }
+        }
+        if (subjectId == null && content.size() > 0) {
+            subjectId = content.get(0).get("subjectId").asText();
+        }
 
         String topicName = "Topic QB " + System.currentTimeMillis();
         String topicContent = """
@@ -290,6 +301,223 @@ public class QuestionBankControllerTest {
                 .param("topicId", topicId)
                 .header("Authorization", "Bearer " + studentToken))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("QB-10: Admin từ chối duyệt câu hỏi kèm lý do và ghi nhận audit log thành công")
+    void rejectQuestion_asAdmin_success() throws Exception {
+        String createRes = mockMvc.perform(post("/api/v1/questions")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "subjectId": "%s",
+                        "topicId": "%s",
+                        "questionType": "MCQ_SINGLE",
+                        "content": "Cau hoi se bi tu choi?",
+                        "difficultyLevel": "EASY",
+                        "options": [
+                            {"content": "A", "isCorrect": true, "orderIndex": 0},
+                            {"content": "B", "isCorrect": false, "orderIndex": 1}
+                        ]
+                    }
+                    """.formatted(subjectId, topicId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String qId = objectMapper.readTree(createRes).get("data").get("questionId").asText();
+
+        // Gửi duyệt trước (DRAFT -> PENDING)
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/submit-review?comment=Xin xet duyet")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        String rejectBody = """
+            {
+                "rejectionReason": "Nội dung câu hỏi chưa đạt chuẩn định dạng",
+                "comment": "Cần bổ sung thêm 2 phương án gây nhiễu"
+            }
+            """;
+
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/reject")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(rejectBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.approvalStatus").value("REJECTED"))
+                .andExpect(jsonPath("$.data.rejectionReason").value("Nội dung câu hỏi chưa đạt chuẩn định dạng"));
+    }
+
+    @Test
+    @DisplayName("QB-11: Từ chối duyệt thiếu lý do -> trả về 400 Bad Request")
+    void rejectQuestion_missingReason_returns400() throws Exception {
+        String createRes = mockMvc.perform(post("/api/v1/questions")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "subjectId": "%s",
+                        "topicId": "%s",
+                        "questionType": "MCQ_SINGLE",
+                        "content": "Cau hoi test validate reject?",
+                        "difficultyLevel": "EASY",
+                        "options": [
+                            {"content": "A", "isCorrect": true, "orderIndex": 0},
+                            {"content": "B", "isCorrect": false, "orderIndex": 1}
+                        ]
+                    }
+                    """.formatted(subjectId, topicId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String qId = objectMapper.readTree(createRes).get("data").get("questionId").asText();
+
+        // Gửi duyệt trước (DRAFT -> PENDING)
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/submit-review")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        String badBody = """
+            {
+                "rejectionReason": "",
+                "comment": "Thieu ly do"
+            }
+            """;
+
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/reject")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(badBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("QB-12: Giảng viên gửi yêu cầu duyệt câu hỏi DRAFT sang PENDING thành công")
+    void submitQuestionForReview_asAdminOrInstructor_success() throws Exception {
+        String createRes = mockMvc.perform(post("/api/v1/questions")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "subjectId": "%s",
+                        "topicId": "%s",
+                        "questionType": "MCQ_SINGLE",
+                        "content": "Cau hoi submit for review?",
+                        "difficultyLevel": "MEDIUM",
+                        "options": [
+                            {"content": "A", "isCorrect": true, "orderIndex": 0},
+                            {"content": "B", "isCorrect": false, "orderIndex": 1}
+                        ]
+                    }
+                    """.formatted(subjectId, topicId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String qId = objectMapper.readTree(createRes).get("data").get("questionId").asText();
+
+        // Gửi duyệt lần 1 (DRAFT -> PENDING)
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/submit-review?comment=Gui lan 1")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.approvalStatus").value("PENDING"));
+
+        // Từ chối (PENDING -> REJECTED)
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/reject")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rejectionReason\": \"Can sua\"}"))
+                .andExpect(status().isOk());
+
+        // Giảng viên gửi duyệt lại (REJECTED -> PENDING)
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/submit-review?comment=Da sua xong")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.approvalStatus").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("QB-13: Lấy lịch sử phê duyệt câu hỏi (Audit Trail) thành công")
+    void getApprovalHistory_success() throws Exception {
+        String createRes = mockMvc.perform(post("/api/v1/questions")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "subjectId": "%s",
+                        "topicId": "%s",
+                        "questionType": "MCQ_SINGLE",
+                        "content": "Cau hoi audit trail test?",
+                        "difficultyLevel": "EASY",
+                        "options": [
+                            {"content": "A", "isCorrect": true, "orderIndex": 0},
+                            {"content": "B", "isCorrect": false, "orderIndex": 1}
+                        ]
+                    }
+                    """.formatted(subjectId, topicId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String qId = objectMapper.readTree(createRes).get("data").get("questionId").asText();
+
+        // Gửi duyệt trước
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/submit-review")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        // Phê duyệt
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/approve?comment=Dat chuan")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        // Lấy lịch sử phê duyệt
+        mockMvc.perform(get("/api/v1/questions/" + qId + "/approvals")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").isNumber());
+    }
+
+    @Test
+    @DisplayName("QB-14: Gán CLO cho câu hỏi thành công")
+    void assignClosToQuestion_success() throws Exception {
+        // Tạo 1 CLO trước
+        String cloRes = mockMvc.perform(post("/api/v1/subjects/" + subjectId + "/clos")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "cloCode": "CLO_ASSIGN_%s",
+                        "description": "CLO gan vao cau hoi",
+                        "orderIndex": 1
+                    }
+                    """.formatted(UUID.randomUUID().toString().substring(0, 6))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String cloId = objectMapper.readTree(cloRes).get("data").get("cloId").asText();
+
+        // Tạo câu hỏi
+        String createRes = mockMvc.perform(post("/api/v1/questions")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "subjectId": "%s",
+                        "topicId": "%s",
+                        "questionType": "MCQ_SINGLE",
+                        "content": "Cau hoi test CLO mapping?",
+                        "difficultyLevel": "EASY",
+                        "options": [
+                            {"content": "A", "isCorrect": true, "orderIndex": 0},
+                            {"content": "B", "isCorrect": false, "orderIndex": 1}
+                        ]
+                    }
+                    """.formatted(subjectId, topicId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String qId = objectMapper.readTree(createRes).get("data").get("questionId").asText();
+
+        // Gán CLO
+        mockMvc.perform(put("/api/v1/questions/" + qId + "/clos")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[\"" + cloId + "\"]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cloIds[0]").value(cloId));
     }
 
     private byte[] createSampleExcelWorkbook(boolean validQuestions) throws Exception {

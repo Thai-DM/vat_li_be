@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS classes (
     max_students   INT,
     status         VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (subject_id, semester_id, class_code)
+    UNIQUE (subject_id, semester_id, class_code),
+    CONSTRAINT uq_classes_id_subject_semester UNIQUE (class_id, subject_id, semester_id)
 );
 
 -- 7. class_staff - Phan cong tro giang / giang vien dong giang
@@ -94,11 +95,19 @@ CREATE TABLE IF NOT EXISTS class_enrollments (
     enrollment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     class_id      UUID NOT NULL REFERENCES classes(class_id) ON DELETE CASCADE,
     student_id    UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    subject_id    UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    semester_id   UUID NOT NULL REFERENCES semesters(semester_id) ON DELETE RESTRICT,
     enrolled_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status        VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
     final_grade   NUMERIC(4,2),
-    UNIQUE (class_id, student_id)
+    UNIQUE (class_id, student_id),
+    CONSTRAINT fk_enrollment_class_subject_semester FOREIGN KEY (class_id, subject_id, semester_id) REFERENCES classes(class_id, subject_id, semester_id) ON DELETE CASCADE,
+    CONSTRAINT chk_class_enrollment_status CHECK (status IN ('ACTIVE', 'DROPPED', 'COMPLETED'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_enrollment_subject_semester
+ON class_enrollments (student_id, subject_id, semester_id)
+WHERE status = 'ACTIVE';
 
 -- 8b. class_schedules - Thoi khoa bieu / Lich hoc cua lop
 CREATE TABLE IF NOT EXISTS class_schedules (
@@ -131,17 +140,53 @@ CREATE TABLE IF NOT EXISTS file_uploads (
     uploaded_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 9b. chapters - Chuong hoc theo mon hoc (Subject-Centric)
+CREATE TABLE IF NOT EXISTS chapters (
+    chapter_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id    UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    chapter_code  VARCHAR(50) NOT NULL,
+    chapter_name  VARCHAR(255) NOT NULL,
+    description   TEXT,
+    order_index   INT NOT NULL DEFAULT 0,
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_chapters_subject_code UNIQUE (subject_id, chapter_code),
+    CONSTRAINT uq_chapters_id_subject UNIQUE (chapter_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chapters_subject_order ON chapters(subject_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_chapters_subject_active ON chapters(subject_id, is_active);
+
 -- 10. topics - Chu de bai hoc theo chuong trinh
 CREATE TABLE IF NOT EXISTS topics (
     topic_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subject_id    UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    chapter_id    UUID,
     topic_code    VARCHAR(50) NOT NULL,
     topic_name    VARCHAR(255) NOT NULL,
     description   TEXT,
     order_index   INT NOT NULL DEFAULT 0,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (subject_id, topic_code)
+    UNIQUE (subject_id, topic_code),
+    CONSTRAINT fk_topics_chapter_subject FOREIGN KEY (chapter_id, subject_id) REFERENCES chapters(chapter_id, subject_id) ON DELETE RESTRICT
 );
+CREATE INDEX IF NOT EXISTS idx_topics_chapter ON topics(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_topics_chapter_subject ON topics(chapter_id, subject_id);
+
+-- 10b. clos - Chuan dau ra hoc phan (Course Learning Outcomes)
+CREATE TABLE IF NOT EXISTS clos (
+    clo_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id  UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE RESTRICT,
+    clo_code    VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    order_index INT NOT NULL,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_clos_subject_code UNIQUE (subject_id, clo_code),
+    CONSTRAINT uq_clos_id_subject UNIQUE (clo_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_clos_subject_order ON clos(subject_id, order_index);
 
 -- 11. learning_materials - Tai lieu hoc tap & Bai giang (slide, pdf, video, text)
 CREATE TABLE IF NOT EXISTS learning_materials (
@@ -296,15 +341,50 @@ CREATE TABLE IF NOT EXISTS experiment_confirmations (
 
 -- 25. question_bank - Ngan hang cau hoi trac nghiem
 CREATE TABLE IF NOT EXISTS question_bank (
-    question_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    topic_id      UUID NOT NULL REFERENCES topics(topic_id) ON DELETE CASCADE,
-    question_text TEXT NOT NULL,
-    question_type VARCHAR(50) NOT NULL DEFAULT 'MCQ_SINGLE',
-    difficulty    VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
-    explanation   TEXT,
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    question_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id       UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    topic_id         UUID NOT NULL REFERENCES topics(topic_id) ON DELETE CASCADE,
+    question_type    VARCHAR(50) NOT NULL DEFAULT 'MCQ_SINGLE',
+    content          TEXT NOT NULL,
+    media_url        TEXT,
+    difficulty_level VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
+    cognitive_level  VARCHAR(50),
+    created_by       UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    approval_status  VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    reviewed_by      UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    reviewed_at      TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_question_bank_id_subject UNIQUE (question_id, subject_id)
 );
+CREATE INDEX IF NOT EXISTS idx_question_bank_reviewed_by ON question_bank(reviewed_by);
+
+-- 25b. question_clos - Quan he N-N giua cau hoi va chuan dau ra CLO
+CREATE TABLE IF NOT EXISTS question_clos (
+    question_id UUID NOT NULL,
+    clo_id      UUID NOT NULL,
+    subject_id  UUID NOT NULL,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_question_clos PRIMARY KEY (question_id, clo_id),
+    CONSTRAINT fk_question_clos_question_subject FOREIGN KEY (question_id, subject_id) REFERENCES question_bank(question_id, subject_id) ON DELETE CASCADE,
+    CONSTRAINT fk_question_clos_clo_subject FOREIGN KEY (clo_id, subject_id) REFERENCES clos(clo_id, subject_id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_question_clos_clo ON question_clos(clo_id);
+CREATE INDEX IF NOT EXISTS idx_question_clos_subject ON question_clos(subject_id);
+
+-- 25c. question_approvals - Nhat ky kiem toan phe duyet cau hoi (Append-Only Audit Trail)
+CREATE TABLE IF NOT EXISTS question_approvals (
+    approval_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL REFERENCES question_bank(question_id) ON DELETE RESTRICT,
+    actor_id    UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    action      VARCHAR(50) NOT NULL,
+    from_status VARCHAR(50),
+    to_status   VARCHAR(50) NOT NULL,
+    comment     TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_question_approvals_question_created ON question_approvals(question_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_question_approvals_actor ON question_approvals(actor_id);
 
 -- 26. question_options - Cac phuong an lua chon cua cau hoi
 CREATE TABLE IF NOT EXISTS question_options (
@@ -608,10 +688,10 @@ VALUES
 ON CONFLICT (class_id, user_id) DO NOTHING;
 
 -- 7. GHI DANH SINH VIEN (class_enrollments)
-INSERT INTO class_enrollments (class_id, student_id, status)
+INSERT INTO class_enrollments (class_id, student_id, subject_id, semester_id, status)
 VALUES
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333', 'ACTIVE'),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '44444444-4444-4444-4444-444444444444', 'ACTIVE')
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'ACTIVE'),
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '44444444-4444-4444-4444-444444444444', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'ACTIVE')
 ON CONFLICT (class_id, student_id) DO NOTHING;
 
 -- 7b. THOI KHOA BIEU / LICH HOC (class_schedules)

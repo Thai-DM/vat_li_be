@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface IClassStaffRepository extends JpaRepository<ClassStaff, ClassStaff> {
     List<ClassStaff> findByClassId(UUID classId);
     boolean existsByClassIdAndUserId(UUID classId, UUID userId);
+    boolean existsByClassIdAndUserIdAndRoleInClass(UUID classId, UUID userId, com.vatly1.example.entity.enums.ClassStaffRole roleInClass);
     void deleteByClassIdAndUserId(UUID classId, UUID userId);
     Optional<ClassStaff> findByClassIdAndUserId(UUID classId, UUID userId);
 }

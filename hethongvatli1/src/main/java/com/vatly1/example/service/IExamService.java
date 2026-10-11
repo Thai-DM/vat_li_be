@@ -38,4 +38,5 @@ public interface IExamService {
     com.vatly1.example.model.dto.ExamAttemptProgressDTO getAttemptProgress(UUID attemptId, UUID currentUserId, String role);
     com.vatly1.example.model.dto.BatchSaveResultDTO autosaveAnswers(UUID attemptId, com.vatly1.example.model.request.BatchSubmitAnswerDTO dto, UUID studentId);
     com.vatly1.example.model.dto.ExamAttemptPolicyDTO getExamAttemptPolicy(UUID examId, UUID studentId);
+    com.vatly1.example.model.response.BulkProvisionFinalExamResultDTO bulkProvisionFinalExams(com.vatly1.example.model.request.BulkProvisionFinalExamDTO dto, UUID adminId);
 }

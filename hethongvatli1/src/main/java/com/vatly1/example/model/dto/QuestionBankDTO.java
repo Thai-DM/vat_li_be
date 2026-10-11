@@ -20,6 +20,7 @@ import java.util.UUID;
 public class QuestionBankDTO {
     private UUID questionId;
     private UUID subjectId;
+    private UUID chapterId;
     private UUID topicId;
     private QuestionType questionType;
     private String content;
@@ -29,6 +30,11 @@ public class QuestionBankDTO {
     private ApprovalStatus approvalStatus;
     private UUID createdBy;
     private Instant createdAt;
+    private UUID reviewedBy;
+    private Instant reviewedAt;
+    private String rejectionReason;
     
+    private List<UUID> cloIds;
     private List<QuestionOptionDTO> options;
+    private List<String> acceptedAnswers;
 }

@@ -28,6 +28,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -83,14 +85,62 @@ public class ClassEnrollmentServiceImpl implements IClassEnrollmentService {
             throw new CustomException("Chỉ có thể ghi danh vào lớp đang hoạt động (ACTIVE)", HttpStatus.BAD_REQUEST);
         }
 
-        if (clazz.getMaxStudents() != null) {
-            int currentCount = enrollmentRepository.countByClassIdAndStatus(classId, EnrollmentStatus.ACTIVE);
-            if (currentCount >= clazz.getMaxStudents()) {
-                throw new CustomException("Lớp học đã đủ số lượng sinh viên tối đa", HttpStatus.BAD_REQUEST);
-            }
+        User user = userRepository.findById(dto.getStudentId())
+                .orElseThrow(() -> new CustomException("Không tìm thấy sinh viên với ID: " + dto.getStudentId(), HttpStatus.NOT_FOUND));
+
+        if (user.getRole() != UserRole.STUDENT) {
+            throw new CustomException("Người dùng " + user.getUsername() + " không phải là sinh viên", HttpStatus.BAD_REQUEST);
         }
 
-        enrollStudent(classId, dto.getStudentId());
+        // Kiểm tra xem sinh viên đã từng có bản ghi trong chính lớp này chưa
+        Optional<ClassEnrollment> existingInThisClass = enrollmentRepository.findByClassIdAndStudentId(classId, dto.getStudentId());
+        if (existingInThisClass.isPresent()) {
+            ClassEnrollment currentEnr = existingInThisClass.get();
+            if (currentEnr.getStatus() == EnrollmentStatus.ACTIVE) {
+                // Đã ở trạng thái ACTIVE trong lớp này, trả về thành công (idempotent)
+                return;
+            }
+
+            // Trường hợp đăng ký lại vào lớp đã từng DROPPED hoặc COMPLETED:
+            // 1. Kiểm tra xem sinh viên có đang ACTIVE ở lớp nào KHÁC cùng môn học và học kỳ không
+            validateNoActiveEnrollmentInOtherClass(dto.getStudentId(), clazz.getSubjectId(), clazz.getSemesterId(), classId);
+
+            // 2. Kiểm tra sĩ số tối đa
+            checkMaxCapacity(clazz, classId, 1);
+
+            // 3. Tái kích hoạt bản ghi hiện tại thành ACTIVE (tránh vi phạm UNIQUE(class_id, student_id))
+            currentEnr.setStatus(EnrollmentStatus.ACTIVE);
+            currentEnr.setSubjectId(clazz.getSubjectId());
+            currentEnr.setSemesterId(clazz.getSemesterId());
+            try {
+                enrollmentRepository.save(currentEnr);
+            } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+                throw new CustomException("Sinh viên đã đăng ký vào một lớp khác của môn học này trong cùng học kỳ", HttpStatus.CONFLICT);
+            }
+            return;
+        }
+
+        // Trường hợp sinh viên chưa từng có bản ghi trong lớp này:
+        // 1. Kiểm tra xem sinh viên có đang ACTIVE ở lớp nào KHÁC cùng môn học và học kỳ không
+        validateNoActiveEnrollmentInOtherClass(dto.getStudentId(), clazz.getSubjectId(), clazz.getSemesterId(), classId);
+
+        // 2. Kiểm tra sĩ số tối đa
+        checkMaxCapacity(clazz, classId, 1);
+
+        // 3. Tạo mới enrollment
+        ClassEnrollment enrollment = ClassEnrollment.builder()
+                .classId(classId)
+                .studentId(dto.getStudentId())
+                .subjectId(clazz.getSubjectId())
+                .semesterId(clazz.getSemesterId())
+                .status(EnrollmentStatus.ACTIVE)
+                .build();
+
+        try {
+            enrollmentRepository.save(enrollment);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new CustomException("Sinh viên đã đăng ký vào một lớp khác của môn học này trong cùng học kỳ", HttpStatus.CONFLICT);
+        }
     }
 
     @Override
@@ -105,19 +155,65 @@ public class ClassEnrollmentServiceImpl implements IClassEnrollmentService {
             throw new CustomException("Chỉ có thể ghi danh vào lớp đang hoạt động (ACTIVE)", HttpStatus.BAD_REQUEST);
         }
 
+        if (dto.getStudentIds() == null || dto.getStudentIds().isEmpty()) {
+            return;
+        }
+
         if (dto.getStudentIds().size() > 500) {
             throw new CustomException("Không thể ghi danh quá 500 sinh viên cùng lúc", HttpStatus.BAD_REQUEST);
         }
 
-        if (clazz.getMaxStudents() != null) {
-            int currentCount = enrollmentRepository.countByClassIdAndStatus(classId, EnrollmentStatus.ACTIVE);
-            if (currentCount + dto.getStudentIds().size() > clazz.getMaxStudents()) {
-                throw new CustomException("Vượt quá số lượng sinh viên tối đa của lớp", HttpStatus.BAD_REQUEST);
+        // Sắp xếp danh sách studentId tăng dần để giảm thiểu nguy cơ Deadlock khi có nhiều bulk operation đồng thời
+        List<UUID> sortedStudentIds = new java.util.ArrayList<>(dto.getStudentIds());
+        sortedStudentIds.sort(UUID::compareTo);
+
+        // Bước 1: Validate toàn bộ sinh viên trong batch trước khi thao tác (All-or-Nothing contract)
+        int newlyActivatedCount = 0;
+        for (UUID studentId : sortedStudentIds) {
+            User user = userRepository.findById(studentId)
+                    .orElseThrow(() -> new CustomException("Không tìm thấy sinh viên với ID: " + studentId, HttpStatus.NOT_FOUND));
+
+            if (user.getRole() != UserRole.STUDENT) {
+                throw new CustomException("Người dùng " + user.getUsername() + " không phải là sinh viên", HttpStatus.BAD_REQUEST);
+            }
+
+            // Kiểm tra trùng môn/kỳ với lớp khác
+            validateNoActiveEnrollmentInOtherClass(studentId, clazz.getSubjectId(), clazz.getSemesterId(), classId);
+
+            Optional<ClassEnrollment> existing = enrollmentRepository.findByClassIdAndStudentId(classId, studentId);
+            if (existing.isEmpty() || existing.get().getStatus() != EnrollmentStatus.ACTIVE) {
+                newlyActivatedCount++;
             }
         }
 
-        for (UUID studentId : dto.getStudentIds()) {
-            enrollStudent(classId, studentId);
+        // Bước 2: Kiểm tra sĩ số tối đa
+        checkMaxCapacity(clazz, classId, newlyActivatedCount);
+
+        // Bước 3: Thực hiện ghi danh hoặc tái kích hoạt
+        try {
+            for (UUID studentId : sortedStudentIds) {
+                Optional<ClassEnrollment> existing = enrollmentRepository.findByClassIdAndStudentId(classId, studentId);
+                if (existing.isPresent()) {
+                    ClassEnrollment currentEnr = existing.get();
+                    if (currentEnr.getStatus() != EnrollmentStatus.ACTIVE) {
+                        currentEnr.setStatus(EnrollmentStatus.ACTIVE);
+                        currentEnr.setSubjectId(clazz.getSubjectId());
+                        currentEnr.setSemesterId(clazz.getSemesterId());
+                        enrollmentRepository.save(currentEnr);
+                    }
+                } else {
+                    ClassEnrollment enrollment = ClassEnrollment.builder()
+                            .classId(classId)
+                            .studentId(studentId)
+                            .subjectId(clazz.getSubjectId())
+                            .semesterId(clazz.getSemesterId())
+                            .status(EnrollmentStatus.ACTIVE)
+                            .build();
+                    enrollmentRepository.save(enrollment);
+                }
+            }
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new CustomException("Xung đột dữ liệu: Một hoặc nhiều sinh viên đã đăng ký vào lớp khác của môn học này trong cùng học kỳ", HttpStatus.CONFLICT);
         }
     }
 
@@ -151,30 +247,46 @@ public class ClassEnrollmentServiceImpl implements IClassEnrollmentService {
         ClassEnrollment enrollment = enrollmentRepository.findByClassIdAndStudentId(classId, studentId)
                 .orElseThrow(() -> new CustomException("Sinh viên không tồn tại trong lớp", HttpStatus.NOT_FOUND));
 
+        // Nếu kích hoạt lại từ DROPPED hoặc COMPLETED sang ACTIVE:
+        if (dto.getStatus() == EnrollmentStatus.ACTIVE && enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            validateNoActiveEnrollmentInOtherClass(studentId, clazz.getSubjectId(), clazz.getSemesterId(), classId);
+            checkMaxCapacity(clazz, classId, 1);
+        }
+
         enrollment.setStatus(dto.getStatus());
-        enrollmentRepository.save(enrollment);
+        enrollment.setSubjectId(clazz.getSubjectId());
+        enrollment.setSemesterId(clazz.getSemesterId());
+
+        try {
+            enrollmentRepository.save(enrollment);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new CustomException("Sinh viên đã có đăng ký hoạt động ở một lớp khác của môn học này trong cùng học kỳ", HttpStatus.CONFLICT);
+        }
     }
 
-    private void enrollStudent(UUID classId, UUID studentId) {
-        User user = userRepository.findById(studentId)
-                .orElseThrow(() -> new CustomException("Không tìm thấy sinh viên với ID: " + studentId, HttpStatus.NOT_FOUND));
-
-        if (user.getRole() != UserRole.STUDENT) {
-            throw new CustomException("Người dùng " + user.getUsername() + " không phải là sinh viên", HttpStatus.BAD_REQUEST);
+    private void validateNoActiveEnrollmentInOtherClass(UUID studentId, UUID subjectId, UUID semesterId, UUID currentClassId) {
+        List<ClassEnrollment> enrollments = enrollmentRepository.findByStudentIdAndSubjectIdAndSemesterId(studentId, subjectId, semesterId);
+        Optional<ClassEnrollment> activeOther = enrollments.stream()
+                .filter(e -> e.getStatus() == EnrollmentStatus.ACTIVE && !e.getClassId().equals(currentClassId))
+                .findFirst();
+        if (activeOther.isPresent()) {
+            UUID otherClassId = activeOther.get().getClassId();
+            String otherCode = classRepository.findById(otherClassId)
+                    .map(Class::getClassCode)
+                    .orElse(otherClassId.toString());
+            throw new CustomException(
+                    String.format("Sinh viên đã đăng ký vào một lớp khác (%s) của môn học này trong học kỳ hiện tại", otherCode),
+                    HttpStatus.CONFLICT);
         }
+    }
 
-        if (enrollmentRepository.existsByClassIdAndStudentId(classId, studentId)) {
-            // Nếu đã tồn tại, bỏ qua (không quăng lỗi để bulk enroll chạy mượt)
-            return;
+    private void checkMaxCapacity(Class clazz, UUID classId, int needToAddCount) {
+        if (clazz.getMaxStudents() != null && needToAddCount > 0) {
+            int currentCount = enrollmentRepository.countByClassIdAndStatus(classId, EnrollmentStatus.ACTIVE);
+            if (currentCount + needToAddCount > clazz.getMaxStudents()) {
+                throw new CustomException("Vượt quá số lượng sinh viên tối đa của lớp (" + clazz.getMaxStudents() + ")", HttpStatus.BAD_REQUEST);
+            }
         }
-
-        ClassEnrollment enrollment = ClassEnrollment.builder()
-                .classId(classId)
-                .studentId(studentId)
-                .status(EnrollmentStatus.ACTIVE)
-                .build();
-
-        enrollmentRepository.save(enrollment);
     }
 
     private void checkWriteAccess(Class clazz, UUID currentUserId, String currentUserRole) {

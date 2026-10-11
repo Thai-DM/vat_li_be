@@ -19,6 +19,11 @@ public interface IFileStorageService {
     String storeFile(MultipartFile file, String folder);
 
     /**
+     * Tải file lên hệ thống lưu trữ từ InputStream và metadata.
+     */
+    String storeFile(InputStream inputStream, String originalFilename, long size, String contentType, String folder);
+
+    /**
      * Lấy InputStream của file để stream về người dùng hoặc xử lý nghiệp vụ.
      */
     InputStream getFileInputStream(String filename);

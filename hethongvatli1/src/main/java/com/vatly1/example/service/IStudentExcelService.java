@@ -23,4 +23,6 @@ public interface IStudentExcelService {
      * @return kết quả chi tiết quá trình tạo sinh viên hàng loạt
      */
     StudentImportResultDTO importStudentsFromExcel(MultipartFile file, String defaultPassword, UUID classId);
+
+    StudentImportResultDTO importStudentsFromExcel(MultipartFile file, String defaultPassword, UUID classId, UUID currentUserId, String currentUserRole);
 }

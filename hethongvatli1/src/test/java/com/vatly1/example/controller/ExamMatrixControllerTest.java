@@ -6,6 +6,7 @@ import com.vatly1.example.entity.Class;
 import com.vatly1.example.entity.QuestionBank;
 import com.vatly1.example.entity.Topic;
 import com.vatly1.example.entity.User;
+import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.model.request.CreateExamMatrixDTO;
@@ -95,6 +96,7 @@ public class ExamMatrixControllerTest {
                 .questionType(QuestionType.MCQ_SINGLE)
                 .content("Câu hỏi nhận biết 1?")
                 .difficultyLevel(DifficultyLevel.EASY)
+                .approvalStatus(ApprovalStatus.APPROVED)
                 .build();
         questionBankRepository.save(q1);
     }

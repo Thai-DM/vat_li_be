@@ -35,13 +35,21 @@ import com.vatly1.example.service.IClassScheduleService;
 import com.vatly1.example.service.IStudentPortalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.vatly1.example.entity.User;
+import com.vatly1.example.exception.CustomException;
+import com.vatly1.example.repository.IUserRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -64,6 +72,7 @@ public class StudentPortalServiceImpl implements IStudentPortalService {
     private final IExamParticipantRepository examParticipantRepository;
     private final IExamAttemptRepository examAttemptRepository;
     private final IClassScheduleService scheduleService;
+    private final IUserRepository userRepository;
 
     private List<UUID> getStudentClassIds(UUID studentId) {
         List<ClassEnrollment> enrollments = classEnrollmentRepository.findByStudentId(studentId);
@@ -215,52 +224,100 @@ public class StudentPortalServiceImpl implements IStudentPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<LearningMaterialDTO> getMyMaterials(UUID studentId, UUID classId, UUID topicId, MaterialType type) {
-        List<UUID> targetClassIds;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID targetStudentId = studentId;
+        boolean isAdmin = false;
+
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            isAdmin = auth.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+            if (!isAdmin) {
+                User user = userRepository.findByUsername(auth.getName());
+                if (user != null) {
+                    targetStudentId = user.getUserId();
+                }
+            }
+        }
+
+        List<LearningMaterial> materials = new ArrayList<>();
+
         if (classId != null) {
-            targetClassIds = List.of(classId);
+            Class clazz = classRepository.findById(classId)
+                    .orElseThrow(() -> new CustomException("Lớp học không tồn tại", HttpStatus.NOT_FOUND));
+
+            if (!isAdmin) {
+                boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(classId, targetStudentId);
+                if (!isEnrolled) {
+                    throw new CustomException("Sinh viên không ghi danh hoặc không có trạng thái hoạt động trong lớp học này", HttpStatus.FORBIDDEN);
+                }
+            }
+
+            if (topicId != null) {
+                Topic topic = topicRepository.findById(topicId)
+                        .orElseThrow(() -> new CustomException("Chủ đề không tồn tại", HttpStatus.NOT_FOUND));
+                if (!Objects.equals(topic.getSubjectId(), clazz.getSubjectId())) {
+                    throw new CustomException("Chủ đề không thuộc môn học của lớp này", HttpStatus.BAD_REQUEST);
+                }
+                materials.addAll(materialRepository.findByTopicIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(topicId, com.vatly1.example.entity.enums.MaterialScope.SHARED, ApprovalStatus.APPROVED));
+                materials.addAll(materialRepository.findByClassIdAndTopicIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(classId, topicId, com.vatly1.example.entity.enums.MaterialScope.CLASS, ApprovalStatus.APPROVED));
+            } else {
+                materials.addAll(materialRepository.findBySubjectIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(clazz.getSubjectId(), com.vatly1.example.entity.enums.MaterialScope.SHARED, ApprovalStatus.APPROVED));
+                materials.addAll(materialRepository.findByClassIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(classId, com.vatly1.example.entity.enums.MaterialScope.CLASS, ApprovalStatus.APPROVED));
+            }
         } else {
-            targetClassIds = getStudentClassIds(studentId);
-        }
+            List<UUID> activeSubjectIds;
+            List<UUID> activeClassIds;
 
-        Set<UUID> subjectIds = new HashSet<>();
-        for (UUID cid : targetClassIds) {
-            classRepository.findById(cid).ifPresent(c -> {
-                if (c.getSubjectId() != null) {
-                    subjectIds.add(c.getSubjectId());
+            if (isAdmin && targetStudentId == null) {
+                activeSubjectIds = topicRepository.findAllByOrderByOrderIndexAsc().stream()
+                        .map(Topic::getSubjectId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+                activeClassIds = classRepository.findAll().stream().map(Class::getClassId).collect(Collectors.toList());
+            } else {
+                activeSubjectIds = classEnrollmentRepository.findActiveSubjectIdsByStudentId(targetStudentId);
+                activeClassIds = classEnrollmentRepository.findActiveClassIdsByStudentId(targetStudentId);
+            }
+
+            if (activeSubjectIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            if (topicId != null) {
+                Topic topic = topicRepository.findById(topicId)
+                        .orElseThrow(() -> new CustomException("Chủ đề không tồn tại", HttpStatus.NOT_FOUND));
+                if (!isAdmin && !activeSubjectIds.contains(topic.getSubjectId())) {
+                    throw new CustomException("Bạn không theo học môn học chứa chủ đề này", HttpStatus.FORBIDDEN);
                 }
-            });
-        }
-
-        Set<UUID> targetTopicIds = new HashSet<>();
-        for (UUID sid : subjectIds) {
-            List<Topic> topics = topicRepository.findBySubjectIdOrderByOrderIndexAsc(sid);
-            for (Topic t : topics) {
-                if (topicId == null || Objects.equals(t.getTopicId(), topicId)) {
-                    targetTopicIds.add(t.getTopicId());
+                materials.addAll(materialRepository.findByTopicIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(topicId, com.vatly1.example.entity.enums.MaterialScope.SHARED, ApprovalStatus.APPROVED));
+                for (UUID cId : activeClassIds) {
+                    materials.addAll(materialRepository.findByClassIdAndTopicIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(cId, topicId, com.vatly1.example.entity.enums.MaterialScope.CLASS, ApprovalStatus.APPROVED));
+                }
+            } else {
+                for (UUID sid : activeSubjectIds) {
+                    materials.addAll(materialRepository.findBySubjectIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(sid, com.vatly1.example.entity.enums.MaterialScope.SHARED, ApprovalStatus.APPROVED));
+                }
+                for (UUID cId : activeClassIds) {
+                    materials.addAll(materialRepository.findByClassIdAndScopeAndApprovalStatusOrderByCreatedAtDesc(cId, com.vatly1.example.entity.enums.MaterialScope.CLASS, ApprovalStatus.APPROVED));
                 }
             }
         }
 
-        List<LearningMaterialDTO> results = new ArrayList<>();
-        for (UUID tid : targetTopicIds) {
-            List<LearningMaterial> materials = materialRepository.findByTopicIdOrderByCreatedAtDesc(tid);
-            for (LearningMaterial m : materials) {
-                if (m.getApprovalStatus() == ApprovalStatus.APPROVED) {
-                    if (type == null || m.getType() == type) {
-                        results.add(mapToMaterialDTO(m));
-                    }
-                }
-            }
-        }
-
-        results.sort(Comparator.comparing(LearningMaterialDTO::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
-        return results;
+        return materials.stream()
+                .filter(m -> m.getApprovalStatus() == ApprovalStatus.APPROVED)
+                .filter(m -> type == null || m.getType() == type)
+                .collect(Collectors.toMap(LearningMaterial::getMaterialId, m -> m, (m1, m2) -> m1, LinkedHashMap::new))
+                .values()
+                .stream()
+                .sorted(Comparator.comparing(LearningMaterial::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::mapToMaterialDTO)
+                .collect(Collectors.toList());
     }
 
     private LearningMaterialDTO mapToMaterialDTO(LearningMaterial material) {
         return LearningMaterialDTO.builder()
                 .materialId(material.getMaterialId())
                 .topicId(material.getTopicId())
+                .subjectId(material.getSubjectId())
+                .scope(material.getScope())
+                .classId(material.getClassId())
                 .fileId(material.getFileId())
                 .title(material.getTitle())
                 .type(material.getType())

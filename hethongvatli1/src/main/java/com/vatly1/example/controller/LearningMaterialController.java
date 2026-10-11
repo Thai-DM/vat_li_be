@@ -32,9 +32,10 @@ public class LearningMaterialController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<LearningMaterialDTO>>> getMaterialsByTopic(
             @PathVariable UUID topicId,
+            @RequestParam(required = false) UUID classId,
             HttpServletRequest request) {
         String role = (String) request.getAttribute("role");
-        List<LearningMaterialDTO> materials = learningMaterialService.getMaterialsByTopic(topicId, role);
+        List<LearningMaterialDTO> materials = learningMaterialService.getMaterialsByTopic(topicId, classId, role);
         return ResponseEntity.ok(ApiResponse.<List<LearningMaterialDTO>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")
@@ -97,7 +98,7 @@ public class LearningMaterialController {
 
     @Operation(summary = "Bộ môn phê duyệt học liệu số", description = "Kiểm duyệt và xuất bản học liệu cho sinh viên truy cập.")
     @PutMapping("/{materialId}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<LearningMaterialDTO>> approveMaterial(
             @PathVariable UUID topicId,
             @PathVariable UUID materialId) {

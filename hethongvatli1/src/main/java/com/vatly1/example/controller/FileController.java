@@ -22,10 +22,24 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.vatly1.example.entity.LearningMaterial;
+import com.vatly1.example.entity.Topic;
+import com.vatly1.example.entity.User;
+import com.vatly1.example.entity.enums.ApprovalStatus;
+import com.vatly1.example.repository.IClassEnrollmentRepository;
+import com.vatly1.example.repository.IClassRepository;
+import com.vatly1.example.repository.IUserRepository;
+import com.vatly1.example.repository.LearningMaterialRepository;
+import com.vatly1.example.repository.TopicRepository;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +51,11 @@ public class FileController {
 
     private final IFileStorageService fileStorageService;
     private final FileUploadRepository fileUploadRepository;
+    private final LearningMaterialRepository materialRepository;
+    private final TopicRepository topicRepository;
+    private final IClassEnrollmentRepository enrollmentRepository;
+    private final IClassRepository classRepository;
+    private final IUserRepository userRepository;
 
     @Value("${security.jwt.token.secret-key:secret-key-fallback-for-signing-files}")
     private String hmacSecret;
@@ -48,20 +67,36 @@ public class FileController {
     public ResponseEntity<ApiResponse<FileDownloadUrlDTO>> generateDownloadUrl(
             @PathVariable UUID fileId,
             HttpServletRequest request) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String userIdStr = (String) request.getAttribute("userId");
+        UUID currentUserId = null;
+        if (userIdStr != null) {
+            currentUserId = UUID.fromString(userIdStr);
+        } else {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null) {
+                User u = userRepository.findByUsername(auth.getName());
+                if (u != null) {
+                    currentUserId = u.getUserId();
+                }
+            }
+        }
         String role = (String) request.getAttribute("role");
+        if (role == null) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null) {
+                role = auth.getAuthorities().stream()
+                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .filter(a -> a.startsWith("ROLE_"))
+                        .map(a -> a.substring(5))
+                        .findFirst()
+                        .orElse("STUDENT");
+            }
+        }
 
         FileUpload fileUpload = fileUploadRepository.findById(fileId)
                 .orElseThrow(() -> new CustomException("File not found", HttpStatus.NOT_FOUND));
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "INSTRUCTOR".equalsIgnoreCase(role);
-        boolean isOwner = Objects.equals(fileUpload.getUploaderId(), currentUserId);
-        if (!isAdmin && !isOwner) {
-            // Standard check: file must not be locked/failed
-            if (fileUpload.getStatus() == com.vatly1.example.entity.enums.FileProcessingStatus.FAILED) {
-                throw new CustomException("File is not available for download", HttpStatus.BAD_REQUEST);
-            }
-        }
+        verifyFileAccessPermission(fileUpload, currentUserId, role);
 
         Instant expiresAt = Instant.now().plus(15, java.time.temporal.ChronoUnit.MINUTES);
         String dataToSign = fileId.toString() + ":" + expiresAt.toEpochMilli();
@@ -162,6 +197,94 @@ public class FileController {
                 .build());
     }
 
+    private void verifyFileAccessPermission(FileUpload fileUpload, UUID currentUserId, String role) {
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(role);
+        if (isAdmin) {
+            return;
+        }
+
+        if (fileUpload.getStatus() == com.vatly1.example.entity.enums.FileProcessingStatus.FAILED) {
+            throw new CustomException("File is not available for download", HttpStatus.BAD_REQUEST);
+        }
+
+        if ("LEARNING_MATERIAL".equalsIgnoreCase(fileUpload.getPurpose())) {
+            if (currentUserId == null) {
+                throw new CustomException("Yêu cầu đăng nhập để truy cập tài liệu học tập", HttpStatus.UNAUTHORIZED);
+            }
+
+            List<LearningMaterial> materials = materialRepository.findByFileId(fileUpload.getFileId());
+            if (materials.isEmpty() && fileUpload.getStoredUrl() != null) {
+                materialRepository.findFirstByFileUrlContaining(fileUpload.getStoredUrl()).ifPresent(materials::add);
+            }
+
+            if (!materials.isEmpty()) {
+                boolean isStudent = "STUDENT".equalsIgnoreCase(role);
+                boolean hasAccess = false;
+
+                for (LearningMaterial m : materials) {
+                    Topic topic = topicRepository.findById(m.getTopicId()).orElse(null);
+                    UUID subjectId = m.getSubjectId() != null ? m.getSubjectId() : (topic != null ? topic.getSubjectId() : null);
+
+                    if (m.getScope() == com.vatly1.example.entity.enums.MaterialScope.CLASS) {
+                        if (isStudent) {
+                            if (ApprovalStatus.APPROVED.equals(m.getApprovalStatus()) && m.getClassId() != null) {
+                                if (enrollmentRepository.isStudentActivelyEnrolledInClass(m.getClassId(), currentUserId)) {
+                                    hasAccess = true;
+                                    break;
+                                }
+                            }
+                        } else { // Instructor
+                            boolean isOwner = Objects.equals(m.getCreatedBy(), currentUserId);
+                            boolean isClassAssigned = m.getClassId() != null && classRepository.isInstructorAssignedToClass(m.getClassId(), currentUserId);
+                            if (isOwner || isClassAssigned) {
+                                hasAccess = true;
+                                break;
+                            }
+                        }
+                    } else { // SHARED
+                        if (isStudent) {
+                            if (ApprovalStatus.APPROVED.equals(m.getApprovalStatus()) && subjectId != null) {
+                                if (enrollmentRepository.isStudentActivelyEnrolledInSubject(currentUserId, subjectId)) {
+                                    hasAccess = true;
+                                    break;
+                                }
+                            }
+                        } else { // Instructor
+                            boolean isOwner = Objects.equals(m.getCreatedBy(), currentUserId);
+                            boolean isAssigned = subjectId != null && classRepository.isInstructorAssignedToSubject(subjectId, currentUserId);
+                            if (isOwner || isAssigned || ApprovalStatus.APPROVED.equals(m.getApprovalStatus())) {
+                                hasAccess = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!hasAccess) {
+                    if (isStudent && materials.stream().noneMatch(m -> ApprovalStatus.APPROVED.equals(m.getApprovalStatus()))) {
+                        throw new CustomException("Học liệu chưa được phê duyệt, không thể tải tệp", HttpStatus.FORBIDDEN);
+                    }
+                    throw new CustomException("Bạn không có quyền truy cập tệp học liệu này", HttpStatus.FORBIDDEN);
+                }
+            } else {
+                if (!Objects.equals(fileUpload.getUploaderId(), currentUserId)) {
+                    throw new CustomException("Bạn không có quyền truy cập tệp này", HttpStatus.FORBIDDEN);
+                }
+            }
+        } else if ("EXPERIMENT_SUBMISSION".equalsIgnoreCase(fileUpload.getPurpose())) {
+            boolean isOwner = Objects.equals(fileUpload.getUploaderId(), currentUserId);
+            boolean isInstructor = "INSTRUCTOR".equalsIgnoreCase(role);
+            if (!isOwner && !isInstructor) {
+                throw new CustomException("Bạn không có quyền truy cập bài nộp thí nghiệm này", HttpStatus.FORBIDDEN);
+            }
+        } else if ("CHUNKED_UPLOAD".equalsIgnoreCase(fileUpload.getPurpose())) {
+            boolean isOwner = Objects.equals(fileUpload.getUploaderId(), currentUserId);
+            if (!isOwner) {
+                throw new CustomException("Bạn không có quyền truy cập tệp tải lên này", HttpStatus.FORBIDDEN);
+            }
+        }
+    }
+
     @Operation(summary = "Truy xuất tệp hoặc hình ảnh", description = "Stream tệp/ảnh từ MinIO với đúng MediaType để hiển thị trực tiếp trên trình duyệt.")
     @GetMapping("/**")
     public ResponseEntity<InputStreamResource> getFile(HttpServletRequest request) {
@@ -170,12 +293,61 @@ public class FileController {
         int index = fullPath.indexOf(prefix);
         String filename = (index != -1) ? fullPath.substring(index + prefix.length()) : fullPath;
 
+        Optional<FileUpload> uploadOpt = fileUploadRepository.findFirstByStoredUrlContaining(filename);
+        Optional<LearningMaterial> materialOpt = uploadOpt.isEmpty()
+                ? materialRepository.findFirstByFileUrlContaining(filename)
+                : Optional.empty();
+
+        boolean isProtected = (uploadOpt.isPresent() && ("LEARNING_MATERIAL".equalsIgnoreCase(uploadOpt.get().getPurpose()) || "CHUNKED_UPLOAD".equalsIgnoreCase(uploadOpt.get().getPurpose())))
+                || materialOpt.isPresent();
+
+        if (isProtected) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+                throw new CustomException("Yêu cầu đăng nhập để truy cập tài liệu hoặc tệp tải lên", HttpStatus.UNAUTHORIZED);
+            }
+
+            String role = (String) request.getAttribute("role");
+            String userIdStr = (String) request.getAttribute("userId");
+            UUID currentUserId = null;
+            if (userIdStr != null) {
+                currentUserId = UUID.fromString(userIdStr);
+            } else {
+                User u = userRepository.findByUsername(auth.getName());
+                if (u != null) {
+                    currentUserId = u.getUserId();
+                }
+            }
+
+            if (role == null) {
+                role = auth.getAuthorities().stream()
+                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .filter(a -> a.startsWith("ROLE_"))
+                        .map(a -> a.substring(5))
+                        .findFirst()
+                        .orElse("STUDENT");
+            }
+
+            if (uploadOpt.isPresent()) {
+                verifyFileAccessPermission(uploadOpt.get(), currentUserId, role);
+            } else if (materialOpt.isPresent()) {
+                FileUpload mockUpload = FileUpload.builder()
+                        .fileId(materialOpt.get().getFileId())
+                        .purpose("LEARNING_MATERIAL")
+                        .storedUrl(materialOpt.get().getFileUrl())
+                        .uploaderId(materialOpt.get().getCreatedBy())
+                        .status(com.vatly1.example.entity.enums.FileProcessingStatus.COMPLETED)
+                        .build();
+                verifyFileAccessPermission(mockUpload, currentUserId, role);
+            }
+        }
+
         InputStream is = fileStorageService.getFileInputStream(filename);
         MediaType mediaType = determineMediaType(filename);
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+                .header(HttpHeaders.CACHE_CONTROL, isProtected ? "no-cache, no-store, must-revalidate" : "public, max-age=86400")
                 .body(new InputStreamResource(is));
     }
 

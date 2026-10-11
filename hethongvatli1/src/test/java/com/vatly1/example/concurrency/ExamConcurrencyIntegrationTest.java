@@ -233,8 +233,11 @@ class ExamConcurrencyIntegrationTest {
                         .build());
             }
             if (!classEnrollmentRepository.existsByClassIdAndStudentId(officialExam.getClassId(), u.getUserId())) {
+                var offClass = classRepository.findById(officialExam.getClassId()).orElseThrow();
                 classEnrollmentRepository.save(ClassEnrollment.builder()
                         .classId(officialExam.getClassId())
+                        .subjectId(offClass.getSubjectId())
+                        .semesterId(offClass.getSemesterId())
                         .studentId(u.getUserId())
                         .status(EnrollmentStatus.ACTIVE)
                         .enrolledAt(Instant.now())

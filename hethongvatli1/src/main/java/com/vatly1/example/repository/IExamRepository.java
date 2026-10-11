@@ -14,4 +14,14 @@ public interface IExamRepository extends JpaRepository<Exam, UUID> {
     boolean existsByExamIdAndCreatedBy(UUID examId, UUID createdBy);
     boolean existsByMatrixId(UUID matrixId);
     long countByMatrixId(UUID matrixId);
+    List<Exam> findByMatrixId(UUID matrixId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT e FROM Exam e WHERE e.examId = :examId")
+    java.util.Optional<Exam> findByIdForUpdate(@org.springframework.data.repository.query.Param("examId") UUID examId);
+
+    boolean existsByClassIdAndMatrixId(UUID classId, UUID matrixId);
+    List<Exam> findByClassIdAndMatrixId(UUID classId, UUID matrixId);
+    boolean existsByClassIdAndExamType(UUID classId, com.vatly1.example.entity.enums.ExamType examType);
+    List<Exam> findByClassIdAndExamType(UUID classId, com.vatly1.example.entity.enums.ExamType examType);
 }

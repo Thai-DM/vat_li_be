@@ -74,6 +74,8 @@ public class AiTutorControllerTest {
         if (!classEnrollmentRepository.existsByClassIdAndStudentId(targetClass.getClassId(), svAn.getUserId())) {
             classEnrollmentRepository.save(ClassEnrollment.builder()
                     .classId(targetClass.getClassId())
+                    .subjectId(targetClass.getSubjectId())
+                    .semesterId(targetClass.getSemesterId())
                     .studentId(svAn.getUserId())
                     .status(EnrollmentStatus.ACTIVE)
                     .build());

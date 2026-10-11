@@ -19,6 +19,9 @@ public class LearningMaterialDTO {
 
     private UUID materialId;
     private UUID topicId;
+    private UUID subjectId;
+    private com.vatly1.example.entity.enums.MaterialScope scope;
+    private UUID classId;
     private UUID fileId;
     private String title;
     private MaterialType type;

@@ -19,6 +19,8 @@ public class ExamMatrixDetailRequestDTO {
     @NotNull(message = "topicId không được để trống")
     private UUID topicId;
 
+    private UUID cloId;
+
     @NotNull(message = "difficultyLevel không được để trống (EASY, MEDIUM, HARD)")
     private DifficultyLevel difficultyLevel;
 

@@ -5,6 +5,7 @@ import com.vatly1.example.app.JwtAuthServiceApp;
 import com.vatly1.example.entity.ExamAttempt;
 import com.vatly1.example.entity.QuestionBank;
 import com.vatly1.example.entity.QuestionOption;
+import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.AttemptStatus;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.QuestionType;
@@ -108,6 +109,7 @@ public class ExamControllerTest {
                 .questionType(QuestionType.MCQ_SINGLE)
                 .content("Gia tốc rơi tự do xấp xỉ bằng bao nhiêu m/s^2?")
                 .difficultyLevel(DifficultyLevel.EASY)
+                .approvalStatus(ApprovalStatus.APPROVED)
                 .build();
         QuestionBank savedQ = questionBankRepository.save(q);
         questionId = savedQ.getQuestionId();

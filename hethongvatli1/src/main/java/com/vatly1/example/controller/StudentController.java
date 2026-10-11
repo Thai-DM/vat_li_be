@@ -89,10 +89,13 @@ public class StudentController {
     @PostMapping(value = "/import-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA')")
     public ResponseEntity<ApiResponse<StudentImportResultDTO>> importStudentsFromExcel(
+            jakarta.servlet.http.HttpServletRequest request,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "defaultPassword", required = false) String defaultPassword,
             @RequestParam(value = "classId", required = false) UUID classId) {
-        StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId);
+        UUID currentUserId = request.getAttribute("userId") != null ? UUID.fromString((String) request.getAttribute("userId")) : null;
+        String role = (String) request.getAttribute("role");
+        StudentImportResultDTO result = studentExcelService.importStudentsFromExcel(file, defaultPassword, classId, currentUserId, role);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(result, "Xử lý nhập danh sách sinh viên từ Excel hoàn tất"));
     }

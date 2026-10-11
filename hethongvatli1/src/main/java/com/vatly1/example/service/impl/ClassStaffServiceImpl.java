@@ -107,15 +107,8 @@ public class ClassStaffServiceImpl implements IClassStaffService {
 
     private void checkOwnership(Class clazz, UUID currentUserId, String currentUserRole) {
         UserRole role = UserRole.valueOf(currentUserRole.toUpperCase());
-        if (role == UserRole.ADMIN) {
-            return;
-        }
-        if (role == UserRole.INSTRUCTOR) {
-            if (clazz.getInstructorId() == null || !clazz.getInstructorId().equals(currentUserId)) {
-                throw new CustomException("Bạn không phải chủ lớp, không thể phân công nhân sự", HttpStatus.FORBIDDEN);
-            }
-        } else {
-            throw new CustomException("Chỉ chủ lớp hoặc Admin mới có quyền quản lý nhân sự", HttpStatus.FORBIDDEN);
+        if (role != UserRole.ADMIN) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền phân công hoặc thu hồi nhân sự của lớp", HttpStatus.FORBIDDEN);
         }
     }
 }

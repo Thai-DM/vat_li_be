@@ -218,7 +218,17 @@ class ClassControllerTest {
                 .content(createBody))
             .andReturn().getResponse().getContentAsString();
         String classId = objectMapper.readTree(createRes).get("data").get("classId").asText();
-        String stuUserId = getUserId(studentToken);
+        String freshUname = "stu_single_" + UUID.randomUUID().toString().substring(0, 8);
+        String signupBody = """
+            {"username":"%s","email":"%s@example.com","password":"password12","role":"STUDENT"}
+            """.formatted(freshUname, freshUname);
+        String signupRes = mockMvc.perform(post("/api/v1/users/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(signupBody))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String stuToken = objectMapper.readTree(signupRes).get("data").get("accessToken").asText();
+        String stuUserId = getUserId(stuToken);
 
         // Update class status to ACTIVE
         String activeStatusBody = "{\"status\": \"ACTIVE\"}";
@@ -374,16 +384,27 @@ class ClassControllerTest {
             .andExpect(status().isOk());
 
         // Sinh viên 1 ghi danh thành công (đạt 1/1)
-        String stu1Id = getUserId(studentToken);
+        String uname1 = "max_stu1_" + UUID.randomUUID().toString().substring(0, 8);
+        String res1 = mockMvc.perform(post("/api/v1/users/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + uname1 + "\",\"email\":\"" + uname1 + "@ex.com\",\"password\":\"password12\",\"role\":\"STUDENT\"}"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String stu1Id = getUserId(objectMapper.readTree(res1).get("data").get("accessToken").asText());
+
         mockMvc.perform(post("/api/v1/classes/" + classId + "/enroll-single")
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"studentId\": \"%s\"}".formatted(stu1Id)))
             .andExpect(status().isCreated());
 
-        // Sinh viên 2 (sv_binh) cố ghi danh -> phải bị từ chối 400 Bad Request
-        String studentBToken = signin("sv_binh", "sv_binh123456");
-        String stu2Id = getUserId(studentBToken);
+        // Sinh viên 2 cố ghi danh -> phải bị từ chối 400 Bad Request
+        String uname2 = "max_stu2_" + UUID.randomUUID().toString().substring(0, 8);
+        String res2 = mockMvc.perform(post("/api/v1/users/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + uname2 + "\",\"email\":\"" + uname2 + "@ex.com\",\"password\":\"password12\",\"role\":\"STUDENT\"}"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String stu2Id = getUserId(objectMapper.readTree(res2).get("data").get("accessToken").asText());
+
         mockMvc.perform(post("/api/v1/classes/" + classId + "/enroll-single")
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)

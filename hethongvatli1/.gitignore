@@ -11,6 +11,7 @@
 *.md
 !README.md
 !**/README.md
+!BACKEND_MASTER_CHANGELOG.md
 *.txt
 *.pdf
 *.xlsx
@@ -47,6 +48,7 @@ out/
 # -----------------------------------------------------------------------------
 uploads/*
 !uploads/.gitkeep
+storage/
 
 # -----------------------------------------------------------------------------
 # 4. Secrets & Credentials
