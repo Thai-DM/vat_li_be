@@ -1,0 +1,204 @@
+{
+  "total_samples": 24,
+  "max_hikari_active": 10.0,
+  "max_hikari_pending": 15.0,
+  "avg_hikari_active": 2.0,
+  "max_jvm_memory_mb": 315.25,
+  "avg_jvm_memory_mb": 128.98,
+  "max_cpu_process_pct": 5.89,
+  "avg_cpu_process_pct": 1.36,
+  "samples": [
+    {
+      "timestamp": 1791732593.160665,
+      "hikari_active": 0.0,
+      "hikari_idle": 10.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 285.05,
+      "cpu_process_pct": 0.33
+    },
+    {
+      "timestamp": 1791732597.0353034,
+      "hikari_active": 0.0,
+      "hikari_idle": 10.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 289.12,
+      "cpu_process_pct": 2.06
+    },
+    {
+      "timestamp": 1791732600.921205,
+      "hikari_active": 1.0,
+      "hikari_idle": 9.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 315.25,
+      "cpu_process_pct": 4.5
+    },
+    {
+      "timestamp": 1791732604.5730078,
+      "hikari_active": 1.0,
+      "hikari_idle": 9.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 218.41,
+      "cpu_process_pct": 3.29
+    },
+    {
+      "timestamp": 1791732608.6801634,
+      "hikari_active": 1.0,
+      "hikari_idle": 9.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 236.95,
+      "cpu_process_pct": 3.11
+    },
+    {
+      "timestamp": 1791732612.123827,
+      "hikari_active": 0.0,
+      "hikari_idle": 10.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 249.18,
+      "cpu_process_pct": 3.21
+    },
+    {
+      "timestamp": 1791732616.0210087,
+      "hikari_active": 4.0,
+      "hikari_idle": 6.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 256.49,
+      "cpu_process_pct": 2.47
+    },
+    {
+      "timestamp": 1791732619.4337494,
+      "hikari_active": 5.0,
+      "hikari_idle": 5.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 264.89,
+      "cpu_process_pct": 2.45
+    },
+    {
+      "timestamp": 1791732622.8582537,
+      "hikari_active": 8.0,
+      "hikari_idle": 2.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 218.19,
+      "cpu_process_pct": 5.89
+    },
+    {
+      "timestamp": 1791732626.1986957,
+      "hikari_active": 8.0,
+      "hikari_idle": 2.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 231.56,
+      "cpu_process_pct": 1.71
+    },
+    {
+      "timestamp": 1791732629.488779,
+      "hikari_active": 10.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 249.82,
+      "cpu_process_pct": 1.96
+    },
+    {
+      "timestamp": 1791732633.9712687,
+      "hikari_active": 10.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 15.0,
+      "jvm_memory_mb": 280.7,
+      "cpu_process_pct": 1.6
+    },
+    {
+      "timestamp": 1791732641.447434,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732658.5518851,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732675.6737888,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732692.7836142,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732709.8850322,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732726.9706435,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732744.081567,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732761.1869092,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732778.2849054,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732795.3655071,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732812.472246,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    },
+    {
+      "timestamp": 1791732829.5411553,
+      "hikari_active": 0.0,
+      "hikari_idle": 0.0,
+      "hikari_pending": 0.0,
+      "jvm_memory_mb": 0.0,
+      "cpu_process_pct": 0.0
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import java.util.UUID;
 @Repository
 public interface QuestionAcceptedAnswerRepository extends JpaRepository<QuestionAcceptedAnswer, UUID> {
     List<QuestionAcceptedAnswer> findByQuestionIdOrderByOrderIndexAsc(UUID questionId);
+    List<QuestionAcceptedAnswer> findByQuestionIdIn(java.util.Collection<UUID> questionIds);
     List<QuestionAcceptedAnswer> findByQuestionId(UUID questionId);
     void deleteByQuestionId(UUID questionId);
     boolean existsByQuestionId(UUID questionId);

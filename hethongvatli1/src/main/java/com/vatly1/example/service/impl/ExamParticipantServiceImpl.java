@@ -281,8 +281,11 @@ public class ExamParticipantServiceImpl implements IExamParticipantService {
         if (role == UserRole.ADMIN) {
             return;
         }
+        if (role != UserRole.INSTRUCTOR) {
+            throw new CustomException(errorMessage, HttpStatus.FORBIDDEN);
+        }
         boolean isOwner = clazz.getInstructorId() != null && clazz.getInstructorId().equals(currentUserId);
-        boolean isStaff = classStaffRepository.existsByClassIdAndUserId(clazz.getClassId(), currentUserId);
+        boolean isStaff = classStaffRepository.existsByClassIdAndUserIdAndRoleInClass(clazz.getClassId(), currentUserId, com.vatly1.example.entity.enums.ClassStaffRole.INSTRUCTOR);
         if (!isOwner && !isStaff) {
             throw new CustomException(errorMessage, HttpStatus.FORBIDDEN);
         }

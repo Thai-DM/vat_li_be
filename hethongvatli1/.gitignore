@@ -12,6 +12,7 @@
 !README.md
 !**/README.md
 !BACKEND_MASTER_CHANGELOG.md
+!BACKEND_PERFORMANCE_REPORT.md
 *.txt
 *.pdf
 *.xlsx
@@ -29,6 +30,7 @@ target/
 build/
 dist/
 out/
+k6.exe
 *.class
 *.jar
 *.war

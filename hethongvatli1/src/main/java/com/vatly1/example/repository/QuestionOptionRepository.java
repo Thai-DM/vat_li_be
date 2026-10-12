@@ -10,6 +10,7 @@ import java.util.UUID;
 @Repository
 public interface QuestionOptionRepository extends JpaRepository<QuestionOption, UUID> {
     List<QuestionOption> findByQuestionIdOrderByOrderIndexAsc(UUID questionId);
+    List<QuestionOption> findByQuestionIdIn(java.util.Collection<UUID> questionIds);
     List<QuestionOption> findByQuestionId(UUID questionId);
     List<QuestionOption> findByQuestionIdAndIsCorrectTrue(UUID questionId);
     boolean existsByOptionIdAndQuestionId(UUID optionId, UUID questionId);

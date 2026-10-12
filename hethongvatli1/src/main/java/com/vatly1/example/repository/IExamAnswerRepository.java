@@ -14,6 +14,7 @@ import java.util.UUID;
 @Repository
 public interface IExamAnswerRepository extends JpaRepository<ExamAnswer, UUID> {
     List<ExamAnswer> findByAttemptId(UUID attemptId);
+    List<ExamAnswer> findByAttemptIdIn(List<UUID> attemptIds);
     List<ExamAnswer> findByQuestionId(UUID questionId);
     Optional<ExamAnswer> findByAttemptIdAndQuestionId(UUID attemptId, UUID questionId);
     boolean existsByAttemptIdAndQuestionId(UUID attemptId, UUID questionId);

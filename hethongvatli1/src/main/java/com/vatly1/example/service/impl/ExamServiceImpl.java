@@ -57,8 +57,11 @@ import com.vatly1.example.repository.TopicRepository;
 import com.vatly1.example.service.IExamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.vatly1.example.entity.enums.ClassStaffRole;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -109,27 +112,37 @@ public class ExamServiceImpl implements IExamService {
         Class clazz = classRepository.findById(dto.getClassId())
                 .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
 
-        User creator = userRepository.findById(creatorId).orElse(null);
-        boolean isAdmin = creator != null && creator.getRole() == UserRole.ADMIN;
-        boolean isInstructor = Objects.equals(clazz.getInstructorId(), creatorId);
-        boolean isStaff = classStaffRepository.existsByClassIdAndUserId(dto.getClassId(), creatorId);
-        if (!isAdmin && !isInstructor && !isStaff) {
-            throw new CustomException("Access denied: You are not authorized to manage exams for this class", HttpStatus.FORBIDDEN);
+        User currentUser = resolveCurrentUser(creatorId);
+        validateExamManagePermission(clazz, currentUser, dto.getExamType());
+
+        if (dto.getDurationMinutes() == null || dto.getDurationMinutes() <= 0) {
+            throw new CustomException("Thời lượng làm bài phải lớn hơn 0", HttpStatus.BAD_REQUEST);
         }
 
-        if (dto.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL && !isAdmin) {
-            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền tạo kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+        if (dto.getStartTime() != null && dto.getEndTime() != null && dto.getStartTime().isAfter(dto.getEndTime())) {
+            throw new CustomException("Thời gian bắt đầu không được sau thời gian kết thúc", HttpStatus.BAD_REQUEST);
+        }
+
+        if (dto.getMatrixId() != null) {
+            ExamMatrix matrix = examMatrixRepository.findById(dto.getMatrixId())
+                    .orElseThrow(() -> new CustomException("Không tìm thấy ma trận đề thi", HttpStatus.NOT_FOUND));
+            if (!Objects.equals(matrix.getSubjectId(), clazz.getSubjectId())) {
+                throw new CustomException("Ma trận đề thi không thuộc môn học của lớp học này", HttpStatus.BAD_REQUEST);
+            }
+            if (currentUser.getRole() != UserRole.ADMIN && matrix.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+                throw new CustomException("Giảng viên không được phép sử dụng ma trận đề thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+            }
         }
 
         Exam exam = Exam.builder()
                 .classId(dto.getClassId())
                 .matrixId(dto.getMatrixId())
-                .title(dto.getTitle())
+                .title(dto.getTitle().trim())
                 .examType(dto.getExamType())
                 .durationMinutes(dto.getDurationMinutes())
                 .startTime(dto.getStartTime())
                 .endTime(dto.getEndTime())
-                .createdBy(creatorId)
+                .createdBy(currentUser.getUserId())
                 .createdAt(Instant.now())
                 .build();
 
@@ -405,14 +418,6 @@ public class ExamServiceImpl implements IExamService {
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
         Class clazz = checkExamOwnership(exam, instructorId);
 
-        if (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
-            User user = userRepository.findById(instructorId).orElse(null);
-            boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
-            if (!isAdmin) {
-                throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền điều chỉnh câu hỏi kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
-            }
-        }
-
         if (examAttemptRepository.existsByExamId(examId)) {
             throw new CustomException("Cannot modify questions for an exam that already has student attempts", HttpStatus.BAD_REQUEST);
         }
@@ -430,6 +435,11 @@ public class ExamServiceImpl implements IExamService {
 
         if (!Objects.equals(question.getSubjectId(), clazz.getSubjectId())) {
             throw new CustomException("Question does not belong to the same subject as the exam", HttpStatus.BAD_REQUEST);
+        }
+
+        if (question.getQuestionType() != com.vatly1.example.entity.enums.QuestionType.MCQ_SINGLE &&
+                question.getQuestionType() != com.vatly1.example.entity.enums.QuestionType.FILL_BLANK) {
+            throw new CustomException("Hệ thống chỉ hỗ trợ câu hỏi trắc nghiệm đơn (MCQ_SINGLE) hoặc điền khuyết (FILL_BLANK) vào đề thi", HttpStatus.BAD_REQUEST);
         }
 
         if (examQuestionRepository.existsByExamIdAndQuestionId(examId, dto.getQuestionId())) {
@@ -1079,12 +1089,11 @@ public class ExamServiceImpl implements IExamService {
     public ExamDTO updateExam(UUID examId, UpdateExamDTO dto, UUID instructorId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
-        checkExamOwnership(exam, instructorId);
+        Class clazz = checkExamOwnership(exam, instructorId);
+        User currentUser = resolveCurrentUser(instructorId);
 
-        User user = userRepository.findById(instructorId).orElse(null);
-        boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
-        if (!isAdmin && (exam.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL || dto.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL)) {
-            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền cập nhật kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+        if (dto.getExamType() != null) {
+            validateExamManagePermission(clazz, currentUser, dto.getExamType());
         }
 
         if (examAttemptRepository.existsByExamId(examId)) {
@@ -1098,6 +1107,9 @@ public class ExamServiceImpl implements IExamService {
             exam.setExamType(dto.getExamType());
         }
         if (dto.getDurationMinutes() != null) {
+            if (dto.getDurationMinutes() <= 0) {
+                throw new CustomException("Thời lượng làm bài phải lớn hơn 0", HttpStatus.BAD_REQUEST);
+            }
             exam.setDurationMinutes(dto.getDurationMinutes());
         }
         if (dto.getStartTime() != null) {
@@ -1106,7 +1118,18 @@ public class ExamServiceImpl implements IExamService {
         if (dto.getEndTime() != null) {
             exam.setEndTime(dto.getEndTime());
         }
+        if (exam.getStartTime() != null && exam.getEndTime() != null && exam.getStartTime().isAfter(exam.getEndTime())) {
+            throw new CustomException("Thời gian bắt đầu không được sau thời gian kết thúc", HttpStatus.BAD_REQUEST);
+        }
         if (dto.getMatrixId() != null) {
+            ExamMatrix matrix = examMatrixRepository.findById(dto.getMatrixId())
+                    .orElseThrow(() -> new CustomException("Không tìm thấy ma trận đề thi", HttpStatus.NOT_FOUND));
+            if (!Objects.equals(matrix.getSubjectId(), clazz.getSubjectId())) {
+                throw new CustomException("Ma trận đề thi không thuộc môn học của lớp học này", HttpStatus.BAD_REQUEST);
+            }
+            if (currentUser.getRole() != UserRole.ADMIN && matrix.getExamType() == com.vatly1.example.entity.enums.ExamType.FINAL) {
+                throw new CustomException("Giảng viên không được phép sử dụng ma trận đề thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+            }
             exam.setMatrixId(dto.getMatrixId());
         }
 
@@ -1225,14 +1248,47 @@ public class ExamServiceImpl implements IExamService {
     private Class checkExamOwnership(Exam exam, UUID instructorId) {
         Class clazz = classRepository.findById(exam.getClassId())
                 .orElseThrow(() -> new CustomException("Class not found", HttpStatus.NOT_FOUND));
-        User user = userRepository.findById(instructorId).orElse(null);
-        boolean isAdmin = user != null && user.getRole() == UserRole.ADMIN;
-        boolean isInstructor = Objects.equals(clazz.getInstructorId(), instructorId);
-        boolean isStaff = classStaffRepository.existsByClassIdAndUserId(clazz.getClassId(), instructorId);
-        if (!isAdmin && !isInstructor && !isStaff) {
-            throw new CustomException("Access denied: You are not authorized to modify this exam", HttpStatus.FORBIDDEN);
-        }
+        User currentUser = resolveCurrentUser(instructorId);
+        validateExamManagePermission(clazz, currentUser, exam.getExamType());
         return clazz;
+    }
+
+    private void validateExamManagePermission(Class clazz, User user, com.vatly1.example.entity.enums.ExamType examType) {
+        if (user == null) {
+            throw new CustomException("Vui lòng đăng nhập để thực hiện thao tác này", HttpStatus.UNAUTHORIZED);
+        }
+        if (user.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (user.getRole() != UserRole.INSTRUCTOR) {
+            throw new CustomException("Chỉ Giảng viên (INSTRUCTOR) hoặc Quản trị viên (ADMIN) mới có quyền tạo hoặc chỉnh sửa bài thi", HttpStatus.FORBIDDEN);
+        }
+
+        boolean isPrimary = Objects.equals(clazz.getInstructorId(), user.getUserId());
+        boolean isStaffInstructor = classStaffRepository.existsByClassIdAndUserIdAndRoleInClass(
+                clazz.getClassId(), user.getUserId(), ClassStaffRole.INSTRUCTOR);
+        if (!isPrimary && !isStaffInstructor) {
+            throw new CustomException("Giảng viên không được phân công giảng dạy lớp học này hoặc không có quyền quản lý bài thi", HttpStatus.FORBIDDEN);
+        }
+
+        if (examType == com.vatly1.example.entity.enums.ExamType.FINAL) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền tạo hoặc cấu hình kỳ thi cuối kỳ (FINAL)", HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private User resolveCurrentUser(UUID fallbackUserId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            User user = userRepository.findByUsername(auth.getName());
+            if (user != null) {
+                return user;
+            }
+        }
+        if (fallbackUserId != null) {
+            return userRepository.findById(fallbackUserId).orElse(null);
+        }
+        return null;
     }
 
     private ExamDTO toExamDTO(Exam exam) {

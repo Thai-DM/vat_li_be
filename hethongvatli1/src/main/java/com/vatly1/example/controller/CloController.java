@@ -42,9 +42,9 @@ public class CloController {
                 .build());
     }
 
-    @Operation(summary = "Tạo CLO mới cho môn học", description = "Tạo mới một chuẩn đầu ra học phần thuộc môn học (Admin hoặc Giảng viên).")
+    @Operation(summary = "Tạo CLO mới cho môn học (Chỉ Admin)", description = "Tạo mới một chuẩn đầu ra học phần thuộc môn học.")
     @PostMapping("/subjects/{subjectId}/clos")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CloDTO>> createClo(
             @PathVariable UUID subjectId,
             @Valid @RequestBody CreateCloDTO createDTO,
@@ -71,9 +71,9 @@ public class CloController {
                 .build());
     }
 
-    @Operation(summary = "Cập nhật thông tin CLO", description = "Chỉnh sửa mã CLO, mô tả hoặc thứ tự hiển thị.")
+    @Operation(summary = "Cập nhật thông tin CLO (Chỉ Admin)", description = "Chỉnh sửa mã CLO, mô tả hoặc thứ tự hiển thị.")
     @PutMapping("/clos/{cloId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CloDTO>> updateClo(
             @PathVariable UUID cloId,
             @Valid @RequestBody UpdateCloDTO updateDTO,
@@ -88,9 +88,9 @@ public class CloController {
                 .build());
     }
 
-    @Operation(summary = "Bật/Tắt trạng thái hoạt động của CLO", description = "Kích hoạt hoặc vô hiệu hóa chuẩn đầu ra học phần.")
+    @Operation(summary = "Bật/Tắt trạng thái hoạt động của CLO (Chỉ Admin)", description = "Kích hoạt hoặc vô hiệu hóa chuẩn đầu ra học phần.")
     @PatchMapping("/clos/{cloId}/toggle-status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CloDTO>> toggleCloActive(
             @PathVariable UUID cloId,
             @RequestParam boolean isActive,

@@ -14,6 +14,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +52,8 @@ public class SubjectServiceImpl implements ISubjectService {
     @Override
     @Transactional
     public SubjectDTO createSubject(CreateSubjectDTO dto) {
+        checkAdminPermission();
+
         if (subjectRepository.existsBySubjectCode(dto.getSubjectCode())) {
             throw new CustomException("Mã môn học đã tồn tại", HttpStatus.UNPROCESSABLE_ENTITY);
         }
@@ -63,6 +67,8 @@ public class SubjectServiceImpl implements ISubjectService {
     @Override
     @Transactional
     public SubjectDTO updateSubject(UUID id, UpdateSubjectDTO dto) {
+        checkAdminPermission();
+
         Subject subject = subjectRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Không tìm thấy môn học", HttpStatus.NOT_FOUND));
 
@@ -76,6 +82,8 @@ public class SubjectServiceImpl implements ISubjectService {
     @Override
     @Transactional
     public SubjectDTO toggleSubjectStatus(UUID id) {
+        checkAdminPermission();
+
         Subject subject = subjectRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Không tìm thấy môn học", HttpStatus.NOT_FOUND));
 
@@ -83,5 +91,17 @@ public class SubjectServiceImpl implements ISubjectService {
 
         subject = subjectRepository.save(subject);
         return subjectConverter.toSubjectDTO(subject);
+    }
+
+    private void checkAdminPermission() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            throw new CustomException("Vui lòng đăng nhập để thực hiện thao tác này", HttpStatus.UNAUTHORIZED);
+        }
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+        if (!isAdmin) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền quản lý môn học", HttpStatus.FORBIDDEN);
+        }
     }
 }

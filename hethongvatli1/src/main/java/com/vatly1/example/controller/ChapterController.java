@@ -42,9 +42,9 @@ public class ChapterController {
                 .build());
     }
 
-    @Operation(summary = "Tạo chương học mới (Admin / Giảng viên được phân công)", description = "Tạo chương học mới trong môn học.")
+    @Operation(summary = "Tạo chương học mới (Chỉ Admin)", description = "Tạo chương học mới trong môn học.")
     @PostMapping("/api/v1/subjects/{subjectId}/chapters")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ChapterDTO>> createChapter(
             @PathVariable UUID subjectId,
             @Valid @RequestBody CreateChapterDTO createChapterDTO) {
@@ -68,9 +68,9 @@ public class ChapterController {
                 .build());
     }
 
-    @Operation(summary = "Cập nhật chương học", description = "Chỉnh sửa mã chương, tên chương, mô tả, thứ tự hiển thị.")
+    @Operation(summary = "Cập nhật chương học (Chỉ Admin)", description = "Chỉnh sửa mã chương, tên chương, mô tả, thứ tự hiển thị.")
     @PutMapping("/api/v1/chapters/{chapterId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ChapterDTO>> updateChapter(
             @PathVariable UUID chapterId,
             @Valid @RequestBody UpdateChapterDTO updateChapterDTO) {
@@ -82,9 +82,9 @@ public class ChapterController {
                 .build());
     }
 
-    @Operation(summary = "Bật/tắt trạng thái hoạt động của chương học", description = "Kích hoạt hoặc ngưng hoạt động chương học.")
+    @Operation(summary = "Bật/tắt trạng thái hoạt động của chương học (Chỉ Admin)", description = "Kích hoạt hoặc ngưng hoạt động chương học.")
     @PutMapping("/api/v1/chapters/{chapterId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ChapterDTO>> updateChapterStatus(
             @PathVariable UUID chapterId,
             @RequestParam(required = false) Boolean isActive,
@@ -101,9 +101,9 @@ public class ChapterController {
                 .build());
     }
 
-    @Operation(summary = "Xóa chương học rỗng", description = "Xóa chương học khi không còn chứa bài học nào.")
+    @Operation(summary = "Xóa chương học rỗng (Chỉ Admin)", description = "Xóa chương học khi không còn chứa bài học nào.")
     @DeleteMapping("/api/v1/chapters/{chapterId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteChapter(@PathVariable UUID chapterId) {
         chapterService.deleteChapter(chapterId);
         return ResponseEntity.ok(ApiResponse.<Void>builder()
@@ -123,9 +123,9 @@ public class ChapterController {
                 .build());
     }
 
-    @Operation(summary = "Sắp xếp lại thứ tự bài học trong chương", description = "Cập nhật lại orderIndex cho toàn bộ bài học trong chương theo danh sách ID.")
+    @Operation(summary = "Sắp xếp lại thứ tự bài học trong chương (Chỉ Admin)", description = "Cập nhật lại orderIndex cho toàn bộ bài học trong chương theo danh sách ID.")
     @PutMapping("/api/v1/chapters/{chapterId}/topics/reorder")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<TopicDTO>>> reorderTopics(
             @PathVariable UUID chapterId,
             @Valid @RequestBody ReorderTopicsDTO dto) {

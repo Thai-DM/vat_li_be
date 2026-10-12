@@ -66,9 +66,9 @@ public class TopicController {
                 .build());
     }
 
-    @Operation(summary = "Tạo chương mục kiến thức mới (Chỉ Admin/Giảng viên)", description = "Thêm chương mục mới vào môn học.")
+    @Operation(summary = "Tạo chương mục kiến thức mới (Chỉ Admin)", description = "Thêm chương mục mới vào môn học.")
     @PostMapping({"/api/v1/subjects/{subjectId}/topics", "/api/v1/topics"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TopicDTO>> createTopic(
             @PathVariable(required = false) UUID subjectId,
             @Valid @RequestBody CreateTopicDTO createTopicDTO) {
@@ -83,9 +83,9 @@ public class TopicController {
                 .build());
     }
 
-    @Operation(summary = "Cập nhật thông tin chương mục", description = "Chỉnh sửa tên, mô tả và thứ tự hiển thị của chương mục.")
+    @Operation(summary = "Cập nhật thông tin chương mục (Chỉ Admin)", description = "Chỉnh sửa tên, mô tả và thứ tự hiển thị của chương mục.")
     @PutMapping({"/api/v1/subjects/{subjectId}/topics/{topicId}", "/api/v1/topics/{topicId}"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TopicDTO>> updateTopic(
             @PathVariable(required = false) UUID subjectId,
             @PathVariable UUID topicId,
@@ -115,9 +115,9 @@ public class TopicController {
                 .build());
     }
 
-    @Operation(summary = "Gán hoặc gỡ chương học cho bài học", description = "Gán bài học vào chương học hoặc gỡ bài học khỏi chương (chapterId = null).")
+    @Operation(summary = "Gán hoặc gỡ chương học cho bài học (Chỉ Admin)", description = "Gán bài học vào chương học hoặc gỡ bài học khỏi chương (chapterId = null).")
     @PutMapping("/api/v1/topics/{topicId}/assign-chapter")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TopicDTO>> assignChapter(
             @PathVariable UUID topicId,
             @RequestBody(required = false) AssignChapterDTO assignChapterDTO,

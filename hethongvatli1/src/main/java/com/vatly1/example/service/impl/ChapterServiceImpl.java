@@ -240,26 +240,14 @@ public class ChapterServiceImpl implements IChapterService {
     private void checkSubjectManagePermission(UUID subjectId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            return;
+            throw new CustomException("Vui lòng đăng nhập để thực hiện thao tác này", HttpStatus.UNAUTHORIZED);
         }
 
         boolean isAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
-        if (isAdmin) {
-            return;
+        if (!isAdmin) {
+            throw new CustomException("Chỉ Quản trị viên (ADMIN) mới có quyền quản lý chương học", HttpStatus.FORBIDDEN);
         }
-
-        boolean isInstructor = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_INSTRUCTOR".equals(a.getAuthority()) || "INSTRUCTOR".equals(a.getAuthority()));
-        if (isInstructor) {
-            User user = userRepository.findByUsername(auth.getName());
-            if (user != null && classRepository.isInstructorAssignedToSubject(subjectId, user.getUserId())) {
-                return;
-            }
-            throw new CustomException("Giảng viên chưa được phân công giảng dạy môn học này", HttpStatus.FORBIDDEN);
-        }
-
-        throw new CustomException("Bạn không có quyền thực hiện thao tác này", HttpStatus.FORBIDDEN);
     }
 
     private ChapterDTO mapToDTO(Chapter chapter) {
