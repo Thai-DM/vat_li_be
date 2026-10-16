@@ -58,7 +58,7 @@ public class LearningMaterialController {
                 .build());
     }
 
-    @Operation(summary = "Tạo học liệu số mới", description = "Tải lên tài liệu học tập mới (File hoặc URL liên kết).")
+    @Operation(summary = "Tạo học liệu số mới (Multipart)", description = "Tải lên tài liệu học tập mới kèm tệp đính kèm.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<LearningMaterialDTO>> createMaterial(
@@ -76,7 +76,25 @@ public class LearningMaterialController {
                 .build());
     }
 
-    @Operation(summary = "Cập nhật học liệu số", description = "Chỉnh sửa thông tin, tệp đính kèm hoặc nội dung bài giảng.")
+    @Operation(summary = "Tạo học liệu số mới (JSON / Markdown)", description = "Tạo tài liệu học tập hoặc bài giảng Markdown trực tiếp bằng JSON.")
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<LearningMaterialDTO>> createMaterialJson(
+            @PathVariable UUID topicId,
+            @Valid @RequestBody CreateLearningMaterialDTO createDTO,
+            HttpServletRequest request) {
+        createDTO.setTopicId(topicId);
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+
+        LearningMaterialDTO created = learningMaterialService.createMaterial(createDTO, currentUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<LearningMaterialDTO>builder()
+                .status(HttpStatus.CREATED.value())
+                .message("Success")
+                .data(created)
+                .build());
+    }
+
+    @Operation(summary = "Cập nhật học liệu số (Multipart)", description = "Chỉnh sửa thông tin, tệp đính kèm hoặc nội dung bài giảng qua form-data.")
     @PutMapping(value = "/{materialId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<ApiResponse<LearningMaterialDTO>> updateMaterial(
@@ -88,6 +106,26 @@ public class LearningMaterialController {
         UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
         String role = (String) request.getAttribute("role");
         
+        LearningMaterialDTO updated = learningMaterialService.updateMaterial(materialId, updateDTO, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<LearningMaterialDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(updated)
+                .build());
+    }
+
+    @Operation(summary = "Cập nhật học liệu số (JSON / Markdown)", description = "Chỉnh sửa nội dung bài giảng Markdown hoặc thông tin học liệu qua JSON.")
+    @PutMapping(value = "/{materialId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<LearningMaterialDTO>> updateMaterialJson(
+            @PathVariable UUID topicId,
+            @PathVariable UUID materialId,
+            @Valid @RequestBody CreateLearningMaterialDTO updateDTO,
+            HttpServletRequest request) {
+        updateDTO.setTopicId(topicId);
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+
         LearningMaterialDTO updated = learningMaterialService.updateMaterial(materialId, updateDTO, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.<LearningMaterialDTO>builder()
                 .status(HttpStatus.OK.value())

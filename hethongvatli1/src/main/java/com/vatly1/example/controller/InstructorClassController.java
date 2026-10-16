@@ -69,7 +69,7 @@ public class InstructorClassController {
             HttpServletRequest request,
             @PathVariable UUID classId,
             @Valid @RequestBody UpdateClassSettingsDTO dto) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         String role = (String) request.getAttribute("role");
         ClassSettingsDTO settings = classSettingsService.updateClassSettings(classId, dto, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.success(settings, "Cập nhật cấu hình lớp học thành công"));
@@ -80,9 +80,24 @@ public class InstructorClassController {
     public ResponseEntity<ApiResponse<com.vatly1.example.model.dto.ClassWeakTopicsSummaryDTO>> getClassWeakTopicsSummary(
             HttpServletRequest request,
             @PathVariable UUID classId) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         String role = (String) request.getAttribute("role");
         com.vatly1.example.model.dto.ClassWeakTopicsSummaryDTO summary = practiceRecommendationService.getClassWeakTopicsSummary(classId, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.success(summary));
+    }
+
+    private UUID resolveUserId(HttpServletRequest request) {
+        Object attr = request.getAttribute("userId");
+        if (attr instanceof UUID u) return u;
+        if (attr != null) {
+            String s = attr.toString().trim();
+            if (s.startsWith("\"") && s.endsWith("\"") && s.length() > 2) {
+                s = s.substring(1, s.length() - 1).trim();
+            }
+            if (s.length() == 36) {
+                try { return UUID.fromString(s); } catch (Exception ignored) {}
+            }
+        }
+        throw new com.vatly1.example.exception.CustomException("User not authenticated", org.springframework.http.HttpStatus.UNAUTHORIZED);
     }
 }

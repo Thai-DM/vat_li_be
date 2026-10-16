@@ -36,7 +36,7 @@ public class Topic {
     @Column(name = "order_index")
     private Integer orderIndex;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
 

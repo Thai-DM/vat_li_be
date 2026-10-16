@@ -8,6 +8,7 @@ import com.vatly1.example.model.dto.*;
 import com.vatly1.example.model.request.CreatePracticeRecommendationRequest;
 import com.vatly1.example.model.request.SubmitSessionAnswerRequest;
 import com.vatly1.example.repository.*;
+import com.vatly1.example.repository.projection.StudentLatestAnswerProjection;
 import com.vatly1.example.service.IClassSettingsService;
 import com.vatly1.example.service.IPracticeRecommendationService;
 import com.vatly1.example.utils.AnswerNormalizationUtil;
@@ -68,137 +69,149 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
         return analyzeStudentWeakTopics(classId, studentId).weakTopics;
     }
 
+    private static class SubjectCurriculumData {
+        final List<Topic> topics;
+        final Map<UUID, Topic> topicMap;
+        final Map<UUID, String> chapterNameMap;
+
+        SubjectCurriculumData(List<Topic> topics, Map<UUID, Topic> topicMap, Map<UUID, String> chapterNameMap) {
+            this.topics = topics;
+            this.topicMap = topicMap;
+            this.chapterNameMap = chapterNameMap;
+        }
+    }
+
+    private static final java.util.regex.Pattern UUID_REGEX_PATTERN =
+            java.util.regex.Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+    private UUID parseUuid(Object val) {
+        if (val == null) return null;
+        if (val instanceof UUID u) return u;
+        if (val instanceof byte[] bytes && bytes.length == 16) {
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bytes);
+            return new UUID(bb.getLong(), bb.getLong());
+        }
+        String s = val.toString().trim();
+        if (s.isEmpty()) return null;
+        if (s.startsWith("\"") && s.endsWith("\"") && s.length() > 2) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        if (s.length() == 36) {
+            try { return UUID.fromString(s); } catch (Exception ignored) {}
+        }
+        if (s.contains(",")) {
+            String[] parts = s.split(",");
+            if (parts.length == 16) {
+                try {
+                    byte[] bytes = new byte[16];
+                    for (int i = 0; i < 16; i++) {
+                        bytes[i] = (byte) Integer.parseInt(parts[i].trim());
+                    }
+                    java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bytes);
+                    return new UUID(bb.getLong(), bb.getLong());
+                } catch (Exception ignored) {}
+            }
+        }
+        if (s.length() == 32 && s.matches("^[0-9a-fA-F]{32}$")) {
+            return UUID.fromString(s.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5"));
+        }
+        java.util.regex.Matcher m = UUID_REGEX_PATTERN.matcher(s);
+        if (m.find()) {
+            try { return UUID.fromString(m.group()); } catch (Exception ignored) {}
+        }
+        try {
+            return UUID.fromString(s);
+        } catch (Exception e) {
+            log.warn("Unable to parse UUID from string '{}': {}", s, e.getMessage());
+            return null;
+        }
+    }
+
+    private SubjectCurriculumData getSubjectCurriculum(UUID subjectId) {
+        if (subjectId == null) {
+            return new SubjectCurriculumData(Collections.emptyList(), Collections.emptyMap(), Collections.emptyMap());
+        }
+        List<com.vatly1.example.repository.projection.TopicWithChapterProjection> projs =
+                topicRepository.findTopicsWithChapterBySubjectId(subjectId);
+        List<Topic> topics = new ArrayList<>(projs.size());
+        Map<UUID, Topic> topicMap = new HashMap<>(projs.size());
+        Map<UUID, String> chapterNameMap = new HashMap<>();
+
+        for (com.vatly1.example.repository.projection.TopicWithChapterProjection p : projs) {
+            UUID tId = parseUuid(p.getTopicId());
+            UUID sId = parseUuid(p.getSubjectId());
+            UUID cId = parseUuid(p.getChapterId());
+            Topic t = Topic.builder()
+                    .topicId(tId)
+                    .subjectId(sId)
+                    .chapterId(cId)
+                    .topicName(p.getTopicName())
+                    .orderIndex(p.getOrderIndex())
+                    .description(p.getDescription())
+                    .build();
+            topics.add(t);
+            if (tId != null) {
+                topicMap.put(tId, t);
+            }
+            if (cId != null && p.getChapterName() != null) {
+                chapterNameMap.putIfAbsent(cId, p.getChapterName());
+            }
+        }
+        return new SubjectCurriculumData(topics, topicMap, chapterNameMap);
+    }
+
     private StudentWeakTopicAnalysis analyzeStudentWeakTopics(UUID classId, UUID studentId) {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new CustomException("Không tìm thấy lớp học", HttpStatus.NOT_FOUND));
 
         UUID subjectId = clazz.getSubjectId();
-        List<Topic> topics = topicRepository.findBySubjectIdOrderByOrderIndexAsc(subjectId);
+        SubjectCurriculumData curriculum = getSubjectCurriculum(subjectId);
+        List<Topic> topics = curriculum.topics;
         if (topics.isEmpty()) {
             return new StudentWeakTopicAnalysis(Collections.emptyList(), Collections.emptySet(), Collections.emptySet());
         }
+        Map<UUID, String> chapterNameMap = curriculum.chapterNameMap;
 
-        Set<UUID> chapterIds = topics.stream()
-                .map(Topic::getChapterId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<UUID, String> chapterNameMap = chapterIds.isEmpty() ? Collections.emptyMap() :
-                chapterRepository.findAllById(chapterIds).stream()
-                        .collect(Collectors.toMap(Chapter::getChapterId, Chapter::getChapterName, (c1, c2) -> c1));
+        List<StudentLatestAnswerProjection> answers = practiceSessionAnswerRepository
+                .findLatestAnswersByStudentIdsAndSubjectId(Collections.singletonList(studentId), subjectId);
 
-        // 1. Thu thập câu trả lời từ các bài thi chính thức (ExamAnswer) đã hoàn tất, không bao gồm đề FINAL
-        Map<UUID, Boolean> latestAnswerPerQuestion = new HashMap<>();
-        Map<UUID, UUID> questionTopicMap = new HashMap<>();
+        List<WeakTopicDTO> results = buildWeakTopicsForStudent(studentId, topics, chapterNameMap, answers);
 
-        List<ExamAttempt> attempts = examAttemptRepository.findByStudentId(studentId);
-        List<ExamAttempt> completedAttempts = attempts.stream()
-                .filter(a -> a.getStatus() == AttemptStatus.GRADED || a.getStatus() == AttemptStatus.SUBMITTED)
-                .sorted(Comparator.comparing(ExamAttempt::getStartedAt, Comparator.nullsLast(Comparator.naturalOrder())))
-                .collect(Collectors.toList());
-
-        List<UUID> allQIdsToResolve = new ArrayList<>();
-        List<List<ExamAnswer>> validExamAnswersList = new ArrayList<>();
-
-        if (!completedAttempts.isEmpty()) {
-            Set<UUID> examIds = completedAttempts.stream().map(ExamAttempt::getExamId).filter(Objects::nonNull).collect(Collectors.toSet());
-            Map<UUID, Exam> examMap = examIds.isEmpty() ? Collections.emptyMap() :
-                    examRepository.findAllById(examIds).stream().collect(Collectors.toMap(Exam::getExamId, e -> e, (e1, e2) -> e1));
-
-            Set<UUID> classIds = examMap.values().stream().map(Exam::getClassId).filter(Objects::nonNull).collect(Collectors.toSet());
-            Map<UUID, Class> classMap = classIds.isEmpty() ? Collections.emptyMap() :
-                    classRepository.findAllById(classIds).stream().collect(Collectors.toMap(Class::getClassId, c -> c, (c1, c2) -> c1));
-
-            List<UUID> validAttemptIds = new ArrayList<>();
-            for (ExamAttempt att : completedAttempts) {
-                Exam exam = examMap.get(att.getExamId());
-                if (exam == null || exam.getExamType() == ExamType.FINAL || exam.getClassId() == null) {
-                    continue;
-                }
-                Class examClass = classMap.get(exam.getClassId());
-                if (examClass == null || !subjectId.equals(examClass.getSubjectId())) {
-                    continue;
-                }
-                validAttemptIds.add(att.getAttemptId());
-            }
-
-            if (!validAttemptIds.isEmpty()) {
-                Map<UUID, List<ExamAnswer>> answersByAttemptId = examAnswerRepository.findByAttemptIdIn(validAttemptIds).stream()
-                        .collect(Collectors.groupingBy(ExamAnswer::getAttemptId));
-                for (UUID attId : validAttemptIds) {
-                    List<ExamAnswer> answers = answersByAttemptId.getOrDefault(attId, Collections.emptyList());
-                    validExamAnswersList.add(answers);
-                    for (ExamAnswer ans : answers) {
-                        if (ans.getIsCorrect() != null && ans.getQuestionId() != null) {
-                            allQIdsToResolve.add(ans.getQuestionId());
-                        }
-                    }
+        Set<UUID> answeredQuestionIds = new HashSet<>();
+        Set<UUID> wrongQuestionIds = new HashSet<>();
+        for (StudentLatestAnswerProjection ans : answers) {
+            UUID qId = parseUuid(ans.getQuestionId());
+            if (qId != null) {
+                answeredQuestionIds.add(qId);
+                if (Boolean.FALSE.equals(ans.getIsCorrect())) {
+                    wrongQuestionIds.add(qId);
                 }
             }
         }
 
-        // 2. Thu thập câu trả lời từ các phiên luyện tập cá nhân (PracticeSessionAnswer) đã COMPLETED
-        List<PracticeSession> completedSessions = practiceSessionRepository.findByStudentIdAndSubjectIdAndStatusOrderByStartedAtDesc(
-                studentId, subjectId, PracticeSessionStatus.COMPLETED);
-        // Duyệt theo thứ tự thời gian tăng dần để câu trả lời mới nhất ghi đè
-        List<PracticeSession> chronologicalSessions = new ArrayList<>(completedSessions);
-        Collections.reverse(chronologicalSessions);
+        return new StudentWeakTopicAnalysis(results, answeredQuestionIds, wrongQuestionIds);
+    }
 
-        List<List<PracticeSessionAnswer>> validSessionAnswersList = new ArrayList<>();
-        if (!chronologicalSessions.isEmpty()) {
-            List<UUID> sessionIds = chronologicalSessions.stream().map(PracticeSession::getSessionId).collect(Collectors.toList());
-            Map<UUID, List<PracticeSessionAnswer>> answersBySessionId = practiceSessionAnswerRepository.findBySessionIdIn(sessionIds).stream()
-                    .collect(Collectors.groupingBy(PracticeSessionAnswer::getSessionId));
-            for (PracticeSession session : chronologicalSessions) {
-                List<PracticeSessionAnswer> sessionAnswers = answersBySessionId.getOrDefault(session.getSessionId(), Collections.emptyList());
-                validSessionAnswersList.add(sessionAnswers);
-                for (PracticeSessionAnswer ans : sessionAnswers) {
-                    if (ans.getIsCorrect() != null && ans.getQuestionId() != null) {
-                        allQIdsToResolve.add(ans.getQuestionId());
-                    }
-                }
-            }
-        }
+    private List<WeakTopicDTO> buildWeakTopicsForStudent(
+            UUID studentId,
+            List<Topic> topics,
+            Map<UUID, String> chapterNameMap,
+            List<StudentLatestAnswerProjection> answers) {
 
-        // Batch resolve question topics in 1 query
-        batchPopulateQuestionTopics(allQIdsToResolve, subjectId, questionTopicMap);
-
-        for (List<ExamAnswer> answers : validExamAnswersList) {
-            for (ExamAnswer ans : answers) {
-                if (ans.getIsCorrect() == null) continue;
-                UUID qId = ans.getQuestionId();
-                if (questionTopicMap.containsKey(qId)) {
-                    latestAnswerPerQuestion.put(qId, ans.getIsCorrect());
-                }
-            }
-        }
-
-        for (List<PracticeSessionAnswer> sessionAnswers : validSessionAnswersList) {
-            for (PracticeSessionAnswer ans : sessionAnswers) {
-                if (ans.getIsCorrect() == null) continue;
-                UUID qId = ans.getQuestionId();
-                if (questionTopicMap.containsKey(qId)) {
-                    latestAnswerPerQuestion.put(qId, ans.getIsCorrect());
-                }
-            }
-        }
-
-        // 3. Gom nhóm theo Topic
         Map<UUID, Integer> totalPerTopic = new HashMap<>();
         Map<UUID, Integer> correctPerTopic = new HashMap<>();
 
-        for (Map.Entry<UUID, Boolean> entry : latestAnswerPerQuestion.entrySet()) {
-            UUID qId = entry.getKey();
-            Boolean isCorrect = entry.getValue();
-            UUID topicId = questionTopicMap.get(qId);
-            if (topicId != null) {
-                totalPerTopic.merge(topicId, 1, Integer::sum);
-                if (Boolean.TRUE.equals(isCorrect)) {
-                    correctPerTopic.merge(topicId, 1, Integer::sum);
-                }
+        for (StudentLatestAnswerProjection ans : answers) {
+            if (ans.getTopicId() == null) continue;
+            UUID tId = parseUuid(ans.getTopicId());
+            if (tId == null) continue;
+            Boolean isCorrect = ans.getIsCorrect();
+            totalPerTopic.merge(tId, 1, Integer::sum);
+            if (Boolean.TRUE.equals(isCorrect)) {
+                correctPerTopic.merge(tId, 1, Integer::sum);
             }
         }
 
-        // 4. Xây dựng DTO cho từng Topic
         List<WeakTopicDTO> results = new ArrayList<>();
         for (Topic t : topics) {
             int total = totalPerTopic.getOrDefault(t.getTopicId(), 0);
@@ -239,19 +252,12 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
                     .build());
         }
 
-        // 5. Sắp xếp thứ tự ưu tiên: NEEDS_PRACTICE -> IMPROVING -> INSUFFICIENT_DATA -> GOOD
         results.sort(Comparator
                 .comparingInt((WeakTopicDTO w) -> getLevelPriority(w.getWeaknessLevel()))
                 .thenComparingDouble(WeakTopicDTO::getAccuracyRate)
                 .thenComparing((WeakTopicDTO w) -> -w.getWrongCount()));
 
-        Set<UUID> answeredQuestionIds = new HashSet<>(latestAnswerPerQuestion.keySet());
-        Set<UUID> wrongQuestionIds = latestAnswerPerQuestion.entrySet().stream()
-                .filter(e -> Boolean.FALSE.equals(e.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toSet());
-
-        return new StudentWeakTopicAnalysis(results, answeredQuestionIds, wrongQuestionIds);
+        return results;
     }
 
     private int getLevelPriority(WeaknessLevel level) {
@@ -566,12 +572,40 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
         Map<UUID, PracticeSessionAnswer> answerMap = existingAnswers.stream()
                 .collect(Collectors.toMap(PracticeSessionAnswer::getQuestionId, a -> a, (a1, a2) -> a1));
 
+        List<UUID> qIds = sessionQuestions.stream().map(PracticeSessionQuestion::getQuestionId).filter(Objects::nonNull).collect(Collectors.toList());
+
+        // Batch retrieval of QuestionBank, Options, and AcceptedAnswers to eliminate N+1 queries
+        Map<UUID, QuestionBank> qbMap = qIds.isEmpty() ? Collections.emptyMap() :
+                questionBankRepository.findAllById(qIds).stream()
+                        .collect(Collectors.toMap(QuestionBank::getQuestionId, q -> q, (q1, q2) -> q1));
+
+        List<UUID> fillBlankQIds = qbMap.values().stream()
+                .filter(q -> q.getQuestionType() == QuestionType.FILL_BLANK)
+                .map(QuestionBank::getQuestionId)
+                .collect(Collectors.toList());
+
+        List<UUID> mcqQIds = qbMap.values().stream()
+                .filter(q -> q.getQuestionType() != QuestionType.FILL_BLANK)
+                .map(QuestionBank::getQuestionId)
+                .collect(Collectors.toList());
+
+        Map<UUID, List<QuestionAcceptedAnswer>> acceptedAnswersMap = fillBlankQIds.isEmpty() ? Collections.emptyMap() :
+                questionAcceptedAnswerRepository.findByQuestionIdIn(fillBlankQIds).stream()
+                        .sorted(Comparator.comparing(QuestionAcceptedAnswer::getOrderIndex))
+                        .collect(Collectors.groupingBy(QuestionAcceptedAnswer::getQuestionId));
+
+        Map<UUID, List<QuestionOption>> optionsMap = mcqQIds.isEmpty() ? Collections.emptyMap() :
+                questionOptionRepository.findByQuestionIdIn(mcqQIds).stream()
+                        .sorted(Comparator.comparing(QuestionOption::getOrderIndex))
+                        .collect(Collectors.groupingBy(QuestionOption::getQuestionId));
+
         int correctCount = 0;
         BigDecimal totalScore = BigDecimal.ZERO;
+        List<PracticeSessionAnswer> answersToSave = new ArrayList<>();
 
         for (PracticeSessionQuestion sq : sessionQuestions) {
             UUID qId = sq.getQuestionId();
-            QuestionBank qb = questionBankRepository.findById(qId).orElse(null);
+            QuestionBank qb = qbMap.get(qId);
             PracticeSessionAnswer ans = answerMap.get(qId);
             if (ans == null) {
                 ans = PracticeSessionAnswer.builder()
@@ -579,12 +613,13 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
                         .questionId(qId)
                         .answeredAt(Instant.now())
                         .build();
+                answerMap.put(qId, ans);
             }
 
             boolean isCorrect = false;
 
             if (qb != null && qb.getQuestionType() == QuestionType.FILL_BLANK) {
-                List<QuestionAcceptedAnswer> acceptedAnswers = questionAcceptedAnswerRepository.findByQuestionIdOrderByOrderIndexAsc(qId);
+                List<QuestionAcceptedAnswer> acceptedAnswers = acceptedAnswersMap.getOrDefault(qId, Collections.emptyList());
                 List<String> acceptedTexts = acceptedAnswers.stream()
                         .map(QuestionAcceptedAnswer::getAcceptedText)
                         .collect(Collectors.toList());
@@ -592,8 +627,11 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
                 String studentText = ans.getAnswerText();
                 isCorrect = AnswerNormalizationUtil.isMatchAny(studentText, acceptedTexts);
             } else if (qb != null) {
-                List<QuestionOption> correctOptions = questionOptionRepository.findByQuestionIdAndIsCorrectTrue(qId);
-                Set<UUID> correctIds = correctOptions.stream().map(QuestionOption::getOptionId).collect(Collectors.toSet());
+                List<QuestionOption> options = optionsMap.getOrDefault(qId, Collections.emptyList());
+                Set<UUID> correctIds = options.stream()
+                        .filter(opt -> Boolean.TRUE.equals(opt.getIsCorrect()))
+                        .map(QuestionOption::getOptionId)
+                        .collect(Collectors.toSet());
 
                 Set<UUID> studentIds = parseOptionIds(ans.getSelectedOptionIds());
                 isCorrect = !correctIds.isEmpty() && studentIds.equals(correctIds);
@@ -602,12 +640,16 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
             ans.setIsCorrect(isCorrect);
             BigDecimal score = isCorrect ? BigDecimal.ONE : BigDecimal.ZERO;
             ans.setScore(score);
-            practiceSessionAnswerRepository.save(ans);
+            answersToSave.add(ans);
 
             if (isCorrect) {
                 correctCount++;
                 totalScore = totalScore.add(score);
             }
+        }
+
+        if (!answersToSave.isEmpty()) {
+            practiceSessionAnswerRepository.saveAll(answersToSave);
         }
 
         int totalQuestions = sessionQuestions.size();
@@ -623,8 +665,23 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
         ClassSettings settings = classSettingsService.getEffectiveSettings(session.getClassId());
         boolean canSeeSolutions = Boolean.TRUE.equals(settings.getPracticeShowSolution());
 
-        PracticeSessionDTO sessionDTO = toSessionDTO(session, canSeeSolutions);
-        List<WeakTopicDTO> updatedWeakTopics = getStudentWeakTopics(session.getClassId(), studentId);
+        // Pre-load subject topics & chapters from cache/single batch queries
+        UUID subjectId = session.getSubjectId();
+        SubjectCurriculumData curriculum = getSubjectCurriculum(subjectId);
+        List<Topic> subjectTopics = curriculum.topics;
+        Map<UUID, Topic> topicMap = curriculum.topicMap;
+        Map<UUID, String> chapterNameMap = curriculum.chapterNameMap;
+
+        Map<UUID, List<String>> acceptedAnswersTextMap = acceptedAnswersMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(QuestionAcceptedAnswer::getAcceptedText).collect(Collectors.toList())));
+
+        // Build session DTO using pre-loaded maps - ZERO extra DB queries!
+        PracticeSessionDTO sessionDTO = buildSessionDTO(session, sessionQuestions, qbMap, answerMap, topicMap, chapterNameMap, optionsMap, acceptedAnswersTextMap, canSeeSolutions);
+
+        // Fetch latest answers and build updated weak topics in ONE query using already loaded topics & chapters!
+        List<StudentLatestAnswerProjection> latestAnswers = practiceSessionAnswerRepository
+                .findLatestAnswersByStudentIdsAndSubjectId(Collections.singletonList(studentId), subjectId);
+        List<WeakTopicDTO> updatedWeakTopics = buildWeakTopicsForStudent(studentId, subjectTopics, chapterNameMap, latestAnswers);
 
         return PracticeSessionResultDTO.builder()
                 .sessionId(session.getSessionId())
@@ -693,22 +750,36 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
         List<ClassEnrollment> activeEnrollments = classEnrollmentRepository.findByClassIdAndStatus(classId, EnrollmentStatus.ACTIVE);
         int totalEnrolledStudents = activeEnrollments.size();
 
-        List<Topic> topics = topicRepository.findBySubjectIdOrderByOrderIndexAsc(clazz.getSubjectId());
-        Map<UUID, String> chapterNameMap = new HashMap<>();
-        Set<UUID> chapterIds = topics.stream()
-                .map(Topic::getChapterId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (!chapterIds.isEmpty()) {
-            chapterRepository.findAllById(chapterIds)
-                    .forEach(ch -> chapterNameMap.put(ch.getChapterId(), ch.getChapterName()));
+        SubjectCurriculumData curriculum = getSubjectCurriculum(clazz.getSubjectId());
+        List<Topic> topics = curriculum.topics;
+        Map<UUID, String> chapterNameMap = curriculum.chapterNameMap;
+
+        if (activeEnrollments.isEmpty() || topics.isEmpty()) {
+            return ClassWeakTopicsSummaryDTO.builder()
+                    .classId(clazz.getClassId())
+                    .classCode(clazz.getClassCode())
+                    .subjectId(clazz.getSubjectId())
+                    .totalEnrolledStudents(totalEnrolledStudents)
+                    .topics(Collections.emptyList())
+                    .build();
         }
 
-        // Tính toán ma trận điểm yếu của từng học sinh (xử lý song song theo pool kết nối)
-        Map<UUID, List<WeakTopicDTO>> studentWeakMap = new java.util.concurrent.ConcurrentHashMap<>();
-        activeEnrollments.parallelStream().forEach(ce -> {
-            studentWeakMap.put(ce.getStudentId(), getStudentWeakTopics(classId, ce.getStudentId()));
-        });
+        List<UUID> studentIds = activeEnrollments.stream()
+                .map(ClassEnrollment::getStudentId)
+                .collect(Collectors.toList());
+
+        List<StudentLatestAnswerProjection> allAnswers = practiceSessionAnswerRepository
+                .findLatestAnswersByStudentIdsAndSubjectId(studentIds, clazz.getSubjectId());
+
+        Map<UUID, List<StudentLatestAnswerProjection>> answersByStudent = allAnswers.stream()
+                .filter(a -> a.getStudentId() != null && parseUuid(a.getStudentId()) != null)
+                .collect(Collectors.groupingBy(a -> parseUuid(a.getStudentId())));
+
+        Map<UUID, List<WeakTopicDTO>> studentWeakMap = new HashMap<>();
+        for (ClassEnrollment ce : activeEnrollments) {
+            List<StudentLatestAnswerProjection> studentAnswers = answersByStudent.getOrDefault(ce.getStudentId(), Collections.emptyList());
+            studentWeakMap.put(ce.getStudentId(), buildWeakTopicsForStudent(ce.getStudentId(), topics, chapterNameMap, studentAnswers));
+        }
 
         List<TopicWeaknessSummaryDTO> topicSummaries = new ArrayList<>();
         for (Topic t : topics) {
@@ -781,28 +852,44 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
                                                Map<UUID, QuestionBank> qbMap,
                                                Map<UUID, PracticeSessionAnswer> answerMap,
                                                boolean canSeeSolutions) {
+        return buildSessionDTO(session, sessionQuestions, qbMap, answerMap, null, null, null, null, canSeeSolutions);
+    }
+
+    private PracticeSessionDTO buildSessionDTO(PracticeSession session,
+                                               List<PracticeSessionQuestion> sessionQuestions,
+                                               Map<UUID, QuestionBank> qbMap,
+                                               Map<UUID, PracticeSessionAnswer> answerMap,
+                                               Map<UUID, Topic> preloadedTopicMap,
+                                               Map<UUID, String> preloadedChapterNameMap,
+                                               Map<UUID, List<QuestionOption>> preloadedOptions,
+                                               Map<UUID, List<String>> preloadedAcceptedAnswers,
+                                               boolean canSeeSolutions) {
         List<UUID> qIds = sessionQuestions.stream().map(PracticeSessionQuestion::getQuestionId).filter(Objects::nonNull).collect(Collectors.toList());
         Set<UUID> topicIds = qbMap.values().stream().map(QuestionBank::getTopicId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<UUID, Topic> topicMap = topicIds.isEmpty() ? Collections.emptyMap() :
-                topicRepository.findAllById(topicIds).stream()
-                        .collect(Collectors.toMap(Topic::getTopicId, t -> t, (t1, t2) -> t1));
+        Map<UUID, Topic> topicMap = (preloadedTopicMap != null) ? preloadedTopicMap :
+                (topicIds.isEmpty() ? Collections.emptyMap() :
+                        topicRepository.findAllById(topicIds).stream()
+                                .collect(Collectors.toMap(Topic::getTopicId, t -> t, (t1, t2) -> t1)));
 
         Set<UUID> chapterIds = topicMap.values().stream().map(Topic::getChapterId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<UUID, String> chapterNameMap = chapterIds.isEmpty() ? Collections.emptyMap() :
-                chapterRepository.findAllById(chapterIds).stream()
-                        .collect(Collectors.toMap(Chapter::getChapterId, Chapter::getChapterName, (c1, c2) -> c1));
+        Map<UUID, String> chapterNameMap = (preloadedChapterNameMap != null) ? preloadedChapterNameMap :
+                (chapterIds.isEmpty() ? Collections.emptyMap() :
+                        chapterRepository.findAllById(chapterIds).stream()
+                                .collect(Collectors.toMap(Chapter::getChapterId, Chapter::getChapterName, (c1, c2) -> c1)));
 
-        Map<UUID, List<QuestionOption>> optionsByQId = qIds.isEmpty() ? Collections.emptyMap() :
-                questionOptionRepository.findByQuestionIdIn(qIds).stream()
-                        .sorted(Comparator.comparing(QuestionOption::getOrderIndex))
-                        .collect(Collectors.groupingBy(QuestionOption::getQuestionId));
+        Map<UUID, List<QuestionOption>> optionsByQId = (preloadedOptions != null) ? preloadedOptions :
+                (qIds.isEmpty() ? Collections.emptyMap() :
+                        questionOptionRepository.findByQuestionIdIn(qIds).stream()
+                                .sorted(Comparator.comparing(QuestionOption::getOrderIndex))
+                                .collect(Collectors.groupingBy(QuestionOption::getQuestionId)));
 
-        Map<UUID, List<String>> acceptedAnswersByQId = (canSeeSolutions && !qIds.isEmpty()) ?
-                questionAcceptedAnswerRepository.findByQuestionIdIn(qIds).stream()
-                        .sorted(Comparator.comparing(QuestionAcceptedAnswer::getOrderIndex))
-                        .collect(Collectors.groupingBy(QuestionAcceptedAnswer::getQuestionId,
-                                Collectors.mapping(QuestionAcceptedAnswer::getAcceptedText, Collectors.toList()))) :
-                Collections.emptyMap();
+        Map<UUID, List<String>> acceptedAnswersByQId = (preloadedAcceptedAnswers != null) ? preloadedAcceptedAnswers :
+                ((canSeeSolutions && !qIds.isEmpty()) ?
+                        questionAcceptedAnswerRepository.findByQuestionIdIn(qIds).stream()
+                                .sorted(Comparator.comparing(QuestionAcceptedAnswer::getOrderIndex))
+                                .collect(Collectors.groupingBy(QuestionAcceptedAnswer::getQuestionId,
+                                        Collectors.mapping(QuestionAcceptedAnswer::getAcceptedText, Collectors.toList()))) :
+                        Collections.emptyMap());
 
         List<PracticeSessionQuestionDTO> questionDTOs = new ArrayList<>();
         for (PracticeSessionQuestion sq : sessionQuestions) {

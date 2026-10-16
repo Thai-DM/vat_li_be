@@ -35,7 +35,7 @@ public class FileUpload {
     @Column(name = "original_filename")
     private String originalFilename;
 
-    @Column(name = "stored_url")
+    @Column(name = "stored_url", length = 1000)
     private String storedUrl;
 
     @Column(name = "file_size_bytes")

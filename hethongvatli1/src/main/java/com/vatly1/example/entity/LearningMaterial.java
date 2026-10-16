@@ -52,10 +52,10 @@ public class LearningMaterial {
     @Enumerated(EnumType.STRING)
     private MaterialType type;
 
-    @Column(name = "file_url")
+    @Column(name = "file_url", length = 1000)
     private String fileUrl;
 
-    @Column(name = "content_text")
+    @Column(name = "content_text", columnDefinition = "TEXT")
     private String contentText;
 
     @Column(name = "version")
@@ -66,7 +66,7 @@ public class LearningMaterial {
     @Enumerated(EnumType.STRING)
     private ApprovalStatus approvalStatus;
 
-    @Column(name = "source_citation")
+    @Column(name = "source_citation", columnDefinition = "TEXT")
     private String sourceCitation;
 
     @Column(name = "created_by")

@@ -34,7 +34,7 @@ public class AiMessage {
     @Enumerated(EnumType.STRING)
     private AiSender sender;
 
-    @Column(name = "content_text")
+    @Column(name = "content_text", columnDefinition = "TEXT")
     private String contentText;
 
     @Column(name = "audio_url")

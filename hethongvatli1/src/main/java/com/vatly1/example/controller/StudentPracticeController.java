@@ -28,7 +28,7 @@ public class StudentPracticeController {
     public ResponseEntity<List<WeakTopicDTO>> getWeakTopics(
             HttpServletRequest request,
             @PathVariable UUID classId) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         List<WeakTopicDTO> weakTopics = practiceRecommendationService.getStudentWeakTopics(classId, currentUserId);
         return ResponseEntity.ok(weakTopics);
     }
@@ -38,7 +38,7 @@ public class StudentPracticeController {
             HttpServletRequest request,
             @PathVariable UUID classId,
             @Valid @RequestBody(required = false) CreatePracticeRecommendationRequest reqBody) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         PracticeSessionDTO session = practiceRecommendationService.createAdaptivePracticeSession(classId, reqBody, currentUserId);
         return ResponseEntity.ok(session);
     }
@@ -47,7 +47,7 @@ public class StudentPracticeController {
     public ResponseEntity<PracticeSessionDTO> getPracticeSession(
             HttpServletRequest request,
             @PathVariable UUID sessionId) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         PracticeSessionDTO session = practiceRecommendationService.getPracticeSession(sessionId, currentUserId);
         return ResponseEntity.ok(session);
     }
@@ -57,7 +57,7 @@ public class StudentPracticeController {
             HttpServletRequest request,
             @PathVariable UUID sessionId,
             @Valid @RequestBody SubmitSessionAnswerRequest reqBody) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         practiceRecommendationService.saveAnswer(sessionId, reqBody, currentUserId);
         return ResponseEntity.ok().build();
     }
@@ -66,7 +66,7 @@ public class StudentPracticeController {
     public ResponseEntity<PracticeSessionResultDTO> submitSession(
             HttpServletRequest request,
             @PathVariable UUID sessionId) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         PracticeSessionResultDTO result = practiceRecommendationService.submitSession(sessionId, currentUserId);
         return ResponseEntity.ok(result);
     }
@@ -75,8 +75,23 @@ public class StudentPracticeController {
     public ResponseEntity<PracticeSessionResultDTO> getSessionResult(
             HttpServletRequest request,
             @PathVariable UUID sessionId) {
-        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        UUID currentUserId = resolveUserId(request);
         PracticeSessionResultDTO result = practiceRecommendationService.getSessionResult(sessionId, currentUserId);
         return ResponseEntity.ok(result);
+    }
+
+    private UUID resolveUserId(HttpServletRequest request) {
+        Object attr = request.getAttribute("userId");
+        if (attr instanceof UUID u) return u;
+        if (attr != null) {
+            String s = attr.toString().trim();
+            if (s.startsWith("\"") && s.endsWith("\"") && s.length() > 2) {
+                s = s.substring(1, s.length() - 1).trim();
+            }
+            if (s.length() == 36) {
+                try { return UUID.fromString(s); } catch (Exception ignored) {}
+            }
+        }
+        throw new com.vatly1.example.exception.CustomException("User not authenticated", org.springframework.http.HttpStatus.UNAUTHORIZED);
     }
 }

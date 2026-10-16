@@ -38,6 +38,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -421,5 +422,66 @@ public class ScopedLearningMaterialControllerTest {
         mockMvc.perform(get(fileUrl))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.IMAGE_PNG));
+    }
+
+    @Test
+    @DisplayName("API-11: Tạo học liệu Markdown dài qua JSON trực tiếp thành công 201 CREATED")
+    void testMarkdownMaterial_createWithLongContentViaJson_success() throws Exception {
+        StringBuilder longMarkdown = new StringBuilder("# Hướng dẫn thí nghiệm Vật lý 1\n\n");
+        for (int i = 1; i <= 100; i++) {
+            longMarkdown.append("### Phần ").append(i).append(": Nội dung lý thuyết và bài tập thực hành nâng cao\n");
+            longMarkdown.append("Công thức: $$F = m \\cdot a$$, vận tốc $$v = \\frac{s}{t}$$.\n\n");
+        }
+
+        String jsonPayload = objectMapper.writeValueAsString(java.util.Map.of(
+                "title", "Tài liệu Markdown Dài",
+                "type", "MARKDOWN",
+                "scope", "SHARED",
+                "contentText", longMarkdown.toString()
+        ));
+
+        String res = mockMvc.perform(post("/api/v1/topics/" + phy101Topic.getTopicId() + "/materials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.title", is("Tài liệu Markdown Dài")))
+                .andExpect(jsonPath("$.data.type", is("MARKDOWN")))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode node = objectMapper.readTree(res);
+        UUID matId = UUID.fromString(node.get("data").get("materialId").asText());
+        createdMaterialIds.add(matId);
+
+        LearningMaterial saved = materialRepository.findById(matId).orElseThrow();
+        assertEquals(longMarkdown.toString(), saved.getContentText());
+    }
+
+    @Test
+    @DisplayName("API-12: Tải lên file README.md cho học liệu MARKDOWN tự động trích xuất nội dung và lưu trữ tệp")
+    void testMarkdownMaterial_createWithUploadedReadmeFile_success() throws Exception {
+        String readmeContent = "# README - Hướng dẫn nhập môn Vật lý 1\n\nChào mừng sinh viên đến với bộ môn.";
+        MockMultipartFile readmeFile = new MockMultipartFile(
+                "file", "README.md", "text/markdown", readmeContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        String res = mockMvc.perform(multipart("/api/v1/topics/" + phy101Topic.getTopicId() + "/materials")
+                        .file(readmeFile)
+                        .param("title", "README Nhập môn")
+                        .param("type", "MARKDOWN")
+                        .param("scope", "SHARED")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.title", is("README Nhập môn")))
+                .andExpect(jsonPath("$.data.type", is("MARKDOWN")))
+                .andExpect(jsonPath("$.data.contentText", containsString("README - Hướng dẫn nhập môn")))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode node = objectMapper.readTree(res);
+        UUID matId = UUID.fromString(node.get("data").get("materialId").asText());
+        createdMaterialIds.add(matId);
+
+        LearningMaterial saved = materialRepository.findById(matId).orElseThrow();
+        assertEquals(readmeContent, saved.getContentText());
+        assertNotNull(saved.getFileUrl(), "File đính kèm của README.md phải được lưu trữ để sinh viên có thể tải về");
     }
 }

@@ -66,7 +66,7 @@ public class ExamMatrix {
     @Builder.Default
     private Long rowVersion = 0L;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "total_points")

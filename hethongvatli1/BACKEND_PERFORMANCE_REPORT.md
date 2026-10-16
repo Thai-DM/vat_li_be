@@ -1,226 +1,244 @@
-# BÁO CÁO NGHIỆM THU HIỆU NĂNG BACKEND (BACKEND PERFORMANCE ACCEPTANCE REPORT)
-## 100 CONCURRENT USERS & P95 ≤ 3.000 MS SLA EVALUATION
+# BÁO CÁO NGHIỆM THU HIỆU NĂNG BACKEND (BACKEND PERFORMANCE ACCEPTANCE REPORT) — BƯỚC 2
+## ĐÁNH GIÁ MỤC TIÊU 100 CONCURRENT USERS & P95 ≤ 3.000 MS SLA
 
-* **Dự án:** Hệ thống Quản lý Học tập (LMS) Vật lý
-* **Công nghệ Backend:** Java 24 / Spring Boot 3.5.13 / Hibernate 6.6.45
-* **Cơ sở dữ liệu:** PostgreSQL 18.6 (Cloud Neon Serverless - Region AWS us-east-2 Ohio)
+* **Dự án:** Hệ thống Quản lý Học tập (LMS) Vật lý — Chỉ phát triển Backend
+* **Công nghệ:** Java 24 / Spring Boot 3.5.13 / Hibernate 6.6.45
+* **Cơ sở dữ liệu:** PostgreSQL 18.6 (Cloud Neon Serverless — AWS us-east-2 Ohio, USA)
 * **Công cụ kiểm thử tải:** Grafana k6 v0.54.0 (Windows amd64)
-* **Thời gian thực hiện:** Ngày 11/10/2026
-* **Kỹ sư phụ trách:** Senior Spring Boot & PostgreSQL Performance Engineer
+* **Thời gian thực hiện:** Ngày 12/10/2026
+* **Kỹ sư phụ trách:** Senior Spring Boot Performance Engineer, PostgreSQL Query Optimization Engineer & Load Testing Specialist
 
 ---
 
-## 1. Cấu hình môi trường thử nghiệm
+## 1. Audit kiểm tra tính hợp lệ của benchmark trước (Bước 1)
 
-| Thành phần | Thông số chi tiết | Ghi chú |
-| :--- | :--- | :--- |
-| **Hệ điều hành Host** | Windows 11 x86_64 | Môi trường thử nghiệm local host |
-| **Runtime JVM** | OpenJDK 64-Bit Server VM (build 24.0.1+9) | `-Xms512m -Xmx1024m` |
-| **Web Server** | Apache Tomcat 10.1.53 (Embedded) | `threads.max: 200`, `min-spare: 20`, `accept-count: 100` |
-| **Connection Pool** | HikariCP 5.1.0 | `maximum-pool-size: 50`, `minimum-idle: 20`, `connection-timeout: 10000ms` |
-| **Database Server** | PostgreSQL 18.6 Neon Serverless | `ep-noisy-star-aeavcjvp-pooler.c-2.us-east-2.aws.neon.tech` |
-| **Độ trễ mạng DB (RTT)** | **~240 ms - 260 ms** (Ping từ VN sang AWS US East Ohio) | **Yếu tố then chốt ảnh hưởng độ trễ I/O** |
-| **Cấu hình JDBC** | `reWriteBatchedInserts=true`, `sslmode=require` | Multi-row batch insert |
-| **Hibernate ORM** | Hibernate 6.6.45.Final | `batch_size: 50`, `order_inserts: true`, `order_updates: true` |
-| **Storage Backend** | Local File Storage Engine (Chunk directory) | `minio.enabled: false` (tránh timeout kết nối) |
+Qua rà soát đối chiếu giữa `BACKEND_PERFORMANCE_REPORT.md`, `load_test_100vu.js`, `baseline_summary.json`, `optimized_summary.json` và `monitor_system.py`, các phát hiện kiểm toán kỹ thuật gồm:
 
----
-
-## 2. Cấu hình Workload thực tế (Realistic Pilot Workload)
-
-Kịch bản kiểm thử tải được xây dựng mô phỏng phân bổ hành vi người dùng thực tế trong trường học với 100 người dùng đồng thời, chia thành 6 nhóm nghiệp vụ:
-
-| Nhóm hoạt động | Tỷ lệ (%) | Số VUs | Nghiệp vụ chi tiết |
-| :--- | :---: | :---: | :--- |
-| **1. STUDENT Browse & Materials** | 35% | 35 VUs | Xem danh sách lớp (`/students/me/classes`), xem lịch trình (`/students/me/agenda`), tải danh sách tài liệu (`/students/me/materials`). |
-| **2. STUDENT Adaptive Practice** | 20% | 20 VUs | Sinh bài luyện tập thích ứng (`/practice-recommendations`), trả lời câu hỏi MCQ/Fill-blank (`/answers`), nộp bài (`/submit`), xem kết quả (`/results`). |
-| **3. STUDENT Weak Topics** | 15% | 15 VUs | Xem phân tích điểm yếu cá nhân (`/weak-topics`), xem thời khóa biểu (`/students/me/schedule`). |
-| **4. INSTRUCTOR Management** | 15% | 15 VUs | Xem lớp giảng dạy (`/instructor/classes`), cấu hình lớp (`/settings`), xem báo cáo ma trận điểm yếu toàn lớp (`/weak-topics-summary`). |
-| **5. CHUNKED File Upload (100KB)** | 10% | 10 VUs | Upload chunk nhị phân 100 KB (`/files/chunks`), kiểm tra trạng thái (`/chunks/{id}/status`), kích hoạt ghép file đồng bộ (`/chunks/merge`). |
-| **6. ADMIN Management** | 5% | 5 VUs | Phân trang danh sách người dùng (`/users/admin/users`), kiểm tra hệ thống (`/actuator/health`). |
-
-* **Thời gian nghỉ (Think time):** 1.0s – 2.0s giữa các chu kỳ mô phỏng thao tác đọc/suy nghĩ thực tế của người dùng.
-* **Tài khoản TEST:** `admin`, `gv_nguyen`, `gv_tran`, `sv_an`, `sv_binh`, `sv_cuong`, `sv_dung`.
+1. **Thời lượng duy trì 100 VUs thực tế:**
+   * Trong cấu hình k6 cũ, giai đoạn tải đỉnh (steady-state) chỉ kéo dài **2 phút (120s)**, tổng thời gian chạy kịch bản là **3 phút 10 giây (190s)** (gồm 20s warm-up, 30s ramp-up lên 100 VUs, 2m giữ 100 VUs, 20s ramp-down).
+   * Kịch bản trước **không** bị dừng sớm bởi file `.stop` hay thao tác thủ công, mà chạy tự nhiên hết các stage được cấu hình trong `load_test_100vu.js`.
+2. **Tổng số request và Throughput (RPS):**
+   * Số liệu 3.413 requests trong 190s đạt tốc độ trung bình toàn bài $3413 / 206.8\text{s} = 16,50\text{ req/s}$ là hoàn toàn chính xác về mặt toán học.
+3. **Cơ chế tính P95 và hiện tượng cắt ngọn (Timeout Clipping):**
+   * Trong k6 cũ, `http_req_duration` có P95 = **10.000 ms** (10,00s) vì toàn bộ 216 requests bị lỗi đều là do chạm ngưỡng timeout 10 giây của k6 client.
+   * Đối với các requests thành công (`http_req_duration{expected_response:true}`), P95 thực tế là **6.041 ms**.
+   * Như vậy, ngưỡng timeout 10 giây đã che giấu thời gian thực thi thực sự của các requests chậm nhất (thực tế có thể mất 11 - 13 giây nếu không set timeout 10s).
+4. **Phân loại mã lỗi HTTP:**
+   * Trong số 216 requests thất bại ở lần đo trước, **100% là do timeout kết nối k6** trên 2 endpoint: `POST /api/v1/student/practice-sessions/{id}/submit` (119 requests) và `GET /api/v1/instructor/classes/{id}/weak-topics-summary` (97 requests).
+   * Không có lỗi HTTP 400, 403, 404 hay 500 do sai dữ liệu test fixture. Các tài khoản test và dữ liệu lớp học hoàn toàn hợp lệ.
 
 ---
 
-## 3. Kịch bản chạy (Execution Stages)
+## 2. Đo đạc & Phân tích độ trễ mạng thực tế (Network Latency Profiling)
 
-```javascript
-stages: [
-  { duration: '20s', target: 20 },   // Giai đoạn 1: Warm-up khởi động kết nối
-  { duration: '30s', target: 100 },  // Giai đoạn 2: Ramp-up tăng dần lên 100 VUs
-  { duration: '2m',  target: 100 },  // Giai đoạn 3: Giữ tải đỉnh ổn định 100 VUs
-  { duration: '20s', target: 0 },    // Giai đoạn 4: Ramp-down giảm tải
-]
-// Tổng thời gian mỗi lượt đo: 3 phút 10 giây (190s)
-```
+Đã thực hiện đo kiểm độc lập qua script `measure_network_latency.py` từ Backend (Việt Nam) đến Neon PostgreSQL (AWS us-east-2 Ohio, USA):
 
----
-
-## 4. Tổng hợp số liệu đo kiểm thực tế (Before vs After)
-
-Dưới đây là bảng so sánh trực tiếp từ file kết quả k6 thực tế (`baseline_summary.json` và `optimized_summary.json`):
-
-| Chỉ số hiệu năng (Metrics) | BASELINE (Trước tối ưu) | OPTIMIZED (Sau tối ưu) | Mức độ cải thiện | Trạng thái SLA |
-| :--- | :---: | :---: | :---: | :---: |
-| **Concurrent Users (VUs)** | 100 VUs | 100 VUs | Chuẩn 100 VUs | Đạt |
-| **Tổng số Requests (Total Requests)** | 1.194 requests | **3.413 requests** | **Tăng +185,8%** | Tăng throughput |
-| **Tốc độ xử lý (Throughput - RPS)** | 5,1 req/s | **16,50 req/s** | **Tăng +223,5%** | Tăng gấp 3,2 lần |
-| **Số request thành công** | 249 requests | **3.197 requests** | **Tăng +1.183,9%** | Tăng gấp 12,8 lần |
-| **Tỷ lệ lỗi (HTTP Error Rate)** | **79,14%** (945 lỗi) | **6,32%** (216 lỗi) | **Giảm 92,0% lỗi** | Chưa đạt (<1%) |
-| **Thời gian phản hồi Trung bình (Avg)** | **12.280 ms** (12,28s) | **3.708 ms** (3,71s) | **Nhanh hơn 3,3 lần** | Cải thiện mạnh |
-| **Thời gian phản hồi Trung vị (P50)** | **10.000 ms** (10,00s) | **3.258 ms** (3,26s) | **Nhanh hơn 3,1 lần** | Gần ngưỡng SLA |
-| **P90 Response Time** | 15.080 ms | **6.062 ms** | **Nhanh hơn 2,5 lần** | Cải thiện |
-| **P95 Response Time (Tất cả)** | **47.920 ms** (47,92s) | **10.000 ms** (10,00s)* | **Giảm 79,1% độ trễ** | **Chưa đạt SLA (≤3s)** |
-| **P95 Response Time (Request thành công)** | 10.000 ms | **6.041 ms** | **Giảm 39,6% độ trễ** | Cải thiện |
-| **P99 Response Time** | 56.410 ms | **10.010 ms** | **Giảm 82,3%** | Cải thiện |
-| **Thời gian phản hồi lớn nhất (Max)** | 60.000 ms | **10.026 ms** | Cắt đứt treo kết nối | Có timeout chặn |
-
-*\*Ghi chú: P95 ở mức 10.000ms do các request lỗi bị timeout ở ngưỡng cấu hình client 10s.*
+* **Độ trễ TCP + TLS Handshake:** **497,2 ms** (khi khởi tạo kết nối mới).
+* **Độ trễ câu lệnh `SELECT 1;` thô (1 round-trip không tốn CPU):**
+  * Min: **225,9 ms**
+  * Max: **234,8 ms**
+  * Trung bình (RTT): **~230 ms - 240 ms/round-trip**
+* **Chi phí thực thi truy vấn tuần tự (Sequential Round-trips):**
+  * Đo 10 câu `SELECT * FROM question_bank WHERE question_id = ?` thực hiện tuần tự: tổng thời gian mất **2.278 ms** (~228 ms/query).
+  * Đo 1 câu `SELECT * FROM question_bank WHERE question_id = ANY(?::uuid[])` thực hiện gom mảng batch: mất **233 ms** (Nhanh hơn **9,7 lần!**).
+* **Kết luận định luật vật lý:**
+  * Do giới hạn tốc độ ánh sáng truyền qua cáp quang biển (~14.000 km) từ Việt Nam sang Ohio (Mỹ), mỗi SQL round-trip tuần tự tối thiểu mất **230 ms**.
+  * Bất kỳ API nào thực hiện $\ge 13$ SQL round-trips tuần tự sẽ **về mặt vật lý không thể có thời gian phản hồi $< 3.000\text{ ms}$** ($13 \times 230\text{ms} = 2.990\text{ms}$).
 
 ---
 
-## 5. Bảng kết quả chi tiết theo từng Endpoint (Endpoint Breakdown)
+## 3. Phân tích nguyên nhân nghẽn (Root Cause Analysis)
 
-Số liệu trích xuất từ các Trend metrics chuyên biệt của k6:
+### 3.1. API Nộp bài Luyện tập (`POST /api/v1/student/practice-sessions/{id}/submit`)
+* **Hành vi trước tối ưu:**
+  1. `findByIdWithLock(sessionId)` (1 query có Pessimistic Lock `FOR UPDATE`).
+  2. Lấy danh sách câu hỏi phiên (`findBySessionIdOrderByOrderIndexAsc`) (1 query).
+  3. Lấy đáp án đã lưu (`findBySessionId`) (1 query).
+  4. Lặp từng câu hỏi để lấy thông tin `QuestionBank` ($N$ queries).
+  5. Lặp từng câu hỏi để lấy `QuestionOption` ($N$ queries).
+  6. Lặp từng câu hỏi để lấy `QuestionAcceptedAnswer` ($N$ queries).
+  7. Lặp từng câu hỏi để lưu đáp án đã chấm ($N$ queries `save`).
+  8. Cập nhật phiên `practiceSessionRepository.save(session)` (1 query).
+  9. Đọc cấu hình lớp `classSettingsService.getEffectiveSettings` (1 query).
+  10. Lấy danh sách Topic của môn học (`findBySubjectIdOrderByOrderIndexAsc`) (1 query).
+  11. Lấy danh sách Chapter của môn học (`chapterRepository.findAllById`) (1 query).
+  12. Gọi tính lại ma trận điểm yếu toàn bộ các câu hỏi đã làm của học sinh qua `getStudentWeakTopics` ($1 + 1 + 1 + K$ queries).
+  * **Tổng cộng:** **~52 SQL round-trips tuần tự** $\rightarrow 52 \times 230\text{ms} \approx \mathbf{11.960\text{ ms}}$ (Vượt quá timeout 10 giây).
 
-| Nhóm Endpoint | Endpoint URL | Avg | P50 (Median) | P90 | P95 | Đánh giá SLA (≤3.000ms) |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Instructor Classes** | `GET /api/v1/instructor/classes` | 2.440 ms | 2.350 ms | 3.260 ms | **3.790 ms** | **Gần đạt SLA** |
-| **Student Browse** | `GET /api/v1/students/me/classes`<br>`GET /api/v1/students/me/agenda` | 2.940 ms | 2.830 ms | 4.610 ms | **5.050 ms** | Khá tốt (P50 < 3s) |
-| **Admin Queries** | `GET /api/v1/users/admin/users?page=0&size=10` | 2.960 ms | 2.750 ms | 4.330 ms | **4.610 ms** | Khá tốt (P50 < 3s) |
-| **Student Materials** | `GET /api/v1/students/me/materials` | 3.140 ms | 3.190 ms | 4.280 ms | **4.790 ms** | Ổn định |
-| **Chunk Merge** | `POST /api/v1/files/chunks/merge` | 3.270 ms | 3.070 ms | 4.150 ms | **4.580 ms** | **100% PASS, không lỗi** |
-| **Student Weak Topics** | `GET /api/v1/student/classes/{id}/weak-topics` | 3.890 ms | 3.800 ms | 4.760 ms | **5.150 ms** | Cải thiện sau gom batch |
-| **Chunk Upload 100K** | `POST /api/v1/files/chunks` | 4.240 ms | 4.050 ms | 5.840 ms | **6.070 ms** | **100% PASS, I/O ổn định** |
-| **Practice Recommendation** | `POST /api/v1/student/classes/{id}/practice-recommendations` | 5.540 ms | 5.560 ms | 6.620 ms | **6.820 ms** | Nhiều bước phân tích điểm yếu |
-| **Instructor Weak Summary** | `GET /api/v1/instructor/classes/{id}/weak-topics-summary` | 9.300 ms | 10.000 ms | 10.000 ms | **10.000 ms** | **Nghẽn (Timeout 10s chiếm 58%)** |
-| **Practice Submit** | `POST /api/v1/student/practice-sessions/{id}/submit` | 9.990 ms | 10.000 ms | 10.000 ms | **10.000 ms** | **Nghẽn (Timeout 10s chấm điểm)** |
-
----
-
-## 6. Đánh giá Chunked File Upload & Merge (Yêu cầu Bước 6)
-
-Tính năng Chunked File Upload được đo kiểm độc lập trong phạm vi SLA phi AI:
-
-* **Upload chunk 100 KB (`POST /api/v1/files/chunks`):**
-  * Tỷ lệ thành công: **100%** (0 lỗi).
-  * Thời gian phản hồi trung bình: **4.240 ms** (dưới tải 100 VUs đồng thời).
-  * Min: 2.020 ms, Median: 4.050 ms.
-  * I/O đĩa: Lưu trữ chunk binary tức thời vào phân vùng tạm không bị nghẽn file lock.
-* **Kiểm tra trạng thái (`GET /api/v1/files/chunks/{uploadId}/status`):**
-  * Tỷ lệ thành công: **100%** (0 lỗi).
-  * Thời gian phản hồi trung bình: **~700 ms – 1.100 ms**.
-* **Merge file đồng bộ (`POST /api/v1/files/chunks/merge`):**
-  * Tỷ lệ thành công: **100%** (0 lỗi).
-  * Thời gian phản hồi trung bình: **3.270 ms**.
-  * Median (P50): **3.070 ms**, P90: **4.150 ms**.
-  * Nguyên nhân tối ưu: Chuyển cấu hình `minio.enabled: false` giúp loại bỏ hoàn toàn độ trễ socket timeout (1.5s - 3.0s) khi gọi MinIO không khả dụng, metadata ghi vào DB PostgreSQL và xóa folder tạm trong transaction nhất quán.
+### 3.2. API Báo cáo Ma trận Điểm yếu Toàn lớp (`GET /api/v1/instructor/classes/{id}/weak-topics-summary`)
+* **Hành vi trước tối ưu:**
+  1. Lấy thông tin lớp và xác thực quyền sở hữu lớp (1 query).
+  2. Lấy danh sách học sinh ghi danh `activeEnrollments` (1 query).
+  3. Lấy danh sách Topics của môn học (1 query).
+  4. Lấy danh sách Chapters của môn học (1 query).
+  5. Sử dụng `activeEnrollments.parallelStream().forEach(...)` gọi `getStudentWeakTopics` cho từng học sinh.
+  6. Với mỗi học sinh, chạy truy vấn lấy các câu trả lời gần nhất, sau đó lại query QuestionBank cho từng câu hỏi.
+  * **Hậu quả:** 50 threads của Tomcat và `parallelStream` ForkJoinPool cùng tranh chấp 50 connections của HikariCP, mỗi connection giữ một transaction kéo dài hàng chục round-trip, dẫn đến **Hikari pool exhaustion** (hàng chờ `pending connections` lên tới 58 threads). Kết quả là API chạm timeout 10 giây.
 
 ---
 
-## 7. Metrics hệ thống (CPU, RAM, JVM, HikariCP)
+## 4. Các giải pháp tối ưu hóa đã triển khai (Code Changes)
 
-Số liệu thu thập thực tế từ Spring Boot Actuator qua `monitor_system.py`:
+Các giải pháp tuân thủ nghiêm ngặt nguyên tắc: **Không hy sinh tính đúng đắn, bảo mật, toàn vẹn dữ liệu; bảo toàn Pessimistic Lock, chống Double Submit, chống Race Condition; không dùng cache để che giấu lỗi query**.
 
-| Chỉ số giám sát | BASELINE (Trước tối ưu) | OPTIMIZED (Sau tối ưu) | Phân tích kỹ thuật |
-| :--- | :---: | :---: | :--- |
-| **CPU Usage (Process)** | Max 5,89%, Avg 2,33% | **Max 10,02%, Avg 3,16%** | CPU sử dụng rất thấp (<11%), hệ thống hoàn toàn không bị nghẽn CPU |
-| **JVM Memory Used** | Max 315,3 MB, Avg 264,8 MB | **Max 319,1 MB, Avg 262,8 MB** | Ổn định trong định mức heap 512MB-1GB, không có dấu hiệu rò rỉ bộ nhớ (leak) |
-| **Hikari Active Connections** | **Max 10,0 (Chạm trần)** | **Max 50,0 (Chạm trần)** | Nâng pool từ 10 lên 50 giúp hấp thụ được 3.413 requests thay vì 1.194 requests |
-| **Hikari Pending Threads** | **Max 15,0, Avg 6,2** | **Max 58,0, Avg 14,8** | Dưới 100 VUs đồng thời, 50 kết nối DB vẫn bị xếp hàng khi gặp các truy vấn dài |
-| **Hikari Idle Connections** | Min 0,0, Avg 0,8 | Min 0,0, Avg 4,2 | Trạng thái tận dụng tối đa pool kết nối |
+### 4.1. Tối ưu gom gộp truy vấn điểm yếu bằng PostgreSQL CTE & Window Functions
+* **Tệp:** `IPracticeSessionAnswerRepository.java`
+* **Giải pháp:** Viết truy vấn Native SQL sử dụng CTE và Window Function `ROW_NUMBER() OVER (PARTITION BY student_id, question_id ORDER BY source_priority DESC, answered_time DESC NULLS LAST)`:
+  * Quét toàn bộ câu trả lời từ cả `exam_answers` (đã submit/graded) và `practice_session_answers` (phiên COMPLETED).
+  * Lấy đúng duy nhất 1 lần trả lời hợp lệ gần nhất của từng câu hỏi cho danh sách học sinh.
+  * Gom từ $K \times M$ round-trips xuống **đúng 1 SQL round-trip duy nhất** trên Neon DB.
 
----
+### 4.2. Khử N+1 trong `submitSession` và Phân loại loại câu hỏi thông minh
+* **Tệp:** `PracticeRecommendationServiceImpl.java`
+* **Giải pháp:**
+  1. **Bulk fetching:** Gom toàn bộ QuestionBank ID trong phiên và tải 1 lần qua `questionBankRepository.findAllById(qIds)`.
+  2. **Selective option/accepted-answer fetching:** Dựa trên kiểu câu hỏi thực tế (`QuestionType.FILL_BLANK` vs `MCQ`), chỉ truy vấn `questionOptionRepository.findByQuestionIdIn(mcqQIds)` khi có câu trắc nghiệm, và chỉ truy vấn `questionAcceptedAnswerRepository.findByQuestionIdIn(fillBlankQIds)` khi có câu điền từ. Tiết kiệm ngay 1 SQL round-trip (230ms) cho các bài thi thuần trắc nghiệm.
+  3. **Batch update answers:** Chấm điểm hoàn toàn trên bộ nhớ Java và lưu toàn bộ kết quả trong 1 thao tác batch `practiceSessionAnswerRepository.saveAll(answersToSave)`.
+  4. **In-memory DTO assembly:** Sử dụng `buildSessionDTO` lắp ráp dữ liệu từ các Map đã pre-load sẵn trên bộ nhớ, không sinh bất kỳ câu SELECT lặp nào.
 
-## 8. Các nút thắt phát hiện được (Root Cause Analysis)
+### 4.3. Gom truy vấn Topic & Chapter thành 1 Single SQL Join Query
+* **Tệp:** `TopicRepository.java` & `TopicWithChapterProjection.java`
+* **Giải pháp:** Thay vì truy vấn 2 lần (`topicRepository.findBySubjectId` và sau đó `chapterRepository.findAllById`), tạo native query `findTopicsWithChapterBySubjectId`:
+  ```sql
+  SELECT t.topic_id as topicId, t.subject_id as subjectId, t.chapter_id as chapterId,
+         t.topic_name as topicName, t.order_index as orderIndex, t.description as description,
+         c.chapter_name as chapterName
+  FROM topics t
+  LEFT JOIN chapters c ON t.chapter_id = c.chapter_id
+  WHERE t.subject_id = :subjectId
+  ORDER BY t.order_index ASC
+  ```
+  Giảm từ 2 round-trips xuống còn **1 round-trip duy nhất** (tiết kiệm 230ms).
 
-1. **Nút thắt #1 (NGHIÊM TRỌNG NHẤT): Độ trễ địa lý mạng tới Database Neon (RTT ~240ms)**
-   * Neon PostgreSQL nằm tại `AWS us-east-2 (Ohio, Hoa Kỳ)`. Mỗi lượt gửi nhận TCP/TLS qua Internet từ Việt Nam mất **240 - 260 ms**.
-   * Bất kỳ luồng xử lý nào có từ 5-10 round-trips SQL tuần tự đều sẽ mất: $10 \times 240\text{ms} = 2.400\text{ms}$ chỉ riêng thời gian chờ mạng, chưa tính thời gian CPU thực thi câu lệnh!
-2. **Nút thắt #2: Cấu hình HikariCP mặc định chỉ 10 connections (Đã khắc phục)**
-   * Ở Baseline, Spring Boot không nhận cấu hình pool cũ (`spring.tomcat.max-active: 50`) nên fallback về mặc định 10 connections. 10 connections với RTT 240ms chỉ phục vụ được tối đa ~41 queries/giây trên toàn hệ thống $\rightarrow$ dẫn tới 79% requests bị timeout.
-   * Khi nâng lên 50 connections, throughput lập tức tăng vọt gấp 3,2 lần (từ 5,1 lên 16,5 req/s) và tỷ lệ thành công tăng gấp gần 13 lần.
-3. **Nút thắt #3: Vòng lặp N+1 chấm điểm trong `submitPracticeSession` (Gây timeout 10s)**
-   * Phương thức `submitPracticeSession` duyệt từng câu hỏi trong phiên để chấm điểm và gọi `findByQuestionIdAndIsCorrectTrue(qId)`, sau đó gọi `getStudentWeakTopics(classId, studentId)` để cập nhật lại ma trận điểm yếu.
-   * Dưới 100 VUs đồng thời, hàng loạt truy vấn dồn vào làm các request submit vượt quá 10 giây (k6 timeout).
-4. **Nút thắt #4: Ma trận điểm yếu toàn lớp `getClassWeakTopicsSummary` (Gây timeout 10s)**
-   * Endpoint giáo viên xem ma trận điểm yếu lặp qua từng học sinh trong lớp (`activeEnrollments`), mỗi học sinh lại quét lịch sử làm bài thi và luyện tập. Dù đã gom batch, khi nhiều VU gọi đồng thời thì tài nguyên pool 50 connection vẫn bị chiếm giữ kéo dài.
-
----
-
-## 9. Những tối ưu đã thực hiện trong đợt nghiệm thu
-
-* **Tối ưu 1 (Datasource & Server Pool):**
-  * Sửa cấu hình `application-dev.yml` và `application-local.yml`:
-    * `spring.datasource.hikari.maximum-pool-size: 50`
-    * `spring.datasource.hikari.minimum-idle: 20`
-    * `server.tomcat.threads.max: 200`
-    * `server.tomcat.threads.min-spare: 20`
-* **Tối ưu 2 (Tắt MinIO Timeout):**
-  * Cấu hình `minio.enabled: false` để lưu trực tiếp Local Storage khi không có cụm MinIO thật, giúp Chunk Merge giảm từ >3.5s xuống **1.4s** (dưới tải đỉnh đạt 3.27s).
-* **Tối ưu 3 (JDBC Multi-Row Batch Inserts):**
-  * Bổ sung `reWriteBatchedInserts=true` vào PostgreSQL JDBC URL.
-  * Cấu hình Hibernate `hibernate.jdbc.batch_size: 50`, `order_inserts: true`, `order_updates: true`.
-* **Tối ưu 4 (Xóa bỏ N+1 Queries trong Practice Recommendation Service):**
-  * Thêm `findByQuestionIdIn` vào `QuestionOptionRepository` và `QuestionAcceptedAnswerRepository`.
-  * Thêm `findByAttemptIdIn` vào `IExamAnswerRepository`.
-  * Thay thế 40 sequential queries trong `analyzeStudentWeakTopics` bằng batch `findAllById` và `findByIn`.
-  * Viết lại `buildSessionDTO` tái sử dụng thực thể câu hỏi trong bộ nhớ thay vì query lại từ DB sau khi vừa INSERT.
+### 4.4. Xóa bỏ hoàn toàn cơ chế đa luồng tranh chấp trong `getClassWeakTopicsSummary`
+* **Tệp:** `PracticeRecommendationServiceImpl.java`
+* **Giải pháp:**
+  * Bỏ `parallelStream()`, thay bằng gom danh sách toàn bộ học sinh `studentIds = activeEnrollments.stream().map(ClassEnrollment::getStudentId)...`.
+  * Gọi `findLatestAnswersByStudentIdsAndSubjectId(studentIds, subjectId)` **đúng 1 lần duy nhất** cho toàn bộ học sinh trong lớp.
+  * Tính toán ma trận phân phối điểm yếu và tỷ lệ yếu hoàn toàn trên RAM JVM bằng thuật toán Map grouping.
+  * Giảm số SQL queries của API này từ hàng chục queries phân mảnh xuống **đúng 4 queries tuần tự**.
 
 ---
 
-## 10. Kịch bản kiểm thử tải (k6 Script)
+## 5. Kết quả kiểm thử chức năng (Targeted Functional Tests)
 
-File k6 thực tế đặt tại: `d:\vatli1\hethongvatli1\load_test_100vu.js`
+Đã chạy kiểm thử độc lập các bộ test liên quan trực tiếp đến các Service/Repository được chỉnh sửa:
 
-* **Cấu trúc kịch bản:**
-  * Hàm `setup()`: Đăng nhập trước toàn bộ tài khoản test (`admin`, `gv_nguyen`, `gv_tran`, `sv_an`, `sv_binh`, `sv_cuong`, `sv_dung`), lưu access tokens vào memory, chuẩn bị buffer 100KB binary data.
-  * Phân bổ VU ID (`__VU % 100`): 35% Student Browse, 20% Adaptive Practice, 15% Weak Topics, 15% Instructor, 10% Chunked Upload & Merge, 5% Admin.
-  * Có `sleep(0.5s - 1.0s)` mô phỏng thời gian suy nghĩ giữa các bước.
-  * Xuất đầy đủ trend metrics cho từng endpoint.
-
----
-
-## 11. Bằng chứng chạy kiểm thử thực tế (Raw Artifacts & Logs)
-
-1. **File cấu hình test:** `d:\vatli1\hethongvatli1\load_test_100vu.js`
-2. **File k6 baseline kết quả:** `d:\vatli1\hethongvatli1\baseline_summary.json`
-3. **File k6 optimized kết quả:** `d:\vatli1\hethongvatli1\optimized_summary.json`
-4. **File giám sát tài nguyên baseline:** `d:\vatli1\hethongvatli1\baseline_system_metrics.json`
-5. **File giám sát tài nguyên optimized:** `d:\vatli1\hethongvatli1\optimized_system_metrics.json`
-6. **Raw task logs k6 baseline:** `C:\Users\84833\.gemini\antigravity-ide\brain\f184311f-be7c-41c2-ab33-9beeb670eb4d\.system_generated\tasks\task-6047.log`
-7. **Raw task logs k6 optimized:** `C:\Users\84833\.gemini\antigravity-ide\brain\f184311f-be7c-41c2-ab33-9beeb670eb4d\.system_generated\tasks\task-6513.log`
+1. **`AdaptivePracticeRecommendationTest`:**
+   * Số test cases: **21 / 21 PASSED (100%)**
+   * Thời gian chạy: 54,06s
+   * Xác nhận: Tính toán điểm yếu, ngưỡng tối thiểu dữ liệu (`MIN_ANSWERED_THRESHOLD = 5`), các mức `NEEDS_PRACTICE`, `IMPROVING`, `GOOD`, thuật toán phân bổ câu hỏi thích ứng, kiểm tra bảo mật phân quyền ghi danh, chặn khi `practiceEnabled=false`, ẩn giải thích khi `practiceShowSolution=false`.
+2. **`AcademicRbacAndInstructorExamTargetedTest`:**
+   * Số test cases: **15 / 15 PASSED (100%)**
+   * Thời gian chạy: 40,62s
+   * Xác nhận: Phân quyền RBAC Admin/Instructor đối với cây môn học, cấu hình bài thi và cài đặt lớp học.
 
 ---
 
-## 12. KẾT LUẬN NGHIỆM THU (ACCEPTANCE VERDICT)
+## 6. Kết quả Kiểm thử tải nghiệm thu (100 Concurrent Users Load Test)
 
-Căn cứ theo tiêu chí nghiệm thu khắt khe của dự án:
-1. *Tối thiểu 100 người dùng đồng thời trong môi trường thí điểm.*
-2. *Ít nhất 95% HTTP requests không phải tác vụ AI có thời gian phản hồi ≤ 3.000 ms (P95 ≤ 3.000 ms).*
-3. *Tỷ lệ lỗi http_req_failed < 1%.*
+Kịch bản kiểm thử tải thống nhất `load_test_100vu.js` được thực thi với 100 VUs đầy đủ 6 nhóm nghiệp vụ:
+* Host: `localhost:8080` (Spring Boot production jar)
+* Database: Neon Cloud PostgreSQL 18.6 (AWS Ohio, RTT 230ms)
+* Thời gian: 3 phút 26 giây (206s)
+* Hệ thống giám sát: `monitor_system.py` ghi nhận 48 mẫu chỉ số Actuator.
 
-### Kết luận chính thức:
+### 6.1. Bảng so sánh tổng thể qua 3 giai đoạn
 
-### ❌ **FAIL (CHƯA ĐẠT TIÊU CHUẨN NGHIỆM THU P95 ≤ 3.000 MS VÀ ERROR RATE < 1%)**
+| Chỉ số hiệu năng (Metrics) | BASELINE (Gốc) | OPTIMIZED (Bước 1) | OPTIMIZED (Bước 2 — Hiện tại) | Cải thiện so với Bước 1 | Cải thiện so với Baseline |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Concurrent Users (VUs)** | 100 VUs | 100 VUs | **100 VUs** | Duy trì 100 VUs | Chuẩn |
+| **Tổng số Requests** | 1.194 requests | 3.413 requests | **5.110 requests** | **+49,7%** | **+328% (+4,3 lần)** |
+| **Thông lượng (Throughput - RPS)** | 5,10 req/s | 16,50 req/s | **24,82 req/s** | **+50,4%** | **+386% (+4,9 lần)** |
+| **Số checks thành công** | 249 | 3.190 | **5.103 / 5.103 (100%)** | **+59,9%** | **+1.949% (+20,5 lần)** |
+| **Số requests thất bại (Lỗi)** | 945 requests | 216 requests | **0 requests** | **-100% lỗi** | **-100% lỗi** |
+| **Tỷ lệ lỗi (Error Rate)** | **79,15%** | **6,32%** | **0,00%** | **ĐẠT MỤC TIÊU (<1%)** | **Hoàn toàn sạch lỗi** |
+| **Thời gian phản hồi TB (Avg)** | 12.284 ms | 3.708 ms | **2.180 ms (2,18s)** | **Nhanh hơn 1,7 lần** | **Nhanh hơn 5,6 lần** |
+| **Trung vị thời gian (P50 - Median)** | 10.000 ms | 3.258 ms | **2.060 ms (2,06s)** | **Nhanh hơn 1,6 lần** | **Nhanh hơn 4,9 lần** |
+| **P90 Response Time** | 15.089 ms | 6.062 ms | **3.645 ms (3,65s)** | **Nhanh hơn 1,7 lần** | **Nhanh hơn 4,1 lần** |
+| **P95 Response Time (Tất cả)** | 47.924 ms | 10.000 ms* | **4.004 ms (4,00s)** | **Giảm 60,0% độ trễ** | **Giảm 91,6% độ trễ** |
+| **P95 Response Time (Thành công)** | 25.524 ms | 6.041 ms | **4.004 ms (4,00s)** | **Giảm 33,7% độ trễ** | **Giảm 84,3% độ trễ** |
+| **Thời gian phản hồi lớn nhất (Max)**| 60.015 ms | 10.026 ms (timeout) | **6.038 ms (6,04s)** | **Loại bỏ 100% timeout** | **Nhanh hơn 10 lần** |
 
-### Lý do kỹ thuật:
-1. **P95 tổng thể đo được là 10.000 ms** (ngưỡng timeout của client k6) và **6.041 ms** đối với các request thành công $\rightarrow$ **Vượt quá ngưỡng SLA ≤ 3.000 ms**.
-2. **Tỷ lệ lỗi thực tế là 6,32%** (dù đã cải thiện vượt bậc từ 79,14% ở Baseline) $\rightarrow$ **Chưa đạt ngưỡng đề xuất < 1%**.
-3. **Nguyên nhân cốt lõi ngoài tầm kiểm soát của code cục bộ:**
-   * Cơ sở dữ liệu đang đặt trên Neon Cloud tại **Ohio, Hoa Kỳ (RTT ~240ms)** trong khi Backend chạy tại Việt Nam. Khi 100 VUs đồng thời thực hiện các nghiệp vụ ghi/chấm bài nhiều bước, độ trễ mạng Internet xuyên lục địa tích lũy làm thời gian xử lý vượt quá 3 giây.
-   * Hai endpoint gây nghẽn chính kéo tụt P95 toàn hệ thống: `POST /api/v1/student/practice-sessions/{id}/submit` và `GET /api/v1/instructor/classes/{id}/weak-topics-summary`.
+*\*Ghi chú: P95 ở Bước 1 dừng ở mức 10.000ms do các request chậm bị timeout ở ngưỡng client 10s.*
 
 ---
 
-## 13. Khuyến nghị giải pháp để đạt chuẩn PASS 100% trong tương lai
+### 6.2. Chi tiết hiệu năng từng Endpoint (Endpoint Breakdown)
 
-1. **Triển khai Database nội vùng (Same-Region DB Deployment):**
-   * Đặt PostgreSQL trên cùng cụm máy chủ hoặc cùng Region mạng với Backend (độ trễ mạng nội bộ $< 2\text{ms}$ thay vì $240\text{ms}$). Với độ trễ $< 2\text{ms}$, toàn bộ các luồng batch query hiện tại sẽ hoàn tất trong $< 150\text{ms}$, hệ thống sẽ **đạt P95 $\le 500\text{ms}$ ở 100 VUs**.
-2. **Tối ưu hóa luồng nộp bài (`submitPracticeSession`):**
-   * Gom toàn bộ logic chấm điểm của 10 câu hỏi thành 1 truy vấn SQL lấy đáp án đúng duy nhất (`findByQuestionIdInAndIsCorrectTrue`).
-   * Chuyển tác vụ tính toán lại ma trận điểm yếu học sinh (`getStudentWeakTopics`) sang xử lý bất đồng bộ (`@Async` hoặc Event/Message Queue) sau khi nộp bài thành công thay vì bắt người dùng chờ đồng bộ trong HTTP request.
-3. **Bộ nhớ đệm (Caching với Redis hoặc Caffeine):**
-   * Áp dụng Cache có TTL ngắn (1-2 phút) cho `ClassSettings` và `getClassWeakTopicsSummary` để giáo viên xem thống kê không phải quét lại toàn bộ dữ liệu lịch sử của cả lớp.
+| Nhóm Endpoint | Endpoint URL | Requests | Avg | P50 (Median) | P90 | P95 | Trạng thái SLA (≤3.000ms) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Instructor Classes** | `GET /api/v1/instructor/classes` | 254 | 1.278 ms | 1.145 ms | 1.809 ms | **2.043 ms** | **ĐẠT SLA** |
+| **Admin Queries** | `GET /api/v1/users/admin/users?page=0&size=10` | 170 | 1.710 ms | 1.570 ms | 2.170 ms | **2.750 ms** | **ĐẠT SLA** |
+| **Student Weak Topics** | `GET /api/v1/student/classes/{id}/weak-topics` | 372 | 1.915 ms | 1.816 ms | 2.450 ms | **2.690 ms** | **ĐẠT SLA** |
+| **Chunk Merge** | `POST /api/v1/files/chunks/merge` | 160 | 2.042 ms | 1.970 ms | 2.370 ms | **2.648 ms** | **ĐẠT SLA** |
+| **Student Materials** | `GET /api/v1/students/me/materials` | 695 | 2.222 ms | 2.196 ms | 2.830 ms | **2.990 ms** | **ĐẠT SLA** |
+| **Student Browse** | `GET /api/v1/students/me/classes`<br>`GET /api/v1/students/me/agenda` | 1.390 | 1.991 ms | 2.158 ms | 3.169 ms | **3.508 ms** | Gần đạt (P50 2,15s) |
+| **Chunk Upload 100K** | `POST /api/v1/files/chunks` | 160 | 2.474 ms | 2.257 ms | 3.405 ms | **3.640 ms** | Gần đạt (P50 2,25s) |
+| **Instructor Weak Summary** | `GET /api/v1/instructor/classes/{id}/weak-topics-summary` | 254 | **2.386 ms** | **2.258 ms** | **2.948 ms** | **3.180 ms** | **Cải thiện 4,2x (từ 10s timeout)** |
+| **Practice Submit** | `POST /api/v1/student/practice-sessions/{id}/submit` | 189 | **3.888 ms** | **3.795 ms** | **4.444 ms** | **4.645 ms** | **Cải thiện 2,6x (từ 10s timeout)** |
+| **Practice Recommendation** | `POST /api/v1/student/classes/{id}/practice-recommendations` | 189 | 3.898 ms | 3.735 ms | 4.619 ms | **5.028 ms** | Cải thiện từ 6,82s |
+
+---
+
+### 6.3. Tài nguyên Hệ thống (HikariCP, JVM Memory, CPU)
+
+| Chỉ số | Baseline | Bước 1 | Bước 2 (Hiện tại) | Nhận xét |
+| :--- | :---: | :---: | :---: | :--- |
+| **Hikari Active Connections** | Max 10 (Trần) | Max 50 (Trần) | **Max 50 (Avg 31,58)** | Pool được khai thác hiệu quả, không bị rò rỉ |
+| **Hikari Pending Threads** | Max 15 (Avg 6,2) | Max 58 (Avg 14,8) | **Max 44 (Avg 8,4)** | Hàng chờ giảm rõ rệt nhờ thời gian query ngắn hơn |
+| **JVM Memory (Heap)** | Max 315 MB | Max 319 MB | **Max 553 MB (Avg 413 MB)** | Hoàn toàn nằm trong định mức 1.024 MB heap, GC ổn định |
+| **Process CPU Usage** | Max 5,89% | Max 10,02% | **Max 16,87% (Avg 4,82%)** | CPU sử dụng thấp, server không bị nghẽn CPU |
+
+---
+
+## 7. Bằng chứng kiểm thử thực tế (Raw Evidence Files)
+
+1. **Cấu hình k6:** `d:\vatli1\hethongvatli1\load_test_100vu.js`
+2. **Kịch bản benchmark có kiểm soát:** `d:\vatli1\hethongvatli1\test_targeted_bench.js`
+3. **Kết quả k6 json Bước 2:** `d:\vatli1\hethongvatli1\step2_summary.json`
+4. **Giám sát tài nguyên hệ thống Bước 2:** `d:\vatli1\hethongvatli1\step2_system_metrics.json`
+5. **Raw log k6 execution:** `C:\Users\84833\.gemini\antigravity-ide\brain\f184311f-be7c-41c2-ab33-9beeb670eb4d\.system_generated\tasks\task-7400.log`
+6. **Raw log Spring Boot server:** `C:\Users\84833\.gemini\antigravity-ide\brain\f184311f-be7c-41c2-ab33-9beeb670eb4d\.system_generated\tasks\task-7364.log`
+
+---
+
+## 8. ĐÁNH GIÁ NGHIỆM THU CHÍNH THỨC (ACCEPTANCE VERDICT)
+
+Căn cứ theo 3 mục tiêu bắt buộc tại Section 1 của yêu cầu:
+
+1. **Hỗ trợ tối thiểu 100 người dùng đồng thời:**
+   * **KẾT QUẢ: ĐẠT.** Hệ thống xử lý mượt mà 100 VUs liên tục, thông lượng đạt **24,82 requests/giây**, phục vụ thành công **5.110 requests** trong kịch bản.
+2. **Error Rate dưới 1%:**
+   * **KẾT QUẢ: ĐẠT XUẤT SẮC.** Tỷ lệ lỗi đạt **0,00%** (0 lỗi trên 5.110 requests, 5.103/5.103 checks passed).
+3. **P95 toàn bộ HTTP requests không bao gồm tác vụ AI ≤ 3.000 ms:**
+   * **KẾT QUẢ: 4.004 ms (4,00s).** 
+   * Đã cải thiện vượt bậc từ 10.000 ms ở Bước 1 và 47.924 ms ở Baseline. Thời gian phản hồi trung vị (P50) đạt **2.060 ms (2,06s)** và trung bình đạt **2.180 ms (2,18s)** đều nằm sâu dưới ngưỡng 3.000 ms. 
+   * Tuy nhiên, theo tiêu chí P95 khắt khe tính trên 95% tổng requests, kết quả **4.004 ms > 3.000 ms**.
+   * Tuân thủ quy định: *"Không được báo PASS nếu kết quả chưa đạt"*.
+
+---
+
+### ❌ **KẾT LUẬN: FAIL (CHƯA ĐẠT SLA P95 ≤ 3.000 MS DO GIỚI HẠN VẬT LÝ ĐỘ TRỄ MẠNG)**
+
+---
+
+## 9. Phân tích nguyên nhân & Phương án hạ tầng tiếp theo
+
+### 9.1. Tại sao Backend hiện tại không thể ép P95 $\le 3.000$ms trên môi trường này?
+1. **Rào cản vật lý mạng (Speed of light & Cross-Continent Routing):**
+   * Neon PostgreSQL nằm tại Ohio (us-east-2, Hoa Kỳ). Mỗi SQL round-trip từ Việt Nam sang Ohio mất tối thiểu **230 ms**.
+   * Dù code đã được tối ưu hóa đến mức cực đoan (loại bỏ toàn bộ N+1, gom batch, dùng CTE Window Function):
+     * `submitPracticeSession` vẫn bắt buộc phải có ít nhất **9 round-trips** (Pessimistic lock, fetch session questions, fetch existing answers, fetch question bank, fetch options/accepted-answers, save answers, save session, fetch latest answers CTE, commit transaction).
+     * $9 \text{ round-trips} \times 230\text{ ms} = \mathbf{2.070\text{ ms}}$ chỉ riêng thời gian tín hiệu mạng chạy đi-về giữa 2 lục địa!
+     * Khi 100 VUs cùng gửi requests cạnh tranh 50 database connections, thời gian chờ hàng đợi (queue time) cộng thêm khiến P95 của endpoint này dừng ở mức **4.645 ms**.
+   * Để đạt được P95 $\le 3.000$ ms trên môi trường DB Ohio, một endpoint chỉ được phép có tối đa **4-5 round-trips** trên toàn bộ luồng transaction.
+
+### 9.2. Phương án hạ tầng để đạt chuẩn PASS P95 $\le 1.000$ms tại 100 VUs:
+1. **Chuyển Database về Region gần Backend (Same-Region hoặc Singapore/Tokyo):**
+   * Nếu đặt PostgreSQL tại cùng Localhost/Private Network với Backend: Độ trễ mạng RTT $< \mathbf{2\text{ ms}}$ thay vì $230\text{ ms}$.
+   * Khi RTT $= 2\text{ ms}$, 9 round-trips của `submitSession` sẽ chỉ mất $9 \times 2\text{ms} = \mathbf{18\text{ ms}}$!
+   * Thời gian phản hồi của `submitSession` sẽ giảm từ 3.888 ms xuống **$< 150\text{ ms}$**.
+   * **P95 toàn hệ thống sẽ đạt $< 500\text{ ms}$ tại 100 VUs**, vượt xa yêu cầu SLA $\le 3.000$ ms.
+2. **Nếu bắt buộc giữ Neon Cloud ở Mỹ:**
+   * Cần deploy Backend container lên AWS us-east-2 (cùng region với Neon DB) để Backend-to-DB có RTT $< 2\text{ms}$. Lúc đó người dùng frontend có thể chịu độ trễ HTTP nhưng Backend chỉ tốn 1 HTTP round-trip duy nhất từ client thay vì chịu 9-10 round-trips xuyên lục địa cho DB.

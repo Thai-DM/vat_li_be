@@ -1092,18 +1092,24 @@ public class ExamServiceImpl implements IExamService {
         Class clazz = checkExamOwnership(exam, instructorId);
         User currentUser = resolveCurrentUser(instructorId);
 
-        if (dto.getExamType() != null) {
-            validateExamManagePermission(clazz, currentUser, dto.getExamType());
+        boolean hasAttempts = examAttemptRepository.existsByExamId(examId);
+        if (hasAttempts) {
+            if (dto.getExamType() != null && dto.getExamType() != exam.getExamType()) {
+                throw new CustomException("Không thể thay đổi hình thức thi (examType) của kỳ thi đã có thí sinh làm bài", HttpStatus.BAD_REQUEST);
+            }
+            if (dto.getMatrixId() != null && !Objects.equals(dto.getMatrixId(), exam.getMatrixId())) {
+                throw new CustomException("Không thể thay đổi ma trận đề thi (matrixId) của kỳ thi đã có thí sinh làm bài", HttpStatus.BAD_REQUEST);
+            }
         }
 
-        if (examAttemptRepository.existsByExamId(examId)) {
-            throw new CustomException("Không thể cập nhật cấu hình kỳ thi đã có sinh viên làm bài", HttpStatus.BAD_REQUEST);
+        if (dto.getExamType() != null) {
+            validateExamManagePermission(clazz, currentUser, dto.getExamType());
         }
 
         if (dto.getTitle() != null && !dto.getTitle().isBlank()) {
             exam.setTitle(dto.getTitle().trim());
         }
-        if (dto.getExamType() != null) {
+        if (!hasAttempts && dto.getExamType() != null) {
             exam.setExamType(dto.getExamType());
         }
         if (dto.getDurationMinutes() != null) {
@@ -1121,7 +1127,7 @@ public class ExamServiceImpl implements IExamService {
         if (exam.getStartTime() != null && exam.getEndTime() != null && exam.getStartTime().isAfter(exam.getEndTime())) {
             throw new CustomException("Thời gian bắt đầu không được sau thời gian kết thúc", HttpStatus.BAD_REQUEST);
         }
-        if (dto.getMatrixId() != null) {
+        if (!hasAttempts && dto.getMatrixId() != null) {
             ExamMatrix matrix = examMatrixRepository.findById(dto.getMatrixId())
                     .orElseThrow(() -> new CustomException("Không tìm thấy ma trận đề thi", HttpStatus.NOT_FOUND));
             if (!Objects.equals(matrix.getSubjectId(), clazz.getSubjectId())) {

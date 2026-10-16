@@ -16,9 +16,11 @@ import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.ExamType;
 import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.exception.CustomException;
+import com.vatly1.example.model.dto.ExamDTO;
 import com.vatly1.example.model.dto.QuestionBankDTO;
 import com.vatly1.example.model.request.AddExamQuestionDTO;
 import com.vatly1.example.model.request.CreateQuestionDTO;
+import com.vatly1.example.model.request.UpdateExamDTO;
 import com.vatly1.example.repository.IClassRepository;
 import com.vatly1.example.repository.IExamAttemptRepository;
 import com.vatly1.example.repository.IExamQuestionRepository;
@@ -279,13 +281,13 @@ public class QuestionAndExamSafetyTest {
         );
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getHttpStatus());
-        assertTrue(ex.getMessage().contains("Access denied"));
+        assertTrue(ex.getMessage().contains("Giảng viên không được phân công") || ex.getMessage().contains("Access denied"));
         assertFalse(examQuestionRepository.existsByExamIdAndQuestionId(exam.getExamId(), q.getQuestionId()));
     }
 
     @Test
-    @DisplayName("Test 7: Câu hỏi đã được sử dụng trong đề không thể bị cập nhật phá vỡ lịch sử options")
-    void test7_UpdateQuestion_AlreadyUsedInExam_Rejected() {
+    @DisplayName("Test 7: Câu hỏi đã được sử dụng trong đề CÓ THỂ được cập nhật sửa lỗi/typo và bảo toàn option ID")
+    void test7_UpdateQuestion_AlreadyUsedInExam_AllowedAndPreservesOptionIds() {
         Exam exam = createTestExam(null, null);
         QuestionBank q = createQuestionWithStatus(targetTopic, ApprovalStatus.APPROVED, "Câu hỏi đã đưa vào đề");
 
@@ -298,32 +300,34 @@ public class QuestionAndExamSafetyTest {
         List<QuestionOption> originalOptions = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(q.getQuestionId());
         assertEquals(2, originalOptions.size());
 
-        // Attempt to update question that is now referenced in exam_questions
+        // Update question that is now referenced in exam_questions (fixing a typo)
         CreateQuestionDTO updateDto = CreateQuestionDTO.builder()
                 .subjectId(targetTopic.getSubjectId())
                 .topicId(targetTopic.getTopicId())
                 .questionType(QuestionType.MCQ_SINGLE)
-                .content("Nội dung câu hỏi bị sửa đổi nguy hiểm!")
+                .content("Nội dung câu hỏi đã được sửa đúng!")
                 .difficultyLevel(DifficultyLevel.HARD)
                 .options(List.of(
                         CreateQuestionDTO.CreateQuestionOptionDTO.builder()
-                                .content("New Option 1")
+                                .content("New Option 1 corrected")
                                 .isCorrect(true)
                                 .orderIndex(0)
+                                .build(),
+                        CreateQuestionDTO.CreateQuestionOptionDTO.builder()
+                                .content("New Option 2 corrected")
+                                .isCorrect(false)
+                                .orderIndex(1)
                                 .build()
                 ))
                 .build();
 
-        CustomException ex = assertThrows(CustomException.class, () ->
-                questionBankService.updateQuestion(q.getQuestionId(), updateDto, instructor.getUserId(), "INSTRUCTOR")
-        );
+        QuestionBankDTO updatedDto = questionBankService.updateQuestion(q.getQuestionId(), updateDto, instructor.getUserId(), "INSTRUCTOR");
+        assertNotNull(updatedDto);
+        assertEquals("Nội dung câu hỏi đã được sửa đúng!", updatedDto.getContent());
 
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getHttpStatus());
-        assertTrue(ex.getMessage().contains("Cannot update question that has already been used in an exam"));
-
-        // Verify options and content in DB were NOT touched or deleted
+        // Verify options in DB were updated in-place preserving option IDs
         QuestionBank preservedQ = questionBankRepository.findById(q.getQuestionId()).orElseThrow();
-        assertEquals("Câu hỏi đã đưa vào đề", preservedQ.getContent());
+        assertEquals("Nội dung câu hỏi đã được sửa đúng!", preservedQ.getContent());
         List<QuestionOption> preservedOptions = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(q.getQuestionId());
         assertEquals(2, preservedOptions.size());
         assertEquals(originalOptions.get(0).getOptionId(), preservedOptions.get(0).getOptionId());
@@ -499,5 +503,75 @@ public class QuestionAndExamSafetyTest {
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getHttpStatus());
         assertTrue(ex.getMessage().contains("You do not have permission to update this question"));
+    }
+
+    @Test
+    @DisplayName("Test 15: Đề thi đã có thí sinh làm bài CÓ THỂ được gia hạn thời gian (durationMinutes, startTime, endTime, title)")
+    void test15_UpdateExam_WithExistingAttempts_AllowsTimeExtensionAndTitleUpdate() {
+        Exam baseExam = createTestExam(Instant.now().minus(30, ChronoUnit.MINUTES), Instant.now().plus(30, ChronoUnit.MINUTES));
+        baseExam.setDurationMinutes(45);
+        Exam exam = examRepository.save(baseExam);
+
+        // Tạo 1 attempt giả định đã có thí sinh làm bài
+        ExamAttempt attempt = ExamAttempt.builder()
+                .examId(exam.getExamId())
+                .studentId(student.getUserId())
+                .attemptNumber(1)
+                .status(AttemptStatus.IN_PROGRESS)
+                .startedAt(Instant.now().minus(10, ChronoUnit.MINUTES))
+                .build();
+        examAttemptRepository.save(attempt);
+
+        // Giáo viên gia hạn thêm thời gian thi do trục trặc
+        Instant newEndTime = Instant.now().plus(90, ChronoUnit.MINUTES);
+        UpdateExamDTO updateDto = UpdateExamDTO.builder()
+                .title("Kỳ thi đã được gia hạn thêm giờ")
+                .durationMinutes(75)
+                .endTime(newEndTime)
+                .build();
+
+        ExamDTO result = examService.updateExam(exam.getExamId(), updateDto, instructor.getUserId());
+        assertNotNull(result);
+        assertEquals(75, result.getDurationMinutes());
+        assertEquals("Kỳ thi đã được gia hạn thêm giờ", result.getTitle());
+
+        Exam reloaded = examRepository.findById(exam.getExamId()).orElseThrow();
+        assertEquals(75, reloaded.getDurationMinutes());
+        assertEquals("Kỳ thi đã được gia hạn thêm giờ", reloaded.getTitle());
+    }
+
+    @Test
+    @DisplayName("Test 16: Đề thi đã có thí sinh làm bài KHÔNG THỂ thay đổi examType hoặc matrixId")
+    void test16_UpdateExam_WithExistingAttempts_DisallowsChangingMatrixOrExamType() {
+        Exam exam = examRepository.save(createTestExam(Instant.now().minus(30, ChronoUnit.MINUTES), Instant.now().plus(30, ChronoUnit.MINUTES)));
+
+        ExamAttempt attempt = ExamAttempt.builder()
+                .examId(exam.getExamId())
+                .studentId(student.getUserId())
+                .attemptNumber(1)
+                .status(AttemptStatus.IN_PROGRESS)
+                .startedAt(Instant.now().minus(10, ChronoUnit.MINUTES))
+                .build();
+        examAttemptRepository.save(attempt);
+
+        UpdateExamDTO changeTypeDto = UpdateExamDTO.builder()
+                .examType(ExamType.FINAL)
+                .build();
+
+        CustomException exType = assertThrows(CustomException.class, () ->
+                examService.updateExam(exam.getExamId(), changeTypeDto, instructor.getUserId())
+        );
+        assertEquals(HttpStatus.BAD_REQUEST, exType.getHttpStatus());
+        assertTrue(exType.getMessage().contains("Không thể thay đổi hình thức thi (examType) của kỳ thi đã có thí sinh làm bài"));
+
+        UpdateExamDTO changeMatrixDto = UpdateExamDTO.builder()
+                .matrixId(UUID.randomUUID())
+                .build();
+
+        CustomException exMatrix = assertThrows(CustomException.class, () ->
+                examService.updateExam(exam.getExamId(), changeMatrixDto, instructor.getUserId())
+        );
+        assertEquals(HttpStatus.BAD_REQUEST, exMatrix.getHttpStatus());
+        assertTrue(exMatrix.getMessage().contains("Không thể thay đổi ma trận đề thi (matrixId) của kỳ thi đã có thí sinh làm bài"));
     }
 }

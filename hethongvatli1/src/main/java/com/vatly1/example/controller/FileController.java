@@ -362,6 +362,8 @@ public class FileController {
         if (lower.endsWith(".xlsx")) return MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         if (lower.endsWith(".docx")) return MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         if (lower.endsWith(".mp4")) return MediaType.parseMediaType("video/mp4");
+        if (lower.endsWith(".md") || lower.endsWith(".markdown")) return MediaType.parseMediaType("text/markdown; charset=UTF-8");
+        if (lower.endsWith(".txt")) return MediaType.parseMediaType("text/plain; charset=UTF-8");
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 }

@@ -369,11 +369,9 @@ public class FillBlankAndChapterTopicTest {
                 .scoreWeight(BigDecimal.valueOf(2.0))
                 .build());
 
-        // Cố gắng cập nhật -> phải bị chặn vì đã sử dụng trong exam
-        CustomException updateEx = assertThrows(CustomException.class, () ->
-                questionBankService.updateQuestion(created.getQuestionId(), updateDTO, adminUser.getUserId(), "ADMIN"));
-        assertEquals(HttpStatus.BAD_REQUEST, updateEx.getHttpStatus());
-        assertTrue(updateEx.getMessage().contains("Cannot update question that has already been used in an exam"));
+        // Cập nhật câu hỏi đã sử dụng trong exam -> được phép (để sửa sai sót/typo)
+        QuestionBankDTO updatedQ = questionBankService.updateQuestion(created.getQuestionId(), updateDTO, adminUser.getUserId(), "ADMIN");
+        assertNotNull(updatedQ);
 
         // Cố gắng xóa -> phải bị chặn
         CustomException deleteEx = assertThrows(CustomException.class, () ->

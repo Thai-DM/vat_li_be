@@ -20,9 +20,9 @@ public class ChunkUploadProperties {
     private String completedDir = "storage/completed";
 
     /**
-     * Kích thước chunk tối đa cho phép (mặc định: 100 KB = 102400 bytes)
+     * Kích thước chunk tối đa cho phép (mặc định: 10 MB = 10485760 bytes)
      */
-    private int maxChunkSize = 102400;
+    private int maxChunkSize = 10485760;
 
     /**
      * Tổng số chunk tối đa cho một file (mặc định: 10,000)
@@ -30,9 +30,9 @@ public class ChunkUploadProperties {
     private int maxTotalChunks = 10000;
 
     /**
-     * Tổng dung lượng file tối đa cho phép (mặc định: 50 MB = 52428800 bytes)
+     * Tổng dung lượng file tối đa cho phép (mặc định: 500 MB = 524288000 bytes)
      */
-    private long maxTotalFileSize = 52428800L;
+    private long maxTotalFileSize = 524288000L;
 
     /**
      * Thời gian hết hạn của phiên upload tạm (mặc định: 24 giờ)

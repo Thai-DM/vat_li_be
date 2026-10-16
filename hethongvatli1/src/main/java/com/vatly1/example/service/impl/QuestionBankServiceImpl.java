@@ -416,11 +416,6 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
             throw new CustomException("You do not have permission to update this question", HttpStatus.FORBIDDEN);
         }
 
-        if (examQuestionRepository.existsByQuestionId(questionId) || examAnswerRepository.existsByQuestionId(questionId)
-                || practiceSessionQuestionRepository.existsByQuestionId(questionId)) {
-            throw new CustomException("Cannot update question that has already been used in an exam or practice session", HttpStatus.BAD_REQUEST);
-        }
-
         checkSubjectPermission(dto.getSubjectId(), effectiveUserId, effectiveRole);
 
         if (!subjectRepository.existsById(dto.getSubjectId())) {
@@ -452,17 +447,24 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
             }
         }
 
+        boolean isUsedInExam = examQuestionRepository.existsByQuestionId(questionId);
         ApprovalStatus fromStatus = question.getApprovalStatus();
         ApprovalStatus nextStatus;
 
-        if (fromStatus == ApprovalStatus.REJECTED) {
+        if ("ADMIN".equals(effectiveRole) && dto.getApprovalStatus() == ApprovalStatus.APPROVED) {
+            nextStatus = ApprovalStatus.APPROVED;
+        } else if (fromStatus == ApprovalStatus.REJECTED) {
             nextStatus = (dto.getApprovalStatus() == ApprovalStatus.PENDING) ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT;
         } else if (fromStatus == ApprovalStatus.DRAFT) {
             nextStatus = (dto.getApprovalStatus() == ApprovalStatus.PENDING) ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT;
         } else if (fromStatus == ApprovalStatus.PENDING) {
             nextStatus = ApprovalStatus.PENDING;
-        } else { // APPROVED -> edit requires re-approval
-            nextStatus = (dto.getApprovalStatus() == ApprovalStatus.PENDING) ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT;
+        } else { // APPROVED -> edit requires re-approval unless already used in an exam (to keep active exams operational)
+            if (isUsedInExam) {
+                nextStatus = ApprovalStatus.APPROVED;
+            } else {
+                nextStatus = (dto.getApprovalStatus() == ApprovalStatus.PENDING) ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT;
+            }
         }
 
         question.setSubjectId(dto.getSubjectId());
@@ -480,30 +482,63 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
 
         question = questionBankRepository.save(question);
 
-        questionOptionRepository.deleteByQuestionId(questionId);
-        questionAcceptedAnswerRepository.deleteByQuestionId(questionId);
-
         if (dto.getQuestionType() == QuestionType.FILL_BLANK) {
+            questionOptionRepository.deleteByQuestionId(questionId);
             List<String> cleanAnswers = extractAcceptedAnswers(dto);
-            int idx = 0;
-            for (String ans : cleanAnswers) {
-                QuestionAcceptedAnswer accepted = QuestionAcceptedAnswer.builder()
-                        .questionId(question.getQuestionId())
-                        .acceptedText(ans)
-                        .orderIndex(idx++)
-                        .build();
-                questionAcceptedAnswerRepository.save(accepted);
+            List<QuestionAcceptedAnswer> existingAnswers = questionAcceptedAnswerRepository.findByQuestionIdOrderByOrderIndexAsc(questionId);
+            int minAns = Math.min(existingAnswers.size(), cleanAnswers.size());
+            for (int i = 0; i < minAns; i++) {
+                QuestionAcceptedAnswer existing = existingAnswers.get(i);
+                existing.setAcceptedText(cleanAnswers.get(i));
+                existing.setOrderIndex(i);
+                questionAcceptedAnswerRepository.save(existing);
+            }
+            if (cleanAnswers.size() > existingAnswers.size()) {
+                for (int i = existingAnswers.size(); i < cleanAnswers.size(); i++) {
+                    QuestionAcceptedAnswer accepted = QuestionAcceptedAnswer.builder()
+                            .questionId(question.getQuestionId())
+                            .acceptedText(cleanAnswers.get(i))
+                            .orderIndex(i)
+                            .build();
+                    questionAcceptedAnswerRepository.save(accepted);
+                }
+            } else if (existingAnswers.size() > cleanAnswers.size()) {
+                for (int i = cleanAnswers.size(); i < existingAnswers.size(); i++) {
+                    questionAcceptedAnswerRepository.delete(existingAnswers.get(i));
+                }
             }
         } else if (dto.getOptions() != null && !dto.getOptions().isEmpty()) {
-            for (CreateQuestionDTO.CreateQuestionOptionDTO optDto : dto.getOptions()) {
-                QuestionOption option = QuestionOption.builder()
-                        .questionId(question.getQuestionId())
-                        .optionText(optDto.getContent())
-                        .isCorrect(optDto.getIsCorrect())
-                        .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : 0)
-                        .build();
-                questionOptionRepository.save(option);
+            questionAcceptedAnswerRepository.deleteByQuestionId(questionId);
+            List<CreateQuestionDTO.CreateQuestionOptionDTO> newOpts = dto.getOptions();
+            List<QuestionOption> existingOptions = questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(questionId);
+            int minOpts = Math.min(existingOptions.size(), newOpts.size());
+            for (int i = 0; i < minOpts; i++) {
+                QuestionOption opt = existingOptions.get(i);
+                CreateQuestionDTO.CreateQuestionOptionDTO optDto = newOpts.get(i);
+                opt.setOptionText(optDto.getContent());
+                opt.setIsCorrect(optDto.getIsCorrect());
+                opt.setOrderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : i);
+                questionOptionRepository.save(opt);
             }
+            if (newOpts.size() > existingOptions.size()) {
+                for (int i = existingOptions.size(); i < newOpts.size(); i++) {
+                    CreateQuestionDTO.CreateQuestionOptionDTO optDto = newOpts.get(i);
+                    QuestionOption option = QuestionOption.builder()
+                            .questionId(question.getQuestionId())
+                            .optionText(optDto.getContent())
+                            .isCorrect(optDto.getIsCorrect())
+                            .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : i)
+                            .build();
+                    questionOptionRepository.save(option);
+                }
+            } else if (existingOptions.size() > newOpts.size()) {
+                for (int i = newOpts.size(); i < existingOptions.size(); i++) {
+                    questionOptionRepository.delete(existingOptions.get(i));
+                }
+            }
+        } else {
+            questionOptionRepository.deleteByQuestionId(questionId);
+            questionAcceptedAnswerRepository.deleteByQuestionId(questionId);
         }
 
         if (dto.getCloIds() != null) {
@@ -527,10 +562,6 @@ public class QuestionBankServiceImpl implements IQuestionBankService {
 
         if (!"ADMIN".equals(effectiveRole) && !Objects.equals(question.getCreatedBy(), effectiveUserId)) {
             throw new CustomException("You do not have permission to update CLOs for this question", HttpStatus.FORBIDDEN);
-        }
-
-        if (examQuestionRepository.existsByQuestionId(questionId) || examAnswerRepository.existsByQuestionId(questionId)) {
-            throw new CustomException("Cannot modify CLOs of a question that has already been used in an exam", HttpStatus.BAD_REQUEST);
         }
 
         syncQuestionClos(question, cloIds != null ? cloIds : new ArrayList<>());

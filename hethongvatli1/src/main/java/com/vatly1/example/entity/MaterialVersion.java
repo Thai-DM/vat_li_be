@@ -30,7 +30,7 @@ public class MaterialVersion {
     @Column(name = "version_no")
     private Integer versionNo;
 
-    @Column(name = "content_snapshot")
+    @Column(name = "content_snapshot", columnDefinition = "TEXT")
     private String contentSnapshot;
 
     @Column(name = "changed_by")

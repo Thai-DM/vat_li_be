@@ -935,12 +935,26 @@ public class AdaptivePracticeRecommendationTest {
         updateDto.setQuestionType(QuestionType.MCQ_SINGLE);
         updateDto.setContent("Updated Content Attempt");
         updateDto.setDifficultyLevel(DifficultyLevel.EASY);
+        updateDto.setOptions(List.of(
+                com.vatly1.example.model.request.CreateQuestionDTO.CreateQuestionOptionDTO.builder()
+                        .content("Option A")
+                        .isCorrect(true)
+                        .orderIndex(0)
+                        .build()
+        ));
 
+        // Cập nhật câu hỏi đã dùng trong practice session -> được phép để sửa sai sót
+        com.vatly1.example.model.dto.QuestionBankDTO updated = questionBankService.updateQuestion(
+                q.getQuestionId(), updateDto, adminToken != null ? UUID.randomUUID() : null, "ADMIN");
+        assertNotNull(updated);
+        assertEquals("Updated Content Attempt", updated.getContent());
+
+        // Xóa câu hỏi đã dùng trong practice session -> bị chặn
         com.vatly1.example.exception.CustomException ex = assertThrows(com.vatly1.example.exception.CustomException.class, () -> {
-            questionBankService.updateQuestion(q.getQuestionId(), updateDto, adminToken != null ? UUID.randomUUID() : null, "ADMIN");
+            questionBankService.deleteQuestion(q.getQuestionId(), adminToken != null ? UUID.randomUUID() : null, "ADMIN");
         });
         assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getHttpStatus());
-        assertTrue(ex.getMessage().contains("Cannot update question that has already been used in an exam or practice session"));
+        assertTrue(ex.getMessage().contains("Cannot delete question that has already been used in an exam or practice session"));
     }
 
     @Test

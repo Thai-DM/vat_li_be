@@ -18,6 +18,11 @@ spring:
         max-size: 50
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
 
 security:
   jwt:

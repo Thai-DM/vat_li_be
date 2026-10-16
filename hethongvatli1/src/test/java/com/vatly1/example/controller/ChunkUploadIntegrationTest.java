@@ -29,6 +29,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -57,6 +58,9 @@ public class ChunkUploadIntegrationTest {
 
     @Autowired
     private com.vatly1.example.service.impl.ChunkUploadServiceImpl chunkUploadService;
+
+    @Autowired
+    private com.vatly1.example.configuration.ChunkUploadProperties chunkProperties;
 
     private String userToken1; // gv_nguyen
     private String userToken2; // sv_an
@@ -459,11 +463,10 @@ public class ChunkUploadIntegrationTest {
     }
 
     @Test
-    @DisplayName("REQ-14: Chunk quá dung lượng (> 100 KB) bị từ chối với 400 Bad Request")
+    @DisplayName("REQ-14: Chunk quá dung lượng bị từ chối với 400 Bad Request")
     void test14_chunkOverSizeLimitRejected() throws Exception {
         UUID uploadId = UUID.randomUUID();
-        // 102401 bytes (> 102400 bytes)
-        byte[] largeChunk = new byte[102401];
+        byte[] largeChunk = new byte[(int) chunkProperties.getMaxChunkSize() + 1];
         MockMultipartFile chunkFile = new MockMultipartFile("chunk", "p.bin", "application/octet-stream", largeChunk);
 
         mockMvc.perform(multipart("/api/v1/files/chunks")
@@ -666,7 +669,8 @@ public class ChunkUploadIntegrationTest {
         }
 
         latch.countDown();
-        Thread.sleep(500);
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
         assertEquals(2, successCount.get(), "Cả 2 request gửi cùng nội dung phải thành công (1 upload, 1 idempotent retry)");
 
         // 2. Gửi khác nội dung cho cùng index 0 -> phải bị 409 Conflict
@@ -792,6 +796,37 @@ public class ChunkUploadIntegrationTest {
 
         ChunkUploadSession zombieAfter = sessionRepository.findById(zombieId).orElseThrow();
         assertEquals(ChunkUploadStatus.FAILED, zombieAfter.getStatus(), "Zombie session bị crash phải chuyển sang FAILED");
+    }
+
+    @Test
+    @DisplayName("REQ-18: Hỗ trợ chunk lớn (trên 100KB) và merge với payload JSON chứa extra metadata")
+    void test18_uploadLargeChunkAndMergeWithExtraJsonFields_Success() throws Exception {
+        UUID uploadId = UUID.randomUUID();
+        String fileName = "README.md";
+        byte[] largeData = new byte[256 * 1024]; // 256 KB chunk (vượt 100KB cũ)
+        Arrays.fill(largeData, (byte) '#');
+
+        mockMvc.perform(multipart("/api/v1/files/chunks")
+                        .file(new MockMultipartFile("chunk", "part.bin", "text/markdown", largeData))
+                        .param("uploadId", uploadId.toString())
+                        .param("chunkIndex", "0")
+                        .param("totalChunks", "1")
+                        .param("fileName", fileName)
+                        .header("Authorization", "Bearer " + userToken1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.uploaded", is(true)));
+
+        // Merge với payload JSON chứa extra fields như FE thường gửi: fileName, totalChunks, fileSize
+        String mergePayload = "{\"uploadId\":\"" + uploadId + "\",\"fileName\":\"" + fileName + "\",\"totalChunks\":1,\"fileSize\":" + largeData.length + "}";
+
+        mockMvc.perform(post("/api/v1/files/chunks/merge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mergePayload)
+                        .header("Authorization", "Bearer " + userToken1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("COMPLETED")))
+                .andExpect(jsonPath("$.fileName", is(fileName)))
+                .andExpect(jsonPath("$.fileSize", is(largeData.length)));
     }
 }
 

@@ -394,11 +394,18 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
         }
 
         if (dto.getType() == MaterialType.MARKDOWN) {
+            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+                try {
+                    String extracted = new String(dto.getFile().getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
+                        dto.setContentText(extracted);
+                    }
+                } catch (java.io.IOException e) {
+                    throw new CustomException("Không thể đọc nội dung tệp markdown/readme: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+                }
+            }
             if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
                 throw new CustomException("Nội dung bài giảng Markdown không được để trống", HttpStatus.BAD_REQUEST);
-            }
-            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
-                throw new CustomException("Bài giảng dạng Markdown chỉ lưu nội dung văn bản trực tiếp trong cơ sở dữ liệu, không lưu dạng tệp đính kèm", HttpStatus.BAD_REQUEST);
             }
         }
 
@@ -419,7 +426,7 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
                 .build();
 
         // Handle file upload
-        if (dto.getType() != MaterialType.MARKDOWN && dto.getFile() != null && !dto.getFile().isEmpty()) {
+        if (dto.getFile() != null && !dto.getFile().isEmpty()) {
             validateUploadedFile(dto.getFile(), dto.getType());
 
             String fileUrl = fileStorageService.storeFile(dto.getFile());
@@ -428,7 +435,7 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
                     .originalFilename(dto.getFile().getOriginalFilename())
                     .storedUrl(fileUrl)
                     .fileSizeBytes(dto.getFile().getSize())
-                    .mimeType(dto.getFile().getContentType())
+                    .mimeType(dto.getType() == MaterialType.MARKDOWN ? "text/markdown; charset=UTF-8" : dto.getFile().getContentType())
                     .purpose("LEARNING_MATERIAL")
                     .status(FileProcessingStatus.COMPLETED)
                     .createdAt(Instant.now())
@@ -493,17 +500,23 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
         material.setApprovalStatus(ApprovalStatus.PENDING); // Bắt buộc duyệt lại sau khi chỉnh sửa
 
         if (dto.getType() == MaterialType.MARKDOWN) {
+            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
+                try {
+                    String extracted = new String(dto.getFile().getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
+                        dto.setContentText(extracted);
+                    }
+                } catch (java.io.IOException e) {
+                    throw new CustomException("Không thể đọc nội dung tệp markdown/readme: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+                }
+            }
             if (dto.getContentText() == null || dto.getContentText().trim().isEmpty()) {
                 throw new CustomException("Nội dung bài giảng Markdown không được để trống", HttpStatus.BAD_REQUEST);
             }
-            if (dto.getFile() != null && !dto.getFile().isEmpty()) {
-                throw new CustomException("Bài giảng dạng Markdown chỉ lưu nội dung văn bản trực tiếp trong cơ sở dữ liệu, không lưu dạng tệp đính kèm", HttpStatus.BAD_REQUEST);
-            }
-            material.setFileId(null);
-            material.setFileUrl(null);
+            material.setContentText(dto.getContentText());
         }
 
-        if (dto.getType() != MaterialType.MARKDOWN && dto.getFile() != null && !dto.getFile().isEmpty()) {
+        if (dto.getFile() != null && !dto.getFile().isEmpty()) {
             validateUploadedFile(dto.getFile(), dto.getType());
 
             String fileUrl = fileStorageService.storeFile(dto.getFile());
@@ -512,7 +525,7 @@ public class LearningMaterialServiceImpl implements ILearningMaterialService {
                     .originalFilename(dto.getFile().getOriginalFilename())
                     .storedUrl(fileUrl)
                     .fileSizeBytes(dto.getFile().getSize())
-                    .mimeType(dto.getFile().getContentType())
+                    .mimeType(dto.getType() == MaterialType.MARKDOWN ? "text/markdown; charset=UTF-8" : dto.getFile().getContentType())
                     .purpose("LEARNING_MATERIAL")
                     .status(FileProcessingStatus.COMPLETED)
                     .createdAt(Instant.now())

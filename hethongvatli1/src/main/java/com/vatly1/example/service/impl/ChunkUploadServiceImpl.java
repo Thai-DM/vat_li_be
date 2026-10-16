@@ -72,8 +72,8 @@ public class ChunkUploadServiceImpl implements IChunkUploadService {
         if (chunk.getSize() > properties.getMaxChunkSize()) {
             throw new CustomException("Kích thước chunk vượt quá giới hạn tối đa cho phép (" + properties.getMaxChunkSize() + " bytes)", HttpStatus.BAD_REQUEST);
         }
-        if ((long) totalChunks * properties.getMaxChunkSize() > properties.getMaxTotalFileSize()) {
-            throw new CustomException("Dung lượng ước tính của file vượt quá giới hạn tối đa cho phép (" + properties.getMaxTotalFileSize() + " bytes)", HttpStatus.BAD_REQUEST);
+        if (totalChunks > properties.getMaxTotalChunks()) {
+            throw new CustomException("Số lượng chunk vượt quá giới hạn tối đa cho phép (" + properties.getMaxTotalChunks() + ")", HttpStatus.BAD_REQUEST);
         }
         if (currentUserId == null) {
             throw new CustomException("Yêu cầu đăng nhập để tải lên tệp", HttpStatus.UNAUTHORIZED);
@@ -282,6 +282,9 @@ public class ChunkUploadServiceImpl implements IChunkUploadService {
             }
 
             long totalSize = Files.size(mergingFile);
+            if (totalSize > properties.getMaxTotalFileSize()) {
+                throw new CustomException("Dung lượng file ghép vượt quá giới hạn tối đa cho phép (" + properties.getMaxTotalFileSize() + " bytes)", HttpStatus.BAD_REQUEST);
+            }
             String contentType = determineContentType(session.getOriginalFilename());
 
             // 2. Tải file hoàn chỉnh lên hệ thống lưu trữ (MinIO hoặc local storage)
@@ -503,6 +506,8 @@ public class ChunkUploadServiceImpl implements IChunkUploadService {
         if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "text/markdown";
+        if (lower.endsWith(".txt")) return "text/plain";
         return "application/octet-stream";
     }
 

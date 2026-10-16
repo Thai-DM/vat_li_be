@@ -89,43 +89,48 @@ public class FileStorageServiceImpl implements IFileStorageService {
 
         String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "application/octet-stream";
 
+        Path targetLocation = this.localFileStorageLocation.resolve(generatedFilename);
+        try {
+            Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException ex) {
+            throw new CustomException("Không thể lưu trữ tệp: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
         // 1. Thử tải lên MinIO nếu được kích hoạt
         if (minioConfig.isEnabled() && minioClient != null) {
             try {
                 minioConfig.initBucket(minioClient);
 
-                minioClient.putObject(
-                        PutObjectArgs.builder()
-                                .bucket(minioConfig.getBucketName())
-                                .object(objectName)
-                                .stream(inputStream, size, -1)
-                                .contentType(effectiveContentType)
-                                .build()
-                );
+                try (InputStream minioIs = Files.newInputStream(targetLocation)) {
+                    minioClient.putObject(
+                            PutObjectArgs.builder()
+                                    .bucket(minioConfig.getBucketName())
+                                    .object(objectName)
+                                    .stream(minioIs, size, -1)
+                                    .contentType(effectiveContentType)
+                                    .build()
+                    );
+                }
 
                 log.info("Uploaded file '{}' to MinIO bucket '{}' successfully.", objectName, minioConfig.getBucketName());
                 return "/api/v1/files/" + objectName;
             } catch (Exception e) {
                 log.warn("Failed to upload to MinIO: {}", e.getMessage());
                 if (!allowLocalFallback) {
+                    try { Files.deleteIfExists(targetLocation); } catch (Exception ignored) {}
                     throw new CustomException("Tải lên MinIO thất bại và hệ thống không cho phép lưu trữ cục bộ: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
                 }
                 log.warn("Falling back to local storage as permitted by policy...");
-                // Fallback to local disk below
+                return "/api/v1/files/" + generatedFilename;
             }
         } else if (!allowLocalFallback) {
+            try { Files.deleteIfExists(targetLocation); } catch (Exception ignored) {}
             throw new CustomException("MinIO là kho lưu trữ bắt buộc nhưng không khả dụng hoặc chưa được bật", HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         // 2. Lưu trữ cục bộ (Dùng cho môi trường Test hoặc khi MinIO tạm thời không khả dụng và cho phép fallback)
-        try {
-            Path targetLocation = this.localFileStorageLocation.resolve(generatedFilename);
-            Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            log.info("Saved file locally to '{}'", targetLocation);
-            return "/api/v1/files/" + generatedFilename;
-        } catch (IOException ex) {
-            throw new CustomException("Không thể lưu trữ tệp " + cleanFilename + ": " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        log.info("Saved file locally to '{}'", targetLocation);
+        return "/api/v1/files/" + generatedFilename;
     }
 
     public boolean isAllowLocalFallback() {

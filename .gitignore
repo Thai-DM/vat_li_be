@@ -133,3 +133,9 @@ $RECYCLE.BIN/
 .AppleDouble
 .LSOverride
 ._*
+
+# Temporary benchmark / summary files
+*.json.bak
+step2_summary.json
+step2_system_metrics.json
+test_targeted_bench.js
