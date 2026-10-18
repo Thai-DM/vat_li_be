@@ -39,4 +39,9 @@ public interface IExamService {
     com.vatly1.example.model.dto.BatchSaveResultDTO autosaveAnswers(UUID attemptId, com.vatly1.example.model.request.BatchSubmitAnswerDTO dto, UUID studentId);
     com.vatly1.example.model.dto.ExamAttemptPolicyDTO getExamAttemptPolicy(UUID examId, UUID studentId);
     com.vatly1.example.model.response.BulkProvisionFinalExamResultDTO bulkProvisionFinalExams(com.vatly1.example.model.request.BulkProvisionFinalExamDTO dto, UUID adminId);
+
+    com.vatly1.example.model.dto.ViolationResultDTO logViolation(UUID attemptId, com.vatly1.example.model.request.LogViolationRequestDTO dto, UUID studentId);
+    List<com.vatly1.example.model.dto.ExamViolationLogDTO> getAttemptViolations(UUID attemptId, UUID currentUserId, String role);
+    ExamAttemptDTO disqualifyAttempt(UUID examId, UUID attemptId, com.vatly1.example.model.request.DisqualifyAttemptRequestDTO dto, UUID instructorId, String role);
+    ExamAttemptDTO reinstateAttempt(UUID examId, UUID attemptId, UUID instructorId, String role);
 }

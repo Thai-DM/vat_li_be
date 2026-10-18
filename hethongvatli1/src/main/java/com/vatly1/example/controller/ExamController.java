@@ -17,6 +17,10 @@ import com.vatly1.example.model.request.GradeAttemptDTO;
 import com.vatly1.example.model.request.SubmitAnswerDTO;
 import com.vatly1.example.model.request.TransferStudentDTO;
 import com.vatly1.example.model.request.UpdateExamDTO;
+import com.vatly1.example.model.request.LogViolationRequestDTO;
+import com.vatly1.example.model.request.DisqualifyAttemptRequestDTO;
+import com.vatly1.example.model.dto.ExamViolationLogDTO;
+import com.vatly1.example.model.dto.ViolationResultDTO;
 import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.service.IExamParticipantService;
 import com.vatly1.example.service.IExamService;
@@ -455,6 +459,73 @@ public class ExamController {
                 .status(HttpStatus.OK.value())
                 .message("Attempt graded successfully")
                 .data(updated)
+                .build());
+    }
+
+    @Operation(summary = "Ghi nhận vi phạm quy chế thi của sinh viên", description = "Client gửi sự kiện vi phạm (chuyển tab, mất focus, thoát toàn màn hình, mở devtools...) để tăng bộ đếm và lưu log.")
+    @PostMapping("/attempts/{attemptId}/violations")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<ViolationResultDTO>> logViolation(
+            @PathVariable UUID attemptId,
+            @Valid @RequestBody LogViolationRequestDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        ViolationResultDTO result = examService.logViolation(attemptId, dto, currentUserId);
+        return ResponseEntity.ok(ApiResponse.<ViolationResultDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message(result.getMessage())
+                .data(result)
+                .build());
+    }
+
+    @Operation(summary = "Xem lịch sử vi phạm quy chế thi của lượt làm bài", description = "Giảng viên hoặc sinh viên xem danh sách các sự kiện vi phạm đã được ghi nhận trong lượt thi.")
+    @GetMapping("/attempts/{attemptId}/violations")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR', 'TA', 'STUDENT')")
+    public ResponseEntity<ApiResponse<List<ExamViolationLogDTO>>> getAttemptViolations(
+            @PathVariable UUID attemptId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        List<ExamViolationLogDTO> logs = examService.getAttemptViolations(attemptId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<List<ExamViolationLogDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(logs)
+                .build());
+    }
+
+    @Operation(summary = "Giảng viên cấm sinh viên tiếp tục làm bài thi (Đình chỉ thi)", description = "Khóa bài làm của sinh viên ngay lập tức khi phát hiện gian lận hoặc vi phạm nghiêm trọng quy chế.")
+    @PostMapping("/{examId}/attempts/{attemptId}/disqualify")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ExamAttemptDTO>> disqualifyAttempt(
+            @PathVariable UUID examId,
+            @PathVariable UUID attemptId,
+            @Valid @RequestBody DisqualifyAttemptRequestDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamAttemptDTO attempt = examService.disqualifyAttempt(examId, attemptId, dto, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<ExamAttemptDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Đã đình chỉ bài làm của sinh viên thành công")
+                .data(attempt)
+                .build());
+    }
+
+    @Operation(summary = "Khôi phục quyền làm bài thi cho sinh viên (Hủy cấm thi)", description = "Giảng viên mở lại bài thi cho sinh viên tiếp tục làm trong trường hợp giải trình hợp lý.")
+    @PostMapping("/{examId}/attempts/{attemptId}/reinstate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ApiResponse<ExamAttemptDTO>> reinstateAttempt(
+            @PathVariable UUID examId,
+            @PathVariable UUID attemptId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamAttemptDTO attempt = examService.reinstateAttempt(examId, attemptId, currentUserId, role);
+        return ResponseEntity.ok(ApiResponse.<ExamAttemptDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Đã khôi phục quyền làm bài cho sinh viên thành công")
+                .data(attempt)
                 .build());
     }
 }

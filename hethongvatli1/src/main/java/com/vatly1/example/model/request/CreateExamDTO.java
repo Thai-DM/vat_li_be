@@ -1,7 +1,7 @@
 package com.vatly1.example.model.request;
 
-
 import com.vatly1.example.entity.enums.ExamType;
+import com.vatly1.example.entity.enums.ProctoringMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -35,4 +35,10 @@ public class CreateExamDTO {
     private Instant startTime;
 
     private Instant endTime;
+
+    private ProctoringMode proctoringMode;
+
+    private Integer maxViolationsAllowed;
+
+    private Boolean autoBanOnLimit;
 }

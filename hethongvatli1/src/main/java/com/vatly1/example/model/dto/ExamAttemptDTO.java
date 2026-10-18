@@ -32,4 +32,14 @@ public class ExamAttemptDTO {
     private Instant examEndTime;
     private Integer totalQuestions;
     private java.util.List<StudentExamQuestionDTO> questions;
+
+    // Proctoring & Violation tracking
+    private Integer violationCount;
+    private Boolean isDisqualified;
+    private String disqualifiedReason;
+    private Instant disqualifiedAt;
+    private UUID disqualifiedBy;
+    private com.vatly1.example.entity.enums.ProctoringMode proctoringMode;
+    private Integer maxViolationsAllowed;
+    private Boolean autoBanOnLimit;
 }

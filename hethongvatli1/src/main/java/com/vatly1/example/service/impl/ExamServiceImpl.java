@@ -52,6 +52,15 @@ import com.vatly1.example.entity.QuestionAcceptedAnswer;
 import com.vatly1.example.repository.IChapterRepository;
 import com.vatly1.example.repository.QuestionAcceptedAnswerRepository;
 import com.vatly1.example.utils.AnswerNormalizationUtil;
+import com.vatly1.example.entity.ExamViolationLog;
+import com.vatly1.example.entity.enums.ProctoringMode;
+import com.vatly1.example.entity.enums.ViolationSeverity;
+import com.vatly1.example.entity.enums.ViolationType;
+import com.vatly1.example.model.dto.ExamViolationLogDTO;
+import com.vatly1.example.model.dto.ViolationResultDTO;
+import com.vatly1.example.model.request.DisqualifyAttemptRequestDTO;
+import com.vatly1.example.model.request.LogViolationRequestDTO;
+import com.vatly1.example.repository.IExamViolationLogRepository;
 import com.vatly1.example.repository.QuestionOptionRepository;
 import com.vatly1.example.repository.TopicRepository;
 import com.vatly1.example.service.IExamService;
@@ -105,6 +114,7 @@ public class ExamServiceImpl implements IExamService {
     private final com.vatly1.example.repository.IQuestionCloRepository questionCloRepository;
     private final com.vatly1.example.service.algorithm.CloAwareQuestionMatcher cloAwareQuestionMatcher;
     private final com.vatly1.example.service.IClassSettingsService classSettingsService;
+    private final IExamViolationLogRepository examViolationLogRepository;
 
     @Override
     @Transactional
@@ -144,6 +154,9 @@ public class ExamServiceImpl implements IExamService {
                 .endTime(dto.getEndTime())
                 .createdBy(currentUser.getUserId())
                 .createdAt(Instant.now())
+                .proctoringMode(dto.getProctoringMode() != null ? dto.getProctoringMode() : ProctoringMode.NONE)
+                .maxViolationsAllowed(dto.getMaxViolationsAllowed() != null ? dto.getMaxViolationsAllowed() : 5)
+                .autoBanOnLimit(Boolean.TRUE.equals(dto.getAutoBanOnLimit()))
                 .build();
 
         Exam savedExam = examRepository.save(exam);
@@ -637,6 +650,11 @@ public class ExamServiceImpl implements IExamService {
             throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
         }
 
+        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+            throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
+                    (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
+        }
+
         if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
             throw new CustomException("Cannot submit answer: Attempt is already completed", HttpStatus.BAD_REQUEST);
         }
@@ -676,6 +694,11 @@ public class ExamServiceImpl implements IExamService {
 
         if (!Objects.equals(attempt.getStudentId(), studentId)) {
             throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+        }
+
+        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+            throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
+                    (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
         }
 
         if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
@@ -824,6 +847,10 @@ public class ExamServiceImpl implements IExamService {
         if ("STUDENT".equalsIgnoreCase(role)) {
             if (!Objects.equals(attempt.getStudentId(), currentUserId)) {
                 throw new CustomException("Access denied: You cannot view another student's exam attempt", HttpStatus.FORBIDDEN);
+            }
+            if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+                throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
+                        (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
             }
         } else if ("INSTRUCTOR".equalsIgnoreCase(role)) {
             Class clazz = classRepository.findById(exam.getClassId())
@@ -1139,6 +1166,16 @@ public class ExamServiceImpl implements IExamService {
             exam.setMatrixId(dto.getMatrixId());
         }
 
+        if (dto.getProctoringMode() != null) {
+            exam.setProctoringMode(dto.getProctoringMode());
+        }
+        if (dto.getMaxViolationsAllowed() != null) {
+            exam.setMaxViolationsAllowed(dto.getMaxViolationsAllowed());
+        }
+        if (dto.getAutoBanOnLimit() != null) {
+            exam.setAutoBanOnLimit(dto.getAutoBanOnLimit());
+        }
+
         Exam updated = examRepository.save(exam);
         return toExamDTO(updated);
     }
@@ -1162,6 +1199,7 @@ public class ExamServiceImpl implements IExamService {
 
         examQuestionRepository.deleteByExamId(examId);
         examParticipantRepository.deleteByExamId(examId);
+        examViolationLogRepository.deleteByExamId(examId);
         examRepository.delete(exam);
     }
 
@@ -1205,6 +1243,10 @@ public class ExamServiceImpl implements IExamService {
                     .totalScore(att.getTotalScore())
                     .totalQuestions(totalQuestions)
                     .correctAnswersCount(correctCount)
+                    .violationCount(att.getViolationCount() != null ? att.getViolationCount() : 0)
+                    .isDisqualified(Boolean.TRUE.equals(att.getIsDisqualified()))
+                    .disqualifiedReason(att.getDisqualifiedReason())
+                    .disqualifiedAt(att.getDisqualifiedAt())
                     .build());
         }
 
@@ -1311,10 +1353,14 @@ public class ExamServiceImpl implements IExamService {
                 .createdBy(exam.getCreatedBy())
                 .createdAt(exam.getCreatedAt())
                 .totalQuestions(totalQuestions)
+                .proctoringMode(exam.getProctoringMode())
+                .maxViolationsAllowed(exam.getMaxViolationsAllowed())
+                .autoBanOnLimit(exam.getAutoBanOnLimit())
                 .build();
     }
 
     private ExamAttemptDTO toAttemptDTO(ExamAttempt attempt) {
+        Exam exam = examRepository.findById(attempt.getExamId()).orElse(null);
         return ExamAttemptDTO.builder()
                 .attemptId(attempt.getAttemptId())
                 .examId(attempt.getExamId())
@@ -1324,6 +1370,18 @@ public class ExamServiceImpl implements IExamService {
                 .submittedAt(attempt.getSubmittedAt())
                 .status(attempt.getStatus())
                 .totalScore(attempt.getTotalScore())
+                .violationCount(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                .isDisqualified(Boolean.TRUE.equals(attempt.getIsDisqualified()))
+                .disqualifiedReason(attempt.getDisqualifiedReason())
+                .disqualifiedAt(attempt.getDisqualifiedAt())
+                .disqualifiedBy(attempt.getDisqualifiedBy())
+                .proctoringMode(exam != null ? exam.getProctoringMode() : null)
+                .maxViolationsAllowed(exam != null ? exam.getMaxViolationsAllowed() : null)
+                .autoBanOnLimit(exam != null ? exam.getAutoBanOnLimit() : null)
+                .examTitle(exam != null ? exam.getTitle() : null)
+                .durationMinutes(exam != null ? exam.getDurationMinutes() : null)
+                .examStartTime(exam != null ? exam.getStartTime() : null)
+                .examEndTime(exam != null ? exam.getEndTime() : null)
                 .build();
     }
 
@@ -1392,6 +1450,11 @@ public class ExamServiceImpl implements IExamService {
                 .expiresAt(expiresAt)
                 .remainingSeconds(remainingSeconds)
                 .isExpired(isExpired)
+                .violationCount(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                .isDisqualified(Boolean.TRUE.equals(attempt.getIsDisqualified()))
+                .disqualifiedReason(attempt.getDisqualifiedReason())
+                .proctoringMode(exam.getProctoringMode())
+                .maxViolationsAllowed(exam.getMaxViolationsAllowed())
                 .build();
     }
 
@@ -1403,6 +1466,11 @@ public class ExamServiceImpl implements IExamService {
 
         if (!Objects.equals(attempt.getStudentId(), studentId)) {
             throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+        }
+
+        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+            throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
+                    (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
         }
 
         if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
@@ -1655,5 +1723,233 @@ public class ExamServiceImpl implements IExamService {
                 .totalClassesProvisioned(createdExamDTOs.size())
                 .createdExams(createdExamDTOs)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public ViolationResultDTO logViolation(UUID attemptId, LogViolationRequestDTO dto, UUID studentId) {
+        ExamAttempt attempt = examAttemptRepository.findByIdWithLock(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(attempt.getStudentId(), studentId)) {
+            throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+        }
+
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if (exam.getProctoringMode() == ProctoringMode.NONE) {
+            return ViolationResultDTO.builder()
+                    .currentViolationCount(0)
+                    .maxViolationsAllowed(exam.getMaxViolationsAllowed())
+                    .isDisqualified(false)
+                    .message("Exam is in NONE proctoring mode. Violation ignored.")
+                    .build();
+        }
+
+        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+            return ViolationResultDTO.builder()
+                    .currentViolationCount(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                    .maxViolationsAllowed(exam.getMaxViolationsAllowed())
+                    .isDisqualified(true)
+                    .message("Lượt thi đã bị đình chỉ trước đó.")
+                    .build();
+        }
+
+        int newCount = (attempt.getViolationCount() != null ? attempt.getViolationCount() : 0) + 1;
+        attempt.setViolationCount(newCount);
+
+        ViolationSeverity severity = dto.getSeverity() != null ? dto.getSeverity() : ViolationSeverity.LOW;
+        if (dto.getViolationType() == ViolationType.DEVTOOLS_OPENED || dto.getViolationType() == ViolationType.MULTIPLE_DISPLAY) {
+            severity = ViolationSeverity.HIGH;
+        }
+
+        ExamViolationLog logItem = ExamViolationLog.builder()
+                .attemptId(attemptId)
+                .examId(exam.getExamId())
+                .studentId(studentId)
+                .violationType(dto.getViolationType())
+                .severity(severity)
+                .violationCountAtTime(newCount)
+                .description(dto.getDescription())
+                .metadataJson(dto.getMetadataJson())
+                .createdAt(Instant.now())
+                .build();
+        examViolationLogRepository.save(logItem);
+
+        boolean autoBanned = false;
+        if (Boolean.TRUE.equals(exam.getAutoBanOnLimit()) && exam.getMaxViolationsAllowed() != null && newCount >= exam.getMaxViolationsAllowed()) {
+            attempt.setStatus(AttemptStatus.DISQUALIFIED);
+            attempt.setIsDisqualified(true);
+            attempt.setDisqualifiedReason("Tự động đình chỉ do số lần vi phạm (" + newCount + ") vượt quá giới hạn cho phép (" + exam.getMaxViolationsAllowed() + ")");
+            attempt.setDisqualifiedAt(Instant.now());
+            autoBanned = true;
+
+            ExamViolationLog autoBanLog = ExamViolationLog.builder()
+                    .attemptId(attemptId)
+                    .examId(exam.getExamId())
+                    .studentId(studentId)
+                    .violationType(ViolationType.OTHER)
+                    .severity(ViolationSeverity.CRITICAL)
+                    .violationCountAtTime(newCount)
+                    .description("Hệ thống tự động đình chỉ bài thi do vượt ngưỡng vi phạm tối đa")
+                    .createdAt(Instant.now())
+                    .build();
+            examViolationLogRepository.save(autoBanLog);
+        }
+
+        examAttemptRepository.save(attempt);
+
+        String message = autoBanned
+                ? "Bạn đã vượt quá số lần vi phạm cho phép. Bài thi đã bị tự động đình chỉ."
+                : "Ghi nhận vi phạm thành công. Lần vi phạm thứ: " + newCount;
+
+        return ViolationResultDTO.builder()
+                .currentViolationCount(newCount)
+                .maxViolationsAllowed(exam.getMaxViolationsAllowed())
+                .isDisqualified(autoBanned)
+                .message(message)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExamViolationLogDTO> getAttemptViolations(UUID attemptId, UUID currentUserId, String role) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if ("STUDENT".equalsIgnoreCase(role)) {
+            if (!Objects.equals(attempt.getStudentId(), currentUserId)) {
+                throw new CustomException("Access denied: You cannot view another student's violation logs", HttpStatus.FORBIDDEN);
+            }
+        } else if (!"ADMIN".equalsIgnoreCase(role)) {
+            checkExamOwnership(exam, currentUserId);
+        }
+
+        User student = userRepository.findById(attempt.getStudentId()).orElse(null);
+        UserProfile profile = userProfileRepository.findById(attempt.getStudentId()).orElse(null);
+        String studentName = (profile != null && profile.getFullName() != null) ? profile.getFullName()
+                : (student != null ? student.getUsername() : "Unknown");
+        String studentCode = profile != null ? profile.getStudentCode() : null;
+
+        List<ExamViolationLog> logs = examViolationLogRepository.findByAttemptIdOrderByCreatedAtAsc(attemptId);
+        return logs.stream().map(l -> ExamViolationLogDTO.builder()
+                .logId(l.getLogId())
+                .attemptId(l.getAttemptId())
+                .examId(l.getExamId())
+                .studentId(l.getStudentId())
+                .studentName(studentName)
+                .studentCode(studentCode)
+                .violationType(l.getViolationType())
+                .severity(l.getSeverity())
+                .violationCountAtTime(l.getViolationCountAtTime())
+                .description(l.getDescription())
+                .metadataJson(l.getMetadataJson())
+                .createdAt(l.getCreatedAt())
+                .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public ExamAttemptDTO disqualifyAttempt(UUID examId, UUID attemptId, DisqualifyAttemptRequestDTO dto, UUID instructorId, String role) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if (!"ADMIN".equalsIgnoreCase(role)) {
+            checkExamOwnership(exam, instructorId);
+        }
+
+        ExamAttempt attempt = examAttemptRepository.findByIdWithLock(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(attempt.getExamId(), examId)) {
+            throw new CustomException("Attempt does not belong to this exam", HttpStatus.BAD_REQUEST);
+        }
+
+        String reason = dto != null && dto.getReason() != null && !dto.getReason().trim().isEmpty()
+                ? dto.getReason().trim()
+                : "Vi phạm quy chế thi (Giảng viên đình chỉ)";
+
+        attempt.setStatus(AttemptStatus.DISQUALIFIED);
+        attempt.setIsDisqualified(true);
+        attempt.setDisqualifiedReason(reason);
+        attempt.setDisqualifiedAt(Instant.now());
+        attempt.setDisqualifiedBy(instructorId);
+
+        int currentCount = (attempt.getViolationCount() != null ? attempt.getViolationCount() : 0) + 1;
+        attempt.setViolationCount(currentCount);
+
+        ExamViolationLog banLog = ExamViolationLog.builder()
+                .attemptId(attemptId)
+                .examId(examId)
+                .studentId(attempt.getStudentId())
+                .violationType(ViolationType.INSTRUCTOR_DISQUALIFIED)
+                .severity(ViolationSeverity.CRITICAL)
+                .violationCountAtTime(currentCount)
+                .description("Giảng viên cấm thi: " + reason)
+                .metadataJson("{\"instructorId\": \"" + instructorId + "\"}")
+                .createdAt(Instant.now())
+                .build();
+        examViolationLogRepository.save(banLog);
+
+        ExamAttempt saved = examAttemptRepository.save(attempt);
+        log.info("Student {} attempt {} in exam {} was DISQUALIFIED by instructor {}. Reason: {}",
+                saved.getStudentId(), attemptId, examId, instructorId, reason);
+
+        return toAttemptDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public ExamAttemptDTO reinstateAttempt(UUID examId, UUID attemptId, UUID instructorId, String role) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if (!"ADMIN".equalsIgnoreCase(role)) {
+            checkExamOwnership(exam, instructorId);
+        }
+
+        ExamAttempt attempt = examAttemptRepository.findByIdWithLock(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(attempt.getExamId(), examId)) {
+            throw new CustomException("Attempt does not belong to this exam", HttpStatus.BAD_REQUEST);
+        }
+
+        if (attempt.getStatus() != AttemptStatus.DISQUALIFIED && !Boolean.TRUE.equals(attempt.getIsDisqualified())) {
+            throw new CustomException("Bài thi này không ở trạng thái bị đình chỉ", HttpStatus.BAD_REQUEST);
+        }
+
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Không thể mở lại bài thi vì kỳ thi đã kết thúc thời gian làm bài", HttpStatus.BAD_REQUEST);
+        }
+
+        attempt.setStatus(AttemptStatus.IN_PROGRESS);
+        attempt.setIsDisqualified(false);
+        attempt.setDisqualifiedReason(null);
+        attempt.setDisqualifiedAt(null);
+        attempt.setDisqualifiedBy(null);
+
+        ExamViolationLog unbanLog = ExamViolationLog.builder()
+                .attemptId(attemptId)
+                .examId(examId)
+                .studentId(attempt.getStudentId())
+                .violationType(ViolationType.OTHER)
+                .severity(ViolationSeverity.LOW)
+                .violationCountAtTime(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                .description("Giảng viên đã khôi phục quyền làm bài thi (Hủy đình chỉ)")
+                .metadataJson("{\"instructorId\": \"" + instructorId + "\"}")
+                .createdAt(Instant.now())
+                .build();
+        examViolationLogRepository.save(unbanLog);
+
+        ExamAttempt saved = examAttemptRepository.save(attempt);
+        log.info("Student {} attempt {} in exam {} was REINSTATED by instructor {}",
+                saved.getStudentId(), attemptId, examId, instructorId);
+
+        return toAttemptDTO(saved);
     }
 }

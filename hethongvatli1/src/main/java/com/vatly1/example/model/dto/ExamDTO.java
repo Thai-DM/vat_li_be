@@ -2,6 +2,7 @@ package com.vatly1.example.model.dto;
 
 
 import com.vatly1.example.entity.enums.ExamType;
+import com.vatly1.example.entity.enums.ProctoringMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,4 +27,7 @@ public class ExamDTO {
     private UUID createdBy;
     private Instant createdAt;
     private Integer totalQuestions;
+    private ProctoringMode proctoringMode;
+    private Integer maxViolationsAllowed;
+    private Boolean autoBanOnLimit;
 }

@@ -29,4 +29,8 @@ public class ExamAttemptSummaryDTO {
     private BigDecimal totalScore;
     private Integer totalQuestions;
     private Integer correctAnswersCount;
+    private Integer violationCount;
+    private Boolean isDisqualified;
+    private String disqualifiedReason;
+    private Instant disqualifiedAt;
 }

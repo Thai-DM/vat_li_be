@@ -1,6 +1,7 @@
 package com.vatly1.example.entity;
 
 import com.vatly1.example.entity.enums.ExamType;
+import com.vatly1.example.entity.enums.ProctoringMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -55,5 +56,16 @@ public class Exam {
     @Column(name = "created_at")
     private java.time.Instant createdAt;
 
+    @Column(name = "proctoring_mode")
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ProctoringMode proctoringMode = ProctoringMode.NONE;
 
+    @Column(name = "max_violations_allowed")
+    @Builder.Default
+    private Integer maxViolationsAllowed = 5;
+
+    @Column(name = "auto_ban_on_limit")
+    @Builder.Default
+    private Boolean autoBanOnLimit = false;
 }

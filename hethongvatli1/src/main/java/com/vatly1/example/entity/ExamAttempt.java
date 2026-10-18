@@ -53,4 +53,21 @@ public class ExamAttempt {
 
     @Column(name = "total_score")
     private BigDecimal totalScore;
+
+    @Column(name = "violation_count")
+    @Builder.Default
+    private Integer violationCount = 0;
+
+    @Column(name = "is_disqualified")
+    @Builder.Default
+    private Boolean isDisqualified = false;
+
+    @Column(name = "disqualified_reason")
+    private String disqualifiedReason;
+
+    @Column(name = "disqualified_at")
+    private Instant disqualifiedAt;
+
+    @Column(name = "disqualified_by")
+    private UUID disqualifiedBy;
 }

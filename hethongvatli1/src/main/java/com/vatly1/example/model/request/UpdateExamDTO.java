@@ -1,6 +1,7 @@
 package com.vatly1.example.model.request;
 
 import com.vatly1.example.entity.enums.ExamType;
+import com.vatly1.example.entity.enums.ProctoringMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,4 +25,7 @@ public class UpdateExamDTO {
     private Boolean shuffleQuestions;
     private Boolean shuffleOptions;
     private Boolean isPublished;
+    private ProctoringMode proctoringMode;
+    private Integer maxViolationsAllowed;
+    private Boolean autoBanOnLimit;
 }

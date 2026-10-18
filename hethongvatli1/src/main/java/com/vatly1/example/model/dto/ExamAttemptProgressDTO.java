@@ -27,4 +27,10 @@ public class ExamAttemptProgressDTO {
     private long remainingSeconds;
     @com.fasterxml.jackson.annotation.JsonProperty("isExpired")
     private boolean isExpired;
+
+    private Integer violationCount;
+    private Boolean isDisqualified;
+    private String disqualifiedReason;
+    private com.vatly1.example.entity.enums.ProctoringMode proctoringMode;
+    private Integer maxViolationsAllowed;
 }
