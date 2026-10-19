@@ -264,7 +264,17 @@ export enum AttemptStatus {
 - **Endpoint:** `/api/v1/exams/{examId}/attempts/{attemptId}/reinstate`
 - **Request Body:** Không cần body (`{}`)
 
-#### Response Success (`200 OK`):
+#### Quy tắc xử lý thông minh theo thời lượng lượt thi:
+- **Nếu lượt thi VẪN CÒN THỜI GIAN** (`now < startedAt + durationMinutes` và `now < exam.endTime`):
+  - `status`: Chuyển về `IN_PROGRESS`
+  - Sinh viên có thể quay lại trang tiếp tục làm bài trong khoảng thời gian còn lại.
+- **Nếu lượt thi ĐÃ HẾT GIỜ** (`now >= startedAt + durationMinutes` hoặc `now >= exam.endTime`):
+  - `status`: Chuyển thành `GRADED`
+  - Hệ thống **tự động nộp bài và chấm điểm** bằng các câu trả lời sinh viên đã lưu trước đó.
+  - `submittedAt` và `totalScore` được cập nhật đầy đủ.
+  - Không bao giờ bị treo ở "Đang làm" kể cả khi sinh viên đã rời trang hoặc offline!
+
+#### Response Success (`200 OK`) - Ví dụ khi còn giờ làm bài:
 ```json
 {
   "status": 200,
@@ -278,6 +288,27 @@ export enum AttemptStatus {
     "disqualifiedReason": null,
     "disqualifiedAt": null,
     "disqualifiedBy": null,
+    "violationCount": 5
+  }
+}
+```
+
+#### Response Success (`200 OK`) - Ví dụ khi đã hết giờ làm bài (Tự động nộp & chấm điểm):
+```json
+{
+  "status": 200,
+  "message": "Đã khôi phục quyền làm bài cho sinh viên thành công",
+  "data": {
+    "attemptId": "ef6a88b7-197a-45e3-b0c6-ef0276e18b1c",
+    "examId": "d65904d2-04ed-4bf8-9010-a37c2f5ef297",
+    "studentId": "5d8a8a5e-112c-481f-95f5-0e6886abc39b",
+    "status": "GRADED",
+    "isDisqualified": false,
+    "disqualifiedReason": null,
+    "disqualifiedAt": null,
+    "disqualifiedBy": null,
+    "submittedAt": "2026-10-19T15:45:00Z",
+    "totalScore": 7.50,
     "violationCount": 5
   }
 }
@@ -500,4 +531,6 @@ export function useExamProctoring({ attemptId, proctoringMode, maxViolations, on
     - *Nút xác nhận:* Gửi `POST /exams/{examId}/attempts/{attemptId}/disqualify`
 - **Nút "MỞ LẠI BÀI THI" (Màu xanh dương / Un-ban):**
   - Chỉ hiển thị khi sinh viên đang ở trạng thái `DISQUALIFIED`.
-  - Giảng viên nhấn xác nhận -> Gửi `POST /exams/{examId}/attempts/{attemptId}/reinstate` -> Đưa bài thi về lại `IN_PROGRESS` cho sinh viên tiếp tục làm bài.
+  - Giảng viên nhấn xác nhận -> Gửi `POST /exams/{examId}/attempts/{attemptId}/reinstate`:
+    - Nếu còn giờ làm: Bài thi về lại `IN_PROGRESS` cho sinh viên tiếp tục làm bài.
+    - Nếu đã hết giờ: Hệ thống tự động thu bài và chuyển sang `GRADED` (chấm điểm các câu đã lưu), hiển thị điểm số và không bị treo ở "Đang làm".
