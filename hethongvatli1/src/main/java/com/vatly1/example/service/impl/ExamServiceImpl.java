@@ -76,6 +76,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -661,8 +662,8 @@ public class ExamServiceImpl implements IExamService {
 
         Exam exam = examRepository.findById(attempt.getExamId())
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
-        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
-            throw new CustomException("Cannot submit answer: Exam has already ended", HttpStatus.BAD_REQUEST);
+        if (isAttemptExpired(attempt, exam)) {
+            throw new CustomException("Cannot submit answer: Attempt time has expired", HttpStatus.BAD_REQUEST);
         }
 
         if (!examQuestionRepository.existsByExamIdAndQuestionId(attempt.getExamId(), dto.getQuestionId())) {
@@ -686,32 +687,31 @@ public class ExamServiceImpl implements IExamService {
         examAnswerRepository.save(answer);
     }
 
-    @Override
-    @Transactional
-    public ExamAttemptDTO submitAttempt(UUID attemptId, UUID studentId) {
-        ExamAttempt attempt = examAttemptRepository.findByIdWithLock(attemptId)
-                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
-
-        if (!Objects.equals(attempt.getStudentId(), studentId)) {
-            throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+    private Instant calculateAttemptExpiry(ExamAttempt attempt, Exam exam) {
+        if (attempt == null || exam == null) {
+            return null;
         }
-
-        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
-            throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
-                    (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
+        Instant startedAt = attempt.getStartedAt();
+        Integer durationMinutes = exam.getDurationMinutes();
+        Instant expiry = null;
+        if (startedAt != null && durationMinutes != null && durationMinutes > 0) {
+            expiry = startedAt.plus(durationMinutes, ChronoUnit.MINUTES);
         }
-
-        if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
-            throw new CustomException("Attempt is already submitted", HttpStatus.BAD_REQUEST);
+        if (exam.getEndTime() != null) {
+            if (expiry == null || exam.getEndTime().isBefore(expiry)) {
+                expiry = exam.getEndTime();
+            }
         }
+        return expiry;
+    }
 
-        Exam exam = examRepository.findById(attempt.getExamId())
-                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
-        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
-            throw new CustomException("Cannot submit exam: Exam deadline has passed", HttpStatus.BAD_REQUEST);
-        }
+    private boolean isAttemptExpired(ExamAttempt attempt, Exam exam) {
+        Instant expiry = calculateAttemptExpiry(attempt, exam);
+        return expiry != null && Instant.now().isAfter(expiry);
+    }
 
-        List<ExamQuestion> questions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(attempt.getExamId());
+    private BigDecimal calculateAndGradeAttemptAnswers(UUID attemptId, UUID examId) {
+        List<ExamQuestion> questions = examQuestionRepository.findByExamIdOrderByOrderIndexAsc(examId);
         List<ExamAnswer> answers = examAnswerRepository.findByAttemptId(attemptId);
         Map<UUID, ExamAnswer> answerMap = answers.stream()
                 .collect(Collectors.toMap(ExamAnswer::getQuestionId, a -> a, (a1, a2) -> a1));
@@ -768,9 +768,42 @@ public class ExamServiceImpl implements IExamService {
                 }
             }
         }
+        return totalScore;
+    }
+
+    @Override
+    @Transactional
+    public ExamAttemptDTO submitAttempt(UUID attemptId, UUID studentId) {
+        ExamAttempt attempt = examAttemptRepository.findByIdWithLock(attemptId)
+                .orElseThrow(() -> new CustomException("Attempt not found", HttpStatus.NOT_FOUND));
+
+        if (!Objects.equals(attempt.getStudentId(), studentId)) {
+            throw new CustomException("Access denied: This attempt belongs to another student", HttpStatus.FORBIDDEN);
+        }
+
+        if (Boolean.TRUE.equals(attempt.getIsDisqualified()) || attempt.getStatus() == AttemptStatus.DISQUALIFIED) {
+            throw new CustomException("Bạn đã bị giảng viên đình chỉ bài thi do vi phạm quy chế. Lý do: " +
+                    (attempt.getDisqualifiedReason() != null ? attempt.getDisqualifiedReason() : "Vi phạm quy chế thi"), HttpStatus.FORBIDDEN);
+        }
+
+        if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
+            throw new CustomException("Attempt is already submitted", HttpStatus.BAD_REQUEST);
+        }
+
+        Exam exam = examRepository.findById(attempt.getExamId())
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
+            throw new CustomException("Cannot submit exam: Exam deadline has passed", HttpStatus.BAD_REQUEST);
+        }
+
+        BigDecimal totalScore = calculateAndGradeAttemptAnswers(attemptId, attempt.getExamId());
+
+        Instant now = Instant.now();
+        Instant expiry = calculateAttemptExpiry(attempt, exam);
+        Instant submittedTime = (expiry != null && now.isAfter(expiry)) ? expiry : now;
 
         attempt.setStatus(AttemptStatus.GRADED);
-        attempt.setSubmittedAt(Instant.now());
+        attempt.setSubmittedAt(submittedTime);
         attempt.setTotalScore(totalScore);
 
         ExamAttempt saved = examAttemptRepository.save(attempt);
@@ -1479,8 +1512,8 @@ public class ExamServiceImpl implements IExamService {
 
         Exam exam = examRepository.findById(attempt.getExamId())
                 .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
-        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
-            throw new CustomException("Cannot autosave answer: Exam has already ended", HttpStatus.BAD_REQUEST);
+        if (isAttemptExpired(attempt, exam)) {
+            throw new CustomException("Cannot autosave answer: Attempt time has expired", HttpStatus.BAD_REQUEST);
         }
 
         int count = 0;
@@ -1923,32 +1956,88 @@ public class ExamServiceImpl implements IExamService {
             throw new CustomException("Bài thi này không ở trạng thái bị đình chỉ", HttpStatus.BAD_REQUEST);
         }
 
-        if (exam.getEndTime() != null && Instant.now().isAfter(exam.getEndTime())) {
-            throw new CustomException("Không thể mở lại bài thi vì kỳ thi đã kết thúc thời gian làm bài", HttpStatus.BAD_REQUEST);
-        }
-
-        attempt.setStatus(AttemptStatus.IN_PROGRESS);
+        // Hủy đình chỉ / cấm thi
         attempt.setIsDisqualified(false);
         attempt.setDisqualifiedReason(null);
         attempt.setDisqualifiedAt(null);
         attempt.setDisqualifiedBy(null);
 
-        ExamViolationLog unbanLog = ExamViolationLog.builder()
-                .attemptId(attemptId)
-                .examId(examId)
-                .studentId(attempt.getStudentId())
-                .violationType(ViolationType.OTHER)
-                .severity(ViolationSeverity.LOW)
-                .violationCountAtTime(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
-                .description("Giảng viên đã khôi phục quyền làm bài thi (Hủy đình chỉ)")
-                .metadataJson("{\"instructorId\": \"" + instructorId + "\"}")
-                .createdAt(Instant.now())
-                .build();
-        examViolationLogRepository.save(unbanLog);
+        Instant now = Instant.now();
+        Instant expiry = calculateAttemptExpiry(attempt, exam);
+        boolean isExpired = (expiry != null && now.isAfter(expiry));
 
-        ExamAttempt saved = examAttemptRepository.save(attempt);
-        log.info("Student {} attempt {} in exam {} was REINSTATED by instructor {}",
-                saved.getStudentId(), attemptId, examId, instructorId);
+        ExamAttempt saved;
+        if (isExpired) {
+            // Đã hết thời gian làm bài của lượt thi (durationMinutes) hoặc kỳ thi đã kết thúc (endTime)
+            // Tự động thu bài và chấm điểm theo các câu trả lời đã lưu của sinh viên (kể cả khi sinh viên đã rời trang)
+            BigDecimal totalScore = calculateAndGradeAttemptAnswers(attemptId, examId);
+            attempt.setStatus(AttemptStatus.GRADED);
+            attempt.setSubmittedAt(expiry != null && expiry.isBefore(now) ? expiry : now);
+            attempt.setTotalScore(totalScore);
+
+            ExamViolationLog unbanLog = ExamViolationLog.builder()
+                    .attemptId(attemptId)
+                    .examId(examId)
+                    .studentId(attempt.getStudentId())
+                    .violationType(ViolationType.OTHER)
+                    .severity(ViolationSeverity.LOW)
+                    .violationCountAtTime(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                    .description("Giảng viên đã mở lại bài thi. Do lượt thi đã hết thời gian làm bài, hệ thống đã tự động thu bài và chấm điểm theo các câu trả lời đã lưu.")
+                    .metadataJson("{\"instructorId\": \"" + instructorId + "\", \"autoSubmitted\": true, \"totalScore\": \"" + totalScore + "\"}")
+                    .createdAt(now)
+                    .build();
+            examViolationLogRepository.save(unbanLog);
+
+            saved = examAttemptRepository.save(attempt);
+            log.info("Student {} attempt {} in exam {} was REINSTATED & AUTO-SUBMITTED (time expired) by instructor {}. Total score: {}",
+                    saved.getStudentId(), attemptId, examId, instructorId, totalScore);
+
+            try {
+                notificationService.sendNotification(
+                        saved.getStudentId(),
+                        "Bài thi đã được mở lại và tự động nộp: " + exam.getTitle(),
+                        "Giảng viên đã hủy đình chỉ bài thi " + exam.getTitle() + ". Do lượt thi đã hết thời gian làm bài, hệ thống đã tự động nộp và chấm điểm theo các câu trả lời đã lưu của bạn. Điểm số: " + totalScore + " điểm.",
+                        com.vatly1.example.entity.enums.NotificationType.EXAM_GRADED,
+                        saved.getAttemptId(),
+                        "EXAM_ATTEMPT"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send reinstate auto-submit notification: {}", e.getMessage());
+            }
+        } else {
+            // Còn thời gian làm bài -> khôi phục trạng thái IN_PROGRESS để sinh viên tiếp tục làm bài
+            attempt.setStatus(AttemptStatus.IN_PROGRESS);
+
+            ExamViolationLog unbanLog = ExamViolationLog.builder()
+                    .attemptId(attemptId)
+                    .examId(examId)
+                    .studentId(attempt.getStudentId())
+                    .violationType(ViolationType.OTHER)
+                    .severity(ViolationSeverity.LOW)
+                    .violationCountAtTime(attempt.getViolationCount() != null ? attempt.getViolationCount() : 0)
+                    .description("Giảng viên đã khôi phục quyền làm bài thi (Hủy đình chỉ). Thời gian làm bài vẫn còn hiệu lực.")
+                    .metadataJson("{\"instructorId\": \"" + instructorId + "\"}")
+                    .createdAt(now)
+                    .build();
+            examViolationLogRepository.save(unbanLog);
+
+            saved = examAttemptRepository.save(attempt);
+            log.info("Student {} attempt {} in exam {} was REINSTATED (in progress) by instructor {}",
+                    saved.getStudentId(), attemptId, examId, instructorId);
+
+            try {
+                notificationService.sendNotification(
+                        saved.getStudentId(),
+                        "Quyền làm bài thi đã được khôi phục: " + exam.getTitle(),
+                        "Giảng viên đã hủy đình chỉ bài thi " + exam.getTitle() + ". Bạn có thể tiếp tục làm bài trong thời gian còn lại.",
+                        com.vatly1.example.entity.enums.NotificationType.ANNOUNCEMENT,
+                        saved.getAttemptId(),
+                        "EXAM_ATTEMPT"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send reinstate notification: {}", e.getMessage());
+            }
+        }
 
         return toAttemptDTO(saved);
     }

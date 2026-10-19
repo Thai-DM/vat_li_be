@@ -344,4 +344,66 @@ public class ExamProctoringAndDisqualificationTest {
                 .build();
         assertDoesNotThrow(() -> examService.submitAnswer(attempt.getAttemptId(), answerDTO, student.getUserId()));
     }
+
+    @Test
+    @DisplayName("Giảng viên mở lại bài thi khi lượt thi đã HẾT GIỜ -> Tự động nộp bài và chấm điểm theo các câu đã lưu (GRADED)")
+    void testInstructorReinstate_WhenTimeExpired_AutoSubmitsAndGrades() {
+        Exam exam = createExamWithMode(ProctoringMode.BASIC, 5, false);
+        // Tạo attempt đã bắt đầu cách đây 70 phút (với thời lượng 60 phút) -> Đã hết thời gian làm bài
+        ExamAttempt attempt = examAttemptRepository.save(ExamAttempt.builder()
+                .examId(exam.getExamId())
+                .studentId(student.getUserId())
+                .attemptNumber(1)
+                .startedAt(Instant.now().minus(70, ChronoUnit.MINUTES))
+                .status(AttemptStatus.IN_PROGRESS)
+                .violationCount(1)
+                .isDisqualified(false)
+                .build());
+
+        // Giảng viên cấm thi
+        examService.disqualifyAttempt(exam.getExamId(), attempt.getAttemptId(),
+                DisqualifyAttemptRequestDTO.builder().reason("Nghi vấn gian lận").build(),
+                instructor.getUserId(), "INSTRUCTOR");
+
+        ExamAttempt afterBan = examAttemptRepository.findById(attempt.getAttemptId()).orElseThrow();
+        assertEquals(AttemptStatus.DISQUALIFIED, afterBan.getStatus());
+        assertTrue(afterBan.getIsDisqualified());
+
+        // Giảng viên mở lại bài thi -> Vì đã hết giờ làm bài của lượt thi, hệ thống phải tự động nộp bài (GRADED)
+        ExamAttemptDTO reinstated = examService.reinstateAttempt(exam.getExamId(), attempt.getAttemptId(),
+                instructor.getUserId(), "INSTRUCTOR");
+
+        // Không còn hiển thị "đang làm" (IN_PROGRESS) nữa mà chuyển thành "GRADED"
+        assertEquals(AttemptStatus.GRADED, reinstated.getStatus());
+        assertFalse(reinstated.getIsDisqualified());
+        assertNull(reinstated.getDisqualifiedReason());
+        assertNotNull(reinstated.getSubmittedAt());
+        assertNotNull(reinstated.getTotalScore());
+    }
+
+    @Test
+    @DisplayName("Sinh viên gửi câu trả lời khi lượt thi đã HẾT GIỜ -> Bị từ chối với mã BAD_REQUEST")
+    void testSubmitAnswer_WhenTimeExpired_ThrowsException() {
+        Exam exam = createExamWithMode(ProctoringMode.BASIC, 5, false);
+        // Attempt bắt đầu cách đây 70 phút (thời lượng exam 60 phút)
+        ExamAttempt attempt = examAttemptRepository.save(ExamAttempt.builder()
+                .examId(exam.getExamId())
+                .studentId(student.getUserId())
+                .attemptNumber(1)
+                .startedAt(Instant.now().minus(70, ChronoUnit.MINUTES))
+                .status(AttemptStatus.IN_PROGRESS)
+                .violationCount(0)
+                .isDisqualified(false)
+                .build());
+
+        SubmitAnswerDTO answerDTO = SubmitAnswerDTO.builder()
+                .questionId(testQuestion.getQuestionId())
+                .selectedOptionIds(List.of())
+                .build();
+
+        CustomException ex = assertThrows(CustomException.class, () ->
+                examService.submitAnswer(attempt.getAttemptId(), answerDTO, student.getUserId()));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getHttpStatus());
+        assertTrue(ex.getMessage().contains("expired") || ex.getMessage().contains("kết thúc") || ex.getMessage().contains("hết"));
+    }
 }
