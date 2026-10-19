@@ -2,7 +2,12 @@
 -- Migration: Exam Proctoring Modes, Violation Logging & Disqualification (Ban)
 -- =============================================================================
 
--- 1. Thêm giá trị 'disqualified' / 'DISQUALIFIED' vào enum attempt_status nếu có
+-- 1. Cập nhật CHECK constraint trên bảng exam_attempts cho cột status (hỗ trợ DISQUALIFIED)
+ALTER TABLE exam_attempts DROP CONSTRAINT IF EXISTS exam_attempts_status_check;
+ALTER TABLE exam_attempts ADD CONSTRAINT exam_attempts_status_check 
+    CHECK (status IN ('IN_PROGRESS', 'SUBMITTED', 'GRADED', 'DISQUALIFIED'));
+
+-- Nếu DB dùng kiểu ENUM (pg_type attempt_status)
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'attempt_status') THEN
