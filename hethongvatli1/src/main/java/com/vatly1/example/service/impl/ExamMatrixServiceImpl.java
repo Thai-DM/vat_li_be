@@ -9,6 +9,7 @@ import com.vatly1.example.entity.Topic;
 import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.DifficultyLevel;
 import com.vatly1.example.entity.enums.ExamType;
+import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.model.dto.ExamMatrixDTO;
 import com.vatly1.example.model.dto.ExamMatrixDetailDTO;
@@ -493,7 +494,10 @@ public class ExamMatrixServiceImpl implements IExamMatrixService {
                 .collect(Collectors.toSet());
 
         List<QuestionBank> candidates = topicIds.isEmpty() ? Collections.emptyList() :
-                questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED);
+                questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED)
+                        .stream()
+                        .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
+                        .collect(Collectors.toList());
 
         Set<UUID> candidateIds = candidates.stream()
                 .map(QuestionBank::getQuestionId)
@@ -566,6 +570,7 @@ public class ExamMatrixServiceImpl implements IExamMatrixService {
                     detail.getTopicId(), detail.getDifficultyLevel(), ApprovalStatus.APPROVED);
 
             List<QuestionBank> availableExact = exactApproved.stream()
+                    .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
                     .filter(q -> !claimedQuestionIds.contains(q.getQuestionId()))
                     .collect(Collectors.toList());
 
@@ -598,6 +603,7 @@ public class ExamMatrixServiceImpl implements IExamMatrixService {
                         detail.getTopicId(), ApprovalStatus.APPROVED);
 
                 List<QuestionBank> availableFallback = topicApproved.stream()
+                        .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
                         .filter(q -> !claimedQuestionIds.contains(q.getQuestionId()))
                         .collect(Collectors.toList());
 

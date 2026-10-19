@@ -65,4 +65,29 @@ public class TestParseExcelFile {
             assertTrue(q4.getOptions().get(0).getIsCorrect(), "Option A must be correct");
         }
     }
+
+    @Test
+    @DisplayName("Generated template should parse successfully with both MCQ_SINGLE and FILL_BLANK questions")
+    public void testParseGeneratedTemplate() throws Exception {
+        ExcelQuestionParserServiceImpl parser = new ExcelQuestionParserServiceImpl();
+        byte[] templateBytes = parser.generateTemplate();
+        assertNotNull(templateBytes);
+        assertTrue(templateBytes.length > 0);
+
+        try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(templateBytes)) {
+            IExcelQuestionParserService.ParsedResult result = parser.parseQuestionsFromExcel(bais, UUID.randomUUID(), UUID.randomUUID());
+
+            assertEquals(5, result.getQuestions().size(), "Must parse 5 questions (4 MCQ_SINGLE + 1 FILL_BLANK)");
+            assertTrue(result.getWarnings().isEmpty(), "Generated template should have no warnings: " + result.getWarnings());
+
+            // Verify question 5 is FILL_BLANK
+            CreateQuestionDTO q5 = result.getQuestions().get(4);
+            assertEquals(QuestionType.FILL_BLANK, q5.getQuestionType());
+            assertNotNull(q5.getAcceptedAnswers());
+            assertEquals(2, q5.getAcceptedAnswers().size());
+            assertTrue(q5.getAcceptedAnswers().contains("N"));
+            assertTrue(q5.getAcceptedAnswers().contains("Newton"));
+            assertNull(q5.getOptions());
+        }
+    }
 }

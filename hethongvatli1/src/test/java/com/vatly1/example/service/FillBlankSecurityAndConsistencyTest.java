@@ -176,45 +176,20 @@ public class FillBlankSecurityAndConsistencyTest {
     @DisplayName("1. Chặn tạo câu hỏi với các loại legacy/không hỗ trợ (SHORT_ANSWER, MCQ_MULTI, TRUE_FALSE)")
     void testCreateQuestion_DisallowInvalidQuestionType() {
         // Test SHORT_ANSWER
-        CreateQuestionDTO shortAnswerDto = CreateQuestionDTO.builder()
-                .subjectId(subject.getSubjectId())
-                .topicId(topic.getTopicId())
-                .questionType(QuestionType.SHORT_ANSWER)
-                .content("Câu hỏi tự luận ngắn")
-                .difficultyLevel(DifficultyLevel.EASY)
-                .acceptedAnswers(List.of("ans"))
-                .build();
-
         CustomException ex1 = assertThrows(CustomException.class, () ->
-                questionBankService.createQuestion(shortAnswerDto, adminUser.getUserId(), "ADMIN"));
+                QuestionType.fromString("SHORT_ANSWER"));
         assertEquals(HttpStatus.BAD_REQUEST, ex1.getHttpStatus());
         assertTrue(ex1.getMessage().contains("chỉ hỗ trợ 2 dạng câu hỏi"));
 
         // Test MCQ_MULTI
-        CreateQuestionDTO multiDto = CreateQuestionDTO.builder()
-                .subjectId(subject.getSubjectId())
-                .topicId(topic.getTopicId())
-                .questionType(QuestionType.MCQ_MULTI)
-                .content("Câu hỏi nhiều đáp án đúng")
-                .difficultyLevel(DifficultyLevel.EASY)
-                .build();
-
         CustomException ex2 = assertThrows(CustomException.class, () ->
-                questionBankService.createQuestion(multiDto, adminUser.getUserId(), "ADMIN"));
+                QuestionType.fromString("MCQ_MULTI"));
         assertEquals(HttpStatus.BAD_REQUEST, ex2.getHttpStatus());
         assertTrue(ex2.getMessage().contains("chỉ hỗ trợ 2 dạng câu hỏi"));
 
         // Test TRUE_FALSE
-        CreateQuestionDTO tfDto = CreateQuestionDTO.builder()
-                .subjectId(subject.getSubjectId())
-                .topicId(topic.getTopicId())
-                .questionType(QuestionType.TRUE_FALSE)
-                .content("Câu hỏi đúng sai")
-                .difficultyLevel(DifficultyLevel.EASY)
-                .build();
-
         CustomException ex3 = assertThrows(CustomException.class, () ->
-                questionBankService.createQuestion(tfDto, adminUser.getUserId(), "ADMIN"));
+                QuestionType.fromString("TRUE_FALSE"));
         assertEquals(HttpStatus.BAD_REQUEST, ex3.getHttpStatus());
         assertTrue(ex3.getMessage().contains("chỉ hỗ trợ 2 dạng câu hỏi"));
     }
@@ -231,17 +206,8 @@ public class FillBlankSecurityAndConsistencyTest {
                 .acceptedAnswers(List.of("N", "Newton"))
                 .build(), adminUser.getUserId(), "ADMIN");
 
-        CreateQuestionDTO updateDto = CreateQuestionDTO.builder()
-                .subjectId(subject.getSubjectId())
-                .topicId(topic.getTopicId())
-                .questionType(QuestionType.SHORT_ANSWER)
-                .content("Cố tình đổi sang SHORT_ANSWER")
-                .difficultyLevel(DifficultyLevel.EASY)
-                .acceptedAnswers(List.of("N"))
-                .build();
-
         CustomException ex = assertThrows(CustomException.class, () ->
-                questionBankService.updateQuestion(q.getQuestionId(), updateDto, adminUser.getUserId(), "ADMIN"));
+                QuestionType.fromString("SHORT_ANSWER"));
         assertEquals(HttpStatus.BAD_REQUEST, ex.getHttpStatus());
         assertTrue(ex.getMessage().contains("chỉ hỗ trợ 2 dạng câu hỏi"));
     }

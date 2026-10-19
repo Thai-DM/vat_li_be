@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -73,8 +74,9 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
 
                 int rowNumDisplay = r + 1;
 
-                if (optA == null && optB == null) {
-                    warnings.add("Dòng " + rowNumDisplay + ": Thiếu các phương án trả lời.");
+                QuestionType questionType = parseQuestionType(qTypeRaw);
+                if (questionType == null) {
+                    warnings.add("Dòng " + rowNumDisplay + ": Loại câu hỏi '" + qTypeRaw + "' không được hỗ trợ. Hệ thống chỉ hỗ trợ MCQ_SINGLE (Trắc nghiệm 1 đáp án) và FILL_BLANK (Điền đáp án).");
                     continue;
                 }
 
@@ -85,7 +87,33 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
 
                 DifficultyLevel difficultyLevel = parseDifficultyLevel(diffRaw);
                 String cognitiveLevel = parseCognitiveLevel(cogRaw);
-                QuestionType questionType = parseQuestionType(qTypeRaw);
+
+                if (questionType == QuestionType.FILL_BLANK) {
+                    List<String> acceptedAnswers = parseAcceptedAnswers(correctRaw);
+                    if (acceptedAnswers.isEmpty()) {
+                        warnings.add("Dòng " + rowNumDisplay + ": Câu hỏi điền đáp án (FILL_BLANK) phải có ít nhất 1 đáp án đúng trong cột 'Đáp án đúng'.");
+                        continue;
+                    }
+
+                    CreateQuestionDTO dto = CreateQuestionDTO.builder()
+                            .subjectId(subjectId)
+                            .topicId(topicId)
+                            .questionType(questionType)
+                            .content(content.trim())
+                            .difficultyLevel(difficultyLevel)
+                            .cognitiveLevel(cognitiveLevel)
+                            .acceptedAnswers(acceptedAnswers)
+                            .build();
+
+                    questions.add(dto);
+                    continue;
+                }
+
+                // Luồng xử lý MCQ_SINGLE:
+                if (optA == null && optB == null) {
+                    warnings.add("Dòng " + rowNumDisplay + ": Thiếu các phương án trả lời cho câu hỏi trắc nghiệm.");
+                    continue;
+                }
 
                 // Xây dựng danh sách phương án
                 List<CreateQuestionDTO.CreateQuestionOptionDTO> options = new ArrayList<>();
@@ -113,7 +141,7 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
                 long correctCount = options.stream().filter(CreateQuestionDTO.CreateQuestionOptionDTO::getIsCorrect).count();
 
                 if (options.size() < 2) {
-                    warnings.add("Dòng " + rowNumDisplay + ": Câu hỏi phải có ít nhất 2 phương án trả lời.");
+                    warnings.add("Dòng " + rowNumDisplay + ": Câu hỏi trắc nghiệm phải có ít nhất 2 phương án trả lời.");
                     continue;
                 }
 
@@ -122,7 +150,7 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
                     continue;
                 }
 
-                if (questionType == QuestionType.MCQ_SINGLE && correctCount > 1) {
+                if (correctCount > 1) {
                     warnings.add("Dòng " + rowNumDisplay + ": Câu hỏi trắc nghiệm một lựa chọn (MCQ_SINGLE) có nhiều hơn 1 đáp án đúng.");
                     continue;
                 }
@@ -299,11 +327,51 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
 
     private QuestionType parseQuestionType(String raw) {
         if (raw == null || raw.isBlank()) return QuestionType.MCQ_SINGLE;
-        String clean = raw.trim().toUpperCase().replace('-', '_').replaceAll("\\s+", "_");
-        if (clean.contains("MULTI") || clean.contains("NHIEU_DAP_AN") || clean.contains("NHIEU_LUA_CHON")) {
-            return QuestionType.MCQ_MULTI;
+        String clean = deAccent(raw.trim().toUpperCase()).replace('-', '_').replaceAll("\\s+", "_");
+
+        // Loại bỏ rõ ràng các loại câu hỏi không được hỗ trợ (MCQ_MULTI, TRUE_FALSE, SHORT_ANSWER, ...)
+        if (clean.contains("MULTI") || clean.contains("NHIEU_DAP_AN") || clean.contains("NHIEU_LUA_CHON")
+                || clean.contains("TRUE_FALSE") || clean.contains("DUNG_SAI")
+                || clean.contains("SHORT_ANSWER") || clean.contains("TU_LUAN")) {
+            return null;
         }
-        return QuestionType.MCQ_SINGLE;
+
+        // FILL_BLANK: điền từ, điền đáp án, điền khuyết, fill, blank
+        if (clean.contains("FILL") || clean.contains("BLANK") || clean.contains("DIEN") || clean.contains("KHUYET")) {
+            return QuestionType.FILL_BLANK;
+        }
+
+        // MCQ_SINGLE: trắc nghiệm 1 đáp án, single, mcq
+        if (clean.equals("MCQ_SINGLE") || clean.equals("SINGLE") || clean.equals("MCQ")
+                || clean.contains("TRAC_NGHIEM") || clean.contains("MOT_DAP_AN") || clean.contains("1_DAP_AN") || clean.contains("LUA_CHON")) {
+            return QuestionType.MCQ_SINGLE;
+        }
+
+        try {
+            return QuestionType.valueOf(clean);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private List<String> parseAcceptedAnswers(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyList();
+        }
+        String[] tokens;
+        if (raw.contains(";") || raw.contains("|") || raw.contains("\n")) {
+            tokens = raw.split("[;|\n\r]+");
+        } else if (raw.matches(".*(?<!\\d),(?!\\d).*")) {
+            tokens = raw.split("(?<!\\d),(?!\\d)");
+        } else {
+            tokens = new String[]{raw};
+        }
+
+        return Arrays.stream(tokens)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     private String deAccent(String str) {
@@ -369,12 +437,13 @@ public class ExcelQuestionParserServiceImpl implements IExcelQuestionParserServi
                 cell.setCellStyle(headerStyle);
             }
 
-            // Dữ liệu mẫu
+            // Dữ liệu mẫu (hỗ trợ cả MCQ_SINGLE và FILL_BLANK)
             Object[][] sampleData = {
                     {1, "Gia tốc rơi tự do tại mặt đất xấp xỉ bằng bao nhiêu?", "MCQ_SINGLE", "NHAN_BIET", "EASY", "9.8 m/s^2", "10 m/s^2", "9.78 m/s^2", "8.9 m/s^2", "A", "Gia tốc trọng trường tiêu chuẩn g ≈ 9.80665 m/s²."},
                     {2, "Đơn vị đo lực trong hệ đo lường quốc tế SI là gì?", "MCQ_SINGLE", "NHAN_BIET", "EASY", "Jun (J)", "Oát (W)", "Niu-tơn (N)", "Paxcan (Pa)", "C", "Đơn vị lực trong SI là Newton (N)."},
                     {3, "Một vật có khối lượng m = 2 kg đang chuyển động với vận tốc v = 3 m/s. Động năng của vật là:", "MCQ_SINGLE", "THONG_HIEU", "MEDIUM", "6 J", "9 J", "18 J", "3 J", "B", "Động năng Wd = 1/2 * m * v^2 = 1/2 * 2 * 3^2 = 9 J."},
-                    {4, "Trong chuyển động thẳng biến đổi đều, công thức liên hệ giữa vận tốc, gia tốc và quãng đường là:", "MCQ_SINGLE", "THONG_HIEU", "MEDIUM", "v^2 - v0^2 = 2as", "v - v0 = 2as", "v^2 + v0^2 = 2as", "s = v*t + a*t^2", "A", "Công thức độc lập thời gian: v^2 - v0^2 = 2as."}
+                    {4, "Trong chuyển động thẳng biến đổi đều, công thức liên hệ giữa vận tốc, gia tốc và quãng đường là:", "MCQ_SINGLE", "THONG_HIEU", "MEDIUM", "v^2 - v0^2 = 2as", "v - v0 = 2as", "v^2 + v0^2 = 2as", "s = v*t + a*t^2", "A", "Công thức độc lập thời gian: v^2 - v0^2 = 2as."},
+                    {5, "Đơn vị của lực trong hệ SI là gì (viết tắt hoặc tên đầy đủ)?", "FILL_BLANK", "NHAN_BIET", "EASY", "", "", "", "", "N; Newton", "Đơn vị của lực là Newton (N). Câu hỏi FILL_BLANK không cần điền cột đáp án A, B, C, D."}
             };
 
             for (int r = 0; r < sampleData.length; r++) {

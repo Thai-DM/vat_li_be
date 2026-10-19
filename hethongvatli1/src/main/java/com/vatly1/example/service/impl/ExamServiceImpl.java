@@ -22,6 +22,7 @@ import com.vatly1.example.entity.QuestionOption;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.enums.ApprovalStatus;
 import com.vatly1.example.entity.enums.AttemptStatus;
+import com.vatly1.example.entity.enums.QuestionType;
 import com.vatly1.example.entity.enums.UserRole;
 import com.vatly1.example.exception.CustomException;
 import com.vatly1.example.entity.Topic;
@@ -278,7 +279,10 @@ public class ExamServiceImpl implements IExamService {
 
         List<QuestionBank> candidates = topicIds.isEmpty() ? Collections.emptyList() :
                 questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(
-                        matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED);
+                        matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED)
+                        .stream()
+                        .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
+                        .collect(Collectors.toList());
 
         Set<UUID> candidateIds = candidates.stream()
                 .map(QuestionBank::getQuestionId)
@@ -363,6 +367,7 @@ public class ExamServiceImpl implements IExamService {
             List<QuestionBank> primaryCandidates = questionBankRepository.findByTopicIdAndDifficultyLevelAndApprovalStatus(
                     detail.getTopicId(), detail.getDifficultyLevel(), ApprovalStatus.APPROVED)
                     .stream()
+                    .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
                     .filter(q -> !chosenQuestionIds.contains(q.getQuestionId()))
                     .collect(Collectors.toList());
 
@@ -384,6 +389,7 @@ public class ExamServiceImpl implements IExamService {
                 List<QuestionBank> fallbackCandidates = questionBankRepository.findByTopicIdAndApprovalStatus(
                         detail.getTopicId(), ApprovalStatus.APPROVED)
                         .stream()
+                        .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
                         .filter(q -> !chosenQuestionIds.contains(q.getQuestionId()) && !currentSelectedIds.contains(q.getQuestionId()))
                         .collect(Collectors.toList());
 
@@ -1660,7 +1666,10 @@ public class ExamServiceImpl implements IExamService {
             }
             Set<UUID> topicIds = details.stream().map(ExamMatrixDetail::getTopicId).filter(Objects::nonNull).collect(Collectors.toSet());
             List<QuestionBank> candidates = topicIds.isEmpty() ? Collections.emptyList() :
-                    questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED);
+                    questionBankRepository.findBySubjectIdAndTopicIdInAndApprovalStatus(matrix.getSubjectId(), topicIds, ApprovalStatus.APPROVED)
+                            .stream()
+                            .filter(q -> q.getQuestionType() == QuestionType.MCQ_SINGLE || q.getQuestionType() == QuestionType.FILL_BLANK)
+                            .collect(Collectors.toList());
             Set<UUID> candidateIds = candidates.stream().map(QuestionBank::getQuestionId).collect(Collectors.toSet());
             List<QuestionClo> questionClos = candidateIds.isEmpty() ? Collections.emptyList() :
                     questionCloRepository.findBySubjectIdAndQuestionIdIn(matrix.getSubjectId(), candidateIds);

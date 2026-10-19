@@ -36,7 +36,6 @@ public class QuestionBank {
     private java.util.UUID topicId;
 
     @Column(name = "question_type")
-    @Enumerated(EnumType.STRING)
     private QuestionType questionType;
 
     @Column(name = "content", columnDefinition = "TEXT")
