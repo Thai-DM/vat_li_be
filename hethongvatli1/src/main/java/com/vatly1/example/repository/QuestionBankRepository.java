@@ -34,4 +34,7 @@ public interface QuestionBankRepository extends JpaRepository<QuestionBank, UUID
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT q FROM QuestionBank q WHERE q.questionId = :id")
     java.util.Optional<QuestionBank> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT q FROM QuestionBank q WHERE (q.mediaUrl IS NOT NULL AND q.mediaUrl LIKE %:key%) OR (q.content IS NOT NULL AND q.content LIKE %:key%)")
+    List<QuestionBank> findQuestionsReferencingFile(@org.springframework.data.repository.query.Param("key") String key);
 }

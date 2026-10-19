@@ -15,4 +15,7 @@ public interface QuestionOptionRepository extends JpaRepository<QuestionOption, 
     List<QuestionOption> findByQuestionIdAndIsCorrectTrue(UUID questionId);
     boolean existsByOptionIdAndQuestionId(UUID optionId, UUID questionId);
     void deleteByQuestionId(UUID questionId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT o FROM QuestionOption o WHERE (o.mediaUrl IS NOT NULL AND o.mediaUrl LIKE %:key%) OR (o.optionText IS NOT NULL AND o.optionText LIKE %:key%)")
+    List<QuestionOption> findOptionsReferencingFile(@org.springframework.data.repository.query.Param("key") String key);
 }

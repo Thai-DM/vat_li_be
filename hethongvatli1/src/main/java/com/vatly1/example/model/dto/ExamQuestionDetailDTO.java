@@ -19,6 +19,7 @@ public class ExamQuestionDetailDTO {
     private UUID examId;
     private UUID questionId;
     private String content;
+    private String mediaUrl;
     private QuestionType questionType;
     private DifficultyLevel difficultyLevel;
     private UUID topicId;

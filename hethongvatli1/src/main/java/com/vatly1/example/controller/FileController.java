@@ -22,20 +22,34 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.vatly1.example.entity.Class;
+import com.vatly1.example.entity.Exam;
 import com.vatly1.example.entity.LearningMaterial;
+import com.vatly1.example.entity.QuestionBank;
+import com.vatly1.example.entity.QuestionOption;
 import com.vatly1.example.entity.Topic;
 import com.vatly1.example.entity.User;
 import com.vatly1.example.entity.enums.ApprovalStatus;
+import com.vatly1.example.entity.enums.ClassStaffRole;
 import com.vatly1.example.repository.IClassEnrollmentRepository;
 import com.vatly1.example.repository.IClassRepository;
+import com.vatly1.example.repository.IClassStaffRepository;
+import com.vatly1.example.repository.IExamAttemptRepository;
+import com.vatly1.example.repository.IExamParticipantRepository;
+import com.vatly1.example.repository.IExamQuestionRepository;
+import com.vatly1.example.repository.IExamRepository;
+import com.vatly1.example.repository.IPracticeSessionQuestionRepository;
 import com.vatly1.example.repository.IUserRepository;
 import com.vatly1.example.repository.LearningMaterialRepository;
+import com.vatly1.example.repository.QuestionBankRepository;
+import com.vatly1.example.repository.QuestionOptionRepository;
 import com.vatly1.example.repository.TopicRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -56,6 +70,14 @@ public class FileController {
     private final IClassEnrollmentRepository enrollmentRepository;
     private final IClassRepository classRepository;
     private final IUserRepository userRepository;
+    private final QuestionBankRepository questionBankRepository;
+    private final QuestionOptionRepository questionOptionRepository;
+    private final IExamQuestionRepository examQuestionRepository;
+    private final IExamRepository examRepository;
+    private final IExamParticipantRepository examParticipantRepository;
+    private final IExamAttemptRepository examAttemptRepository;
+    private final IClassStaffRepository classStaffRepository;
+    private final IPracticeSessionQuestionRepository practiceSessionQuestionRepository;
 
     @Value("${security.jwt.token.secret-key:secret-key-fallback-for-signing-files}")
     private String hmacSecret;
@@ -198,6 +220,10 @@ public class FileController {
     }
 
     private void verifyFileAccessPermission(FileUpload fileUpload, UUID currentUserId, String role) {
+        verifyFileAccessPermission(fileUpload, currentUserId, role, fileUpload != null ? fileUpload.getStoredUrl() : null);
+    }
+
+    private void verifyFileAccessPermission(FileUpload fileUpload, UUID currentUserId, String role, String filename) {
         boolean isAdmin = "ADMIN".equalsIgnoreCase(role);
         if (isAdmin) {
             return;
@@ -279,9 +305,132 @@ public class FileController {
             }
         } else if ("CHUNKED_UPLOAD".equalsIgnoreCase(fileUpload.getPurpose())) {
             boolean isOwner = Objects.equals(fileUpload.getUploaderId(), currentUserId);
-            if (!isOwner) {
+            if (isOwner) {
+                return;
+            }
+
+            // Trích xuất tên file định danh (ví dụ UUID.png) để tra cứu liên kết câu hỏi/đáp án
+            String key = filename;
+            if (key == null && fileUpload.getStoredUrl() != null) {
+                key = fileUpload.getStoredUrl();
+            }
+            if (key != null && key.contains("/")) {
+                key = key.substring(key.lastIndexOf('/') + 1);
+            }
+
+            List<QuestionBank> questions = new ArrayList<>();
+            if (key != null && !key.isBlank()) {
+                questions.addAll(questionBankRepository.findQuestionsReferencingFile(key));
+                List<QuestionOption> options = questionOptionRepository.findOptionsReferencingFile(key);
+                for (QuestionOption opt : options) {
+                    if (opt.getQuestionId() != null) {
+                        questionBankRepository.findById(opt.getQuestionId()).ifPresent(q -> {
+                            if (questions.stream().noneMatch(existing -> existing.getQuestionId().equals(q.getQuestionId()))) {
+                                questions.add(q);
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Nếu không gắn với câu hỏi nào thì bắt buộc phải là người upload
+            if (questions.isEmpty()) {
                 throw new CustomException("Bạn không có quyền truy cập tệp tải lên này", HttpStatus.FORBIDDEN);
             }
+
+            // Nếu người dùng hiện tại là người tạo câu hỏi
+            if (questions.stream().anyMatch(q -> Objects.equals(q.getCreatedBy(), currentUserId))) {
+                return;
+            }
+
+            boolean isInstructor = "INSTRUCTOR".equalsIgnoreCase(role);
+            boolean isStudent = "STUDENT".equalsIgnoreCase(role);
+
+            // Giảng viên: Được xem ảnh câu hỏi nếu câu hỏi thuộc ngân hàng câu hỏi (APPROVED), hoặc thuộc môn học phụ trách, hoặc trong đề thi của lớp phụ trách
+            if (isInstructor) {
+                boolean instructorHasAccess = false;
+                for (QuestionBank q : questions) {
+                    if (q.getApprovalStatus() == ApprovalStatus.APPROVED) {
+                        instructorHasAccess = true;
+                        break;
+                    }
+                    if (q.getSubjectId() != null && classRepository.isInstructorAssignedToSubject(q.getSubjectId(), currentUserId)) {
+                        instructorHasAccess = true;
+                        break;
+                    }
+                    List<UUID> examIds = examQuestionRepository.findDistinctExamIdsByQuestionIdIn(List.of(q.getQuestionId()));
+                    for (UUID examId : examIds) {
+                        Exam exam = examRepository.findById(examId).orElse(null);
+                        if (exam != null && exam.getClassId() != null) {
+                            Class clazz = classRepository.findById(exam.getClassId()).orElse(null);
+                            if (clazz != null) {
+                                boolean isPrimary = Objects.equals(clazz.getInstructorId(), currentUserId);
+                                boolean isStaff = classStaffRepository.existsByClassIdAndUserIdAndRoleInClass(
+                                        clazz.getClassId(), currentUserId, ClassStaffRole.INSTRUCTOR);
+                                if (isPrimary || isStaff) {
+                                    instructorHasAccess = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (instructorHasAccess) break;
+                }
+
+                if (instructorHasAccess) {
+                    return;
+                }
+                throw new CustomException("Bạn không có quyền truy cập ảnh của câu hỏi này", HttpStatus.FORBIDDEN);
+            }
+
+            // Sinh viên: Được xem ảnh nếu đang làm/xem lại đề thi có chứa câu hỏi này (đã đến giờ thi hoặc đã làm), hoặc có trong phiên luyện tập, hoặc câu hỏi ngân hàng APPROVED thuộc môn học đang học
+            if (isStudent) {
+                boolean studentHasAccess = false;
+                Instant now = Instant.now();
+
+                for (QuestionBank q : questions) {
+                    List<UUID> examIds = examQuestionRepository.findDistinctExamIdsByQuestionIdIn(List.of(q.getQuestionId()));
+                    if (!examIds.isEmpty()) {
+                        // Câu hỏi thuộc đề thi: chỉ sinh viên được phép làm bài (trong lớp của đề, hoặc là thí sinh, hoặc đã làm bài) mới được xem
+                        for (UUID examId : examIds) {
+                            Exam exam = examRepository.findById(examId).orElse(null);
+                            if (exam != null) {
+                                boolean isEnrolled = exam.getClassId() != null && enrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), currentUserId);
+                                boolean isParticipant = examParticipantRepository.existsByExamIdAndStudentId(examId, currentUserId);
+                                boolean hasAttempt = examAttemptRepository.existsByExamIdAndStudentId(examId, currentUserId);
+
+                                if (isEnrolled || isParticipant || hasAttempt) {
+                                    if (exam.getStartTime() == null || !now.isBefore(exam.getStartTime()) || hasAttempt) {
+                                        studentHasAccess = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Nếu sinh viên có trong phiên luyện tập chứa câu hỏi này
+                    if (!studentHasAccess && practiceSessionQuestionRepository.existsByStudentIdAndQuestionId(currentUserId, q.getQuestionId())) {
+                        studentHasAccess = true;
+                    }
+
+                    // Nếu câu hỏi không gắn với đề thi nào và là câu hỏi APPROVED thuộc môn sinh viên đang học (tự ôn tập/ngân hàng câu hỏi)
+                    if (!studentHasAccess && examIds.isEmpty() && q.getSubjectId() != null && q.getApprovalStatus() == ApprovalStatus.APPROVED) {
+                        if (enrollmentRepository.isStudentActivelyEnrolledInSubject(currentUserId, q.getSubjectId())) {
+                            studentHasAccess = true;
+                        }
+                    }
+
+                    if (studentHasAccess) break;
+                }
+
+                if (studentHasAccess) {
+                    return;
+                }
+                throw new CustomException("Bạn không có quyền truy cập hình ảnh trong bài thi/câu hỏi này", HttpStatus.FORBIDDEN);
+            }
+
+            throw new CustomException("Bạn không có quyền truy cập tệp tải lên này", HttpStatus.FORBIDDEN);
         }
     }
 
@@ -329,7 +478,7 @@ public class FileController {
             }
 
             if (uploadOpt.isPresent()) {
-                verifyFileAccessPermission(uploadOpt.get(), currentUserId, role);
+                verifyFileAccessPermission(uploadOpt.get(), currentUserId, role, filename);
             } else if (materialOpt.isPresent()) {
                 FileUpload mockUpload = FileUpload.builder()
                         .fileId(materialOpt.get().getFileId())
@@ -338,7 +487,7 @@ public class FileController {
                         .uploaderId(materialOpt.get().getCreatedBy())
                         .status(com.vatly1.example.entity.enums.FileProcessingStatus.COMPLETED)
                         .build();
-                verifyFileAccessPermission(mockUpload, currentUserId, role);
+                verifyFileAccessPermission(mockUpload, currentUserId, role, filename);
             }
         }
 

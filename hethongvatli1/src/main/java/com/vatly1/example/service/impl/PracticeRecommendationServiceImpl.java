@@ -940,6 +940,7 @@ public class PracticeRecommendationServiceImpl implements IPracticeRecommendatio
             questionDTOs.add(PracticeSessionQuestionDTO.builder()
                     .questionId(qb.getQuestionId())
                     .content(qb.getContent())
+                    .mediaUrl(qb.getMediaUrl())
                     .questionType(qb.getQuestionType())
                     .difficultyLevel(qb.getDifficultyLevel())
                     .topicId(qb.getTopicId())

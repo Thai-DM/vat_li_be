@@ -120,6 +120,10 @@ public class JwtTokenUtils {
       }
       return token;
     }
+    String paramToken = req.getParameter("token");
+    if (paramToken != null && !paramToken.isBlank() && paramToken.startsWith("ey") && paramToken.chars().filter(ch -> ch == '.').count() == 2) {
+      return paramToken.trim();
+    }
     return null;
   }
 

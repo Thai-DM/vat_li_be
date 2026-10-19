@@ -18,6 +18,7 @@ import java.util.UUID;
 public class PracticeSessionQuestionDTO {
     private UUID questionId;
     private String content;
+    private String mediaUrl;
     private QuestionType questionType;
     private DifficultyLevel difficultyLevel;
     private UUID topicId;
