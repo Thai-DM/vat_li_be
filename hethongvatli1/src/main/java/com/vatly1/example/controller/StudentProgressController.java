@@ -1,8 +1,10 @@
 package com.vatly1.example.controller;
 
-import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.model.dto.LearningProgressDTO;
+import com.vatly1.example.model.dto.MaterialProgressDTO;
 import com.vatly1.example.model.request.UpdateLearningProgressDTO;
+import com.vatly1.example.model.request.UpdateMaterialProgressDTO;
+import com.vatly1.example.model.response.ApiResponse;
 import com.vatly1.example.service.ILearningProgressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -43,7 +45,7 @@ public class StudentProgressController {
                 .build());
     }
 
-    @Operation(summary = "Cập nhật tiến độ học tập cá nhân", description = "Ghi nhận trạng thái hoàn thành hoặc thời gian tương tác với học liệu số.")
+    @Operation(summary = "Cập nhật tiến độ học tập cá nhân", description = "Ghi nhận trạng thái hoàn thành hoặc thời gian tương tác với học liệu số hoặc chủ đề.")
     @PutMapping
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     public ResponseEntity<ApiResponse<LearningProgressDTO>> updateProgress(
@@ -53,6 +55,57 @@ public class StudentProgressController {
         
         LearningProgressDTO updated = progressService.updateProgress(currentUserId, updateDTO);
         return ResponseEntity.ok(ApiResponse.<LearningProgressDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(updated)
+                .build());
+    }
+
+    @Operation(summary = "Lấy chi tiết tiến độ từng học liệu", description = "Xem danh sách trạng thái (đã học, đang học, thời gian tương tác) của từng học liệu.")
+    @GetMapping("/materials")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<MaterialProgressDTO>>> getMyMaterialProgress(
+            @RequestParam(required = false) UUID classId,
+            @RequestParam(required = false) UUID topicId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+
+        List<MaterialProgressDTO> list = progressService.getMyMaterialProgress(currentUserId, classId, topicId);
+        return ResponseEntity.ok(ApiResponse.<List<MaterialProgressDTO>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(list)
+                .build());
+    }
+
+    @Operation(summary = "Cập nhật tiến độ của học liệu cụ thể", description = "Ghi nhận tiến độ % và thời gian học cho một học liệu số, tự động đồng bộ lên tiến độ Topic.")
+    @PutMapping("/materials")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<MaterialProgressDTO>> updateMaterialProgress(
+            @Valid @RequestBody UpdateMaterialProgressDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+
+        MaterialProgressDTO updated = progressService.updateMaterialProgress(currentUserId, dto);
+        return ResponseEntity.ok(ApiResponse.<MaterialProgressDTO>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success")
+                .data(updated)
+                .build());
+    }
+
+    @Operation(summary = "Cập nhật tiến độ của học liệu qua đường dẫn", description = "Ghi nhận trạng thái hoàn thành theo materialId trên đường dẫn.")
+    @PutMapping("/materials/{materialId}")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<ApiResponse<MaterialProgressDTO>> updateMaterialProgressById(
+            @PathVariable UUID materialId,
+            @Valid @RequestBody UpdateMaterialProgressDTO dto,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        dto.setMaterialId(materialId);
+
+        MaterialProgressDTO updated = progressService.updateMaterialProgress(currentUserId, dto);
+        return ResponseEntity.ok(ApiResponse.<MaterialProgressDTO>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")
                 .data(updated)

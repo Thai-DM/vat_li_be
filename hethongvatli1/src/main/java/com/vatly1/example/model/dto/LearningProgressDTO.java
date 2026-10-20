@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -23,4 +24,8 @@ public class LearningProgressDTO {
     private ProgressStatus status;
     private BigDecimal progressPercent;
     private Instant lastAccessedAt;
+
+    private List<UUID> completedMaterialIds;
+    private Integer totalMaterials;
+    private Integer completedMaterials;
 }

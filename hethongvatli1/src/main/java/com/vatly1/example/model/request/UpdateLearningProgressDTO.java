@@ -18,14 +18,18 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UpdateLearningProgressDTO {
     
-    @NotNull(message = "Topic ID is required")
     private UUID topicId;
     
     @NotNull(message = "Class ID is required")
     private UUID classId;
+
+    private UUID materialId;
     
     @NotNull(message = "Progress percent is required")
     @Min(value = 0, message = "Progress must be at least 0")
     @Max(value = 100, message = "Progress cannot exceed 100")
     private BigDecimal progressPercent;
+
+    @Min(value = 0, message = "Time spent cannot be negative")
+    private Integer timeSpentSeconds;
 }

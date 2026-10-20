@@ -478,6 +478,24 @@ CREATE TABLE IF NOT EXISTS learning_progress (
     UNIQUE (student_id, class_id, topic_id)
 );
 
+-- 33b. material_progress - Tien do hoc tap chi tiet theo tung hoc lieu
+CREATE TABLE IF NOT EXISTS material_progress (
+    progress_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id         UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    class_id           UUID NOT NULL REFERENCES classes(class_id) ON DELETE CASCADE,
+    material_id        UUID NOT NULL REFERENCES learning_materials(material_id) ON DELETE CASCADE,
+    topic_id           UUID NOT NULL REFERENCES topics(topic_id) ON DELETE CASCADE,
+    status             VARCHAR(50) NOT NULL DEFAULT 'NOT_STARTED',
+    progress_percent   NUMERIC(5,2) NOT NULL DEFAULT 0,
+    time_spent_seconds INT DEFAULT 0,
+    completed_at       TIMESTAMPTZ,
+    last_accessed_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_student_class_material UNIQUE (student_id, class_id, material_id)
+);
+CREATE INDEX IF NOT EXISTS idx_material_progress_student_class ON material_progress(student_id, class_id);
+CREATE INDEX IF NOT EXISTS idx_material_progress_material ON material_progress(material_id);
+
+
 -- 34. activity_logs - Nhat ky hoat dong chi tiet
 CREATE TABLE IF NOT EXISTS activity_logs (
     log_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
