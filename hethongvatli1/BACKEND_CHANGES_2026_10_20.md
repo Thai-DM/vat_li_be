@@ -144,15 +144,20 @@ Trong ngày 20/10/2026, Backend đã xử lý dứt điểm 2 khối tính năng
 
 | Commit | Thông điệp | Nội dung chính |
 |---|---|---|
+| `ed85c2b` | `fix(exam): enforce isPublished check on getExamById, getExamQuestions and attempt policy for students` | Hoàn thiện kiểm tra `isPublished` trên toàn bộ các API GET cho sinh viên (`getExamById`, `getExamQuestions`, `getExamAttemptPolicy`). |
 | `89529b9` | `fix(exam): implement isPublished visibility toggle, filtering, and attempt protection` | Thêm `isPublished` vào Exam, ExamDTO, CreateExamDTO, lọc danh sách đề thi theo quyền, chặn sinh viên làm đề ẩn, thêm test suite `ExamPublishStatusTest`. |
 | `21ae37b` | `feat(progress): implement material-level learning progress tracking and topic rollup` | Tạo bảng & entity `material_progress`, API cập nhật tiến độ học liệu, tự động tính % Topic cha, thêm test suite `MaterialLearningProgressTest`. |
 
 ### Danh sách các tệp thay đổi chính:
+- `src/main/java/com/vatly1/example/controller/ExamController.java`
+- `src/main/java/com/vatly1/example/service/IExamService.java`
+- `src/main/java/com/vatly1/example/service/impl/ExamServiceImpl.java`
 - `src/main/java/com/vatly1/example/entity/Exam.java`
 - `src/main/java/com/vatly1/example/model/dto/ExamDTO.java`
 - `src/main/java/com/vatly1/example/model/request/CreateExamDTO.java`
+- `src/main/java/com/vatly1/example/model/request/UpdateExamDTO.java`
 - `src/main/java/com/vatly1/example/repository/IExamRepository.java`
-- `src/main/java/com/vatly1/example/service/impl/ExamServiceImpl.java`
+- `src/main/java/com/vatly1/example/service/impl/ExamParticipantServiceImpl.java`
 - `src/main/java/com/vatly1/example/service/impl/StudentPortalServiceImpl.java`
 - `src/main/java/com/vatly1/example/entity/MaterialProgress.java`
 - `src/main/java/com/vatly1/example/repository/MaterialProgressRepository.java`
