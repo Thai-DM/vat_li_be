@@ -143,8 +143,12 @@ public class ExamController {
     @Operation(summary = "Lấy chi tiết kỳ thi theo ID", description = "Xem cấu hình chi tiết, thời gian và thông tin kỳ thi.")
     @GetMapping("/{examId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR', 'TA', 'ADMIN')")
-    public ResponseEntity<ApiResponse<ExamDTO>> getExamById(@PathVariable UUID examId) {
-        ExamDTO exam = examService.getExamById(examId);
+    public ResponseEntity<ApiResponse<ExamDTO>> getExamById(
+            @PathVariable UUID examId,
+            HttpServletRequest request) {
+        UUID currentUserId = UUID.fromString((String) request.getAttribute("userId"));
+        String role = (String) request.getAttribute("role");
+        ExamDTO exam = examService.getExamById(examId, currentUserId, role);
         return ResponseEntity.ok(ApiResponse.<ExamDTO>builder()
                 .status(HttpStatus.OK.value())
                 .message("Success")

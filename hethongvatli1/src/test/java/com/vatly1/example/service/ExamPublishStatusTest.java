@@ -222,4 +222,46 @@ public class ExamPublishStatusTest {
                 () -> examService.startAttempt(hiddenExam.getExamId(), student.getUserId()));
         assertNotNull(attempt.getAttemptId());
     }
+
+    @Test
+    @DisplayName("PUB-05: Sinh viên truy vấn chi tiết đề (getExamById), câu hỏi, hoặc policy của đề ẩn -> Bị từ chối 403 Forbidden")
+    void test05_GetExamById_AndQuestions_UnpublishedExam_BlockedForStudent() {
+        ExamDTO hiddenExam = examService.createExam(CreateExamDTO.builder()
+                .classId(clazz.getClassId())
+                .title("Đề ẩn bảo mật " + UUID.randomUUID())
+                .examType(ExamType.PRACTICE)
+                .durationMinutes(45)
+                .isPublished(false)
+                .build(), instructor.getUserId());
+
+        examService.addQuestionToExam(hiddenExam.getExamId(), AddExamQuestionDTO.builder()
+                .questionId(question.getQuestionId())
+                .orderIndex(1)
+                .scoreWeight(BigDecimal.TEN)
+                .build(), instructor.getUserId());
+
+        // 1. Sinh viên gọi getExamById -> 403 Forbidden
+        CustomException exGet = assertThrows(CustomException.class,
+                () -> examService.getExamById(hiddenExam.getExamId(), student.getUserId(), "STUDENT"));
+        assertEquals(HttpStatus.FORBIDDEN, exGet.getHttpStatus());
+        assertTrue(exGet.getMessage().contains("chưa được công bố"));
+
+        // 2. Giảng viên gọi getExamById -> Thành công
+        ExamDTO instructorView = assertDoesNotThrow(
+                () -> examService.getExamById(hiddenExam.getExamId(), instructor.getUserId(), "INSTRUCTOR"));
+        assertNotNull(instructorView);
+        assertFalse(instructorView.getIsPublished());
+
+        // 3. Sinh viên gọi getExamQuestions -> 403 Forbidden
+        CustomException exQuestions = assertThrows(CustomException.class,
+                () -> examService.getExamQuestions(hiddenExam.getExamId(), student.getUserId(), "STUDENT"));
+        assertEquals(HttpStatus.FORBIDDEN, exQuestions.getHttpStatus());
+        assertTrue(exQuestions.getMessage().contains("chưa được công bố"));
+
+        // 4. Sinh viên gọi getExamAttemptPolicy -> 403 Forbidden
+        CustomException exPolicy = assertThrows(CustomException.class,
+                () -> examService.getExamAttemptPolicy(hiddenExam.getExamId(), student.getUserId()));
+        assertEquals(HttpStatus.FORBIDDEN, exPolicy.getHttpStatus());
+        assertTrue(exPolicy.getMessage().contains("chưa được công bố"));
+    }
 }

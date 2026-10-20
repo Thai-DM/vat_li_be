@@ -47,8 +47,12 @@ Trong ngày 20/10/2026, Backend đã xử lý dứt điểm 2 khối tính năng
    - **Lọc danh sách đề thi (`getExamsByClass`, `getAllExams`):**
      - **Sinh viên:** Chỉ xem được đề thi đã công bố (`isPublished = true`).
      - **Giảng viên / Quản trị viên:** Xem toàn bộ đề (kèm boolean `isPublished` chính xác) để phục vụ quản lý và bật/tắt checkbox.
-   - **Bảo vệ làm bài thi (`startAttempt`):** Nếu sinh viên cố tình truy cập link làm bài của đề chưa công bố, hệ thống chặn lại với lỗi `403 FORBIDDEN`: *"Kỳ thi này hiện chưa được công bố"*.
-   - **Student Agenda ([`StudentPortalServiceImpl.java`](file:///d:/vatli1/hethongvatli1/src/main/java/com/vatly1/example/service/impl/StudentPortalServiceImpl.java)):** Loại bỏ đề ẩn khỏi lịch thi của sinh viên.
+   - **Bảo vệ toàn diện các API chi tiết của đề thi (GET & POST):**
+     - `GET /api/v1/exams/{examId}`: Sinh viên truy vấn chi tiết đề chưa công bố sẽ nhận `403 FORBIDDEN` (*"Kỳ thi này hiện chưa được công bố"*). Giảng viên/Admin truy vấn bình thường.
+     - `GET /api/v1/exams/{examId}/questions`: Chặn sinh viên lấy danh sách câu hỏi của đề ẩn (`403 FORBIDDEN`).
+     - `GET /api/v1/exams/{examId}/attempt-policy`: Chặn sinh viên truy vấn chính sách lượt làm của đề ẩn (`403 FORBIDDEN`).
+     - `POST /api/v1/exams/{examId}/attempts` (`startAttempt`): Chặn sinh viên bắt đầu làm bài của đề chưa công bố (`403 FORBIDDEN`).
+   - **Student Agenda ([`StudentPortalServiceImpl.java`](file:///d:/vatli1/hethongvatli1/src/main/java/com/vatly1/example/service/impl/StudentPortalServiceImpl.java)):** Tự động loại bỏ đề ẩn khỏi lịch thi của sinh viên.
 
 ---
 

@@ -20,6 +20,7 @@ public interface IExamService {
     List<ExamDTO> getExamsByClass(UUID classId, UUID currentUserId, String role);
     List<ExamDTO> getAllExams(UUID currentUserId, String role);
     ExamDTO getExamById(UUID examId);
+    ExamDTO getExamById(UUID examId, UUID currentUserId, String role);
     ExamAttemptDTO startAttempt(UUID examId, UUID studentId);
     void submitAnswer(UUID attemptId, SubmitAnswerDTO dto, UUID studentId);
     ExamAttemptDTO submitAttempt(UUID attemptId, UUID studentId);

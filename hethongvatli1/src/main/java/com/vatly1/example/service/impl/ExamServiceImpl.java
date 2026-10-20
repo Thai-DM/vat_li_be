@@ -540,6 +540,25 @@ public class ExamServiceImpl implements IExamService {
     }
 
     @Override
+    public ExamDTO getExamById(UUID examId, UUID currentUserId, String role) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new CustomException("Exam not found", HttpStatus.NOT_FOUND));
+
+        if ("STUDENT".equalsIgnoreCase(role)) {
+            if (Boolean.FALSE.equals(exam.getIsPublished())) {
+                throw new CustomException("Kỳ thi này hiện chưa được công bố", HttpStatus.FORBIDDEN);
+            }
+            boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), currentUserId);
+            boolean isParticipant = examParticipantRepository.existsByExamIdAndStudentId(examId, currentUserId);
+            if (!isEnrolled && !isParticipant) {
+                throw new CustomException("Access denied: You are not enrolled in this class", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        return toExamDTO(exam);
+    }
+
+    @Override
     @Transactional
     public ExamAttemptDTO startAttempt(UUID examId, UUID studentId) {
         Exam exam = examRepository.findById(examId)
@@ -922,6 +941,9 @@ public class ExamServiceImpl implements IExamService {
         if ("INSTRUCTOR".equalsIgnoreCase(role)) {
             checkExamOwnership(exam, currentUserId);
         } else if ("STUDENT".equalsIgnoreCase(role)) {
+            if (Boolean.FALSE.equals(exam.getIsPublished())) {
+                throw new CustomException("Kỳ thi này hiện chưa được công bố", HttpStatus.FORBIDDEN);
+            }
             boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), currentUserId);
             boolean isParticipant = examParticipantRepository.existsByExamIdAndStudentId(examId, currentUserId);
             if (!isEnrolled && !isParticipant) {
@@ -1578,6 +1600,9 @@ public class ExamServiceImpl implements IExamService {
         User studentUser = userRepository.findById(studentId).orElse(null);
         boolean isAdmin = studentUser != null && studentUser.getRole() == UserRole.ADMIN;
         if (!isAdmin) {
+            if (Boolean.FALSE.equals(exam.getIsPublished())) {
+                throw new CustomException("Kỳ thi này hiện chưa được công bố", HttpStatus.FORBIDDEN);
+            }
             boolean isEnrolled = classEnrollmentRepository.isStudentActivelyEnrolledInClass(exam.getClassId(), studentId);
             boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
             if (!isEnrolled && !isTransferred) {
