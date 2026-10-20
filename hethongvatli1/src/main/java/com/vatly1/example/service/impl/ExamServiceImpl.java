@@ -159,6 +159,7 @@ public class ExamServiceImpl implements IExamService {
                 .proctoringMode(dto.getProctoringMode() != null ? dto.getProctoringMode() : ProctoringMode.NONE)
                 .maxViolationsAllowed(dto.getMaxViolationsAllowed() != null ? dto.getMaxViolationsAllowed() : 5)
                 .autoBanOnLimit(Boolean.TRUE.equals(dto.getAutoBanOnLimit()))
+                .isPublished(dto.getIsPublished() != null ? dto.getIsPublished() : true)
                 .build();
 
         Exam savedExam = examRepository.save(exam);
@@ -167,17 +168,19 @@ public class ExamServiceImpl implements IExamService {
             populateQuestionsFromMatrix(savedExam.getExamId(), dto.getMatrixId());
         }
 
-        try {
-            notificationService.sendNotificationToClass(
-                    savedExam.getClassId(),
-                    "Bài thi mới: " + savedExam.getTitle(),
-                    "Lớp học vừa có bài thi mới: " + savedExam.getTitle() + " (Thời lượng: " + savedExam.getDurationMinutes() + " phút). Vui lòng hoàn thành đúng thời hạn.",
-                    com.vatly1.example.entity.enums.NotificationType.EXAM_NEW,
-                    savedExam.getExamId(),
-                    "EXAM"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to send exam notification: {}", e.getMessage());
+        if (Boolean.TRUE.equals(savedExam.getIsPublished())) {
+            try {
+                notificationService.sendNotificationToClass(
+                        savedExam.getClassId(),
+                        "Bài thi mới: " + savedExam.getTitle(),
+                        "Lớp học vừa có bài thi mới: " + savedExam.getTitle() + " (Thời lượng: " + savedExam.getDurationMinutes() + " phút). Vui lòng hoàn thành đúng thời hạn.",
+                        com.vatly1.example.entity.enums.NotificationType.EXAM_NEW,
+                        savedExam.getExamId(),
+                        "EXAM"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send exam notification: {}", e.getMessage());
+            }
         }
 
         return toExamDTO(savedExam);
@@ -487,6 +490,9 @@ public class ExamServiceImpl implements IExamService {
             if (!classEnrollmentRepository.isStudentActivelyEnrolledInClass(classId, currentUserId)) {
                 throw new CustomException("Access denied: You are not enrolled in this class", HttpStatus.FORBIDDEN);
             }
+            return examRepository.findByClassIdAndIsPublishedTrue(classId).stream()
+                    .map(this::toExamDTO)
+                    .collect(Collectors.toList());
         } else if ("INSTRUCTOR".equalsIgnoreCase(role)) {
             boolean isInstructor = Objects.equals(clazz.getInstructorId(), currentUserId);
             boolean isStaff = classStaffRepository.existsByClassIdAndUserId(classId, currentUserId);
@@ -515,12 +521,12 @@ public class ExamServiceImpl implements IExamService {
                     .map(this::toExamDTO)
                     .collect(Collectors.toList());
         } else {
-            // STUDENT
+            // STUDENT: Chỉ thấy các đề thi đã công bố (isPublished = true)
             List<UUID> classIds = classRepository.findEnrolledClassIdsByStudentId(currentUserId);
             if (classIds.isEmpty()) {
                 return java.util.Collections.emptyList();
             }
-            return examRepository.findByClassIdIn(classIds).stream()
+            return examRepository.findByClassIdInAndIsPublishedTrue(classIds).stream()
                     .map(this::toExamDTO)
                     .collect(Collectors.toList());
         }
@@ -546,6 +552,9 @@ public class ExamServiceImpl implements IExamService {
             boolean isTransferred = examParticipantRepository.existsByExamIdAndStudentId(examId, studentId);
             if (!isEnrolled && !isTransferred) {
                 throw new CustomException("Bạn không có tên trong danh sách ca thi này", HttpStatus.FORBIDDEN);
+            }
+            if (Boolean.FALSE.equals(exam.getIsPublished())) {
+                throw new CustomException("Kỳ thi này hiện chưa được công bố", HttpStatus.FORBIDDEN);
             }
         }
 
@@ -1216,6 +1225,24 @@ public class ExamServiceImpl implements IExamService {
         if (dto.getAutoBanOnLimit() != null) {
             exam.setAutoBanOnLimit(dto.getAutoBanOnLimit());
         }
+        if (dto.getIsPublished() != null) {
+            boolean wasUnpublished = Boolean.FALSE.equals(exam.getIsPublished());
+            exam.setIsPublished(dto.getIsPublished());
+            if (wasUnpublished && Boolean.TRUE.equals(dto.getIsPublished())) {
+                try {
+                    notificationService.sendNotificationToClass(
+                            exam.getClassId(),
+                            "Bài thi mới: " + exam.getTitle(),
+                            "Lớp học vừa công bố bài thi: " + exam.getTitle() + " (Thời lượng: " + exam.getDurationMinutes() + " phút). Vui lòng hoàn thành đúng thời hạn.",
+                            com.vatly1.example.entity.enums.NotificationType.EXAM_NEW,
+                            exam.getExamId(),
+                            "EXAM"
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to send exam publication notification: {}", e.getMessage());
+                }
+            }
+        }
 
         Exam updated = examRepository.save(exam);
         return toExamDTO(updated);
@@ -1397,6 +1424,7 @@ public class ExamServiceImpl implements IExamService {
                 .proctoringMode(exam.getProctoringMode())
                 .maxViolationsAllowed(exam.getMaxViolationsAllowed())
                 .autoBanOnLimit(exam.getAutoBanOnLimit())
+                .isPublished(exam.getIsPublished() != null ? exam.getIsPublished() : true)
                 .build();
     }
 

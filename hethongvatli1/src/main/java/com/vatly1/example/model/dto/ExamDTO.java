@@ -30,4 +30,5 @@ public class ExamDTO {
     private ProctoringMode proctoringMode;
     private Integer maxViolationsAllowed;
     private Boolean autoBanOnLimit;
+    private Boolean isPublished;
 }

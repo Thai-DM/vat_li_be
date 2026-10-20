@@ -147,7 +147,7 @@ public class StudentPortalServiceImpl implements IStudentPortalService {
             Class clazz = classRepository.findById(classId).orElse(null);
             List<Exam> exams = examRepository.findByClassId(classId);
             for (Exam ex : exams) {
-                if (seenExamIds.add(ex.getExamId())) {
+                if (Boolean.TRUE.equals(ex.getIsPublished()) && seenExamIds.add(ex.getExamId())) {
                     examDTOs.add(mapToAgendaExam(ex, clazz != null ? clazz.getClassCode() : null, false, studentId, now));
                 }
             }
@@ -158,7 +158,7 @@ public class StudentPortalServiceImpl implements IStudentPortalService {
         for (ExamParticipant ep : transfers) {
             if (seenExamIds.add(ep.getExamId())) {
                 Exam ex = examRepository.findById(ep.getExamId()).orElse(null);
-                if (ex != null) {
+                if (ex != null && Boolean.TRUE.equals(ex.getIsPublished())) {
                     Class clazz = classRepository.findById(ex.getClassId()).orElse(null);
                     examDTOs.add(mapToAgendaExam(ex, clazz != null ? clazz.getClassCode() : null, true, studentId, now));
                 }

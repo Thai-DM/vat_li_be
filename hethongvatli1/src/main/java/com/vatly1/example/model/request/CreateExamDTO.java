@@ -41,4 +41,6 @@ public class CreateExamDTO {
     private Integer maxViolationsAllowed;
 
     private Boolean autoBanOnLimit;
+
+    private Boolean isPublished;
 }

@@ -273,6 +273,7 @@ public class ExamParticipantServiceImpl implements IExamParticipantService {
                 .endTime(exam.getEndTime())
                 .createdBy(exam.getCreatedBy())
                 .createdAt(exam.getCreatedAt())
+                .isPublished(exam.getIsPublished() != null ? exam.getIsPublished() : true)
                 .build();
     }
 

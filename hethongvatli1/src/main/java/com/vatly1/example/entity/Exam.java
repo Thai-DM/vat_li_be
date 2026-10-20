@@ -68,4 +68,8 @@ public class Exam {
     @Column(name = "auto_ban_on_limit")
     @Builder.Default
     private Boolean autoBanOnLimit = false;
+
+    @Column(name = "is_published")
+    @Builder.Default
+    private Boolean isPublished = true;
 }
